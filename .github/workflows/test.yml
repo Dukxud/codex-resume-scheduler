@@ -1,0 +1,23 @@
+name: Tests
+on:
+  push:
+  pull_request:
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Codex usage tests
+        run: node --test tests/usage.test.js
+      - name: PowerShell 7 syntax
+        shell: pwsh
+        run: |
+          foreach ($source in Get-ChildItem -Path . -Filter '*.ps1' -File) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($source.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count) { $errors | Out-String | Write-Error; exit 1 }
+          }

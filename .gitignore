@@ -1,0 +1,7 @@
+# Generated app/session state (never commit job configuration or logs)
+*.log
+*.jsonl
+CodexResume-*.json
+BP*-Codex-*.ps1
+node_modules/
+.DS_Store

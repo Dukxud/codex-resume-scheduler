@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.3: background auto-refresh, remaining quota display, session repository discovery.
+# v1.3.1: scheduled runners use a process-scoped execution policy for unsigned scripts.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -620,7 +620,7 @@ $schedule.Add_Click({
         $log = Join-Path $appDir ($name + '.log')
         [pscustomobject]@{ sessionId = $sessionId; repo = $root; branch = $branch; effort = $effort; access = $access; message = $message; log = $log } |
             ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $jobFilePath -Encoding utf8
-        $runnerArgs = '-NoLogo -NoProfile -NoExit -File "' + $installedScript + '" -RunJob -JobFile "' + $jobFilePath + '"'
+        $runnerArgs = '-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "' + $installedScript + '" -RunJob -JobFile "' + $jobFilePath + '"'
         $action = New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'pwsh.exe') -Argument $runnerArgs -WorkingDirectory $root
         $trigger = New-ScheduledTaskTrigger -Once -At $when
         $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
@@ -633,6 +633,7 @@ $schedule.Add_Click({
         if ($saved.State -notin @('Ready','Running')) { $issues += "Task state: $($saved.State)" }
         if ($actualTime -ne $expectedTime) { $issues += "Scheduled time: $actualTime (expected $expectedTime)" }
         if ($saved.Actions.Count -ne 1 -or $saved.Actions[0].Arguments -notmatch '(?i)(?:^|\s)-NoExit(?:\s|$)') { $issues += 'PowerShell -NoExit missing' }
+        if ($saved.Actions.Count -ne 1 -or $saved.Actions[0].Arguments -notmatch '(?i)(?:^|\s)-ExecutionPolicy\s+Bypass(?:\s|$)') { $issues += 'PowerShell process execution-policy override missing' }
         if ($saved.Principal.LogonType -ne 'Interactive') { $issues += "Logon type: $($saved.Principal.LogonType)" }
         if ($issues.Count -gt 0) { throw ("Task '$name' WAS registered, but these checks need attention: " + ($issues -join '; ')) }
         Refresh-PendingList

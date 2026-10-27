@@ -11,7 +11,7 @@ jobs:
         with:
           node-version: '22'
       - name: Codex usage tests
-        run: node --test tests/usage.test.js
+        run: node --test tests/*.test.js
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

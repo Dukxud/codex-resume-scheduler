@@ -57,10 +57,11 @@ MIT License. See [LICENSE](LICENSE).
 ## Security and limitations
 
 - **YOLO** (`--dangerously-bypass-approvals-and-sandbox`) disables approvals and sandboxing, including **outside the repository**. Use only for trusted sessions. The default is **workspace-write**.
+- The launcher and scheduled task runner use **`pwsh -ExecutionPolicy Bypass` for their own PowerShell process only**, because the local `.ps1` is not digitally signed. This does not change `CurrentUser` or `LocalMachine` policy; organization Group Policy can still block execution. Use only with source you trust. Existing scheduled jobs created before v1.3.1 retain their original command until repaired or recreated.
 - The GUI validates repository root and branch at scheduling time, and the runner checks them again before execution. It does not revalidate the current task's full instruction/history. Concurrent sessions may conflict.
 - Tasks run once, not every day; Windows Task Scheduler can launch them after a missed time if `StartWhenAvailable` is enabled.
 - Scheduled tasks and job settings are kept locally. No code, repository content, or saved Codex conversations are uploaded by this app.
-- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.3 must still be tested on Windows**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
+- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.3.1 must still be tested on Windows**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
 
 ## Development
 

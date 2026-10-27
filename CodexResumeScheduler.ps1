@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.3.1: scheduled runners use a process-scoped execution policy for unsigned scripts.
+# v1.3.2: refuse ambiguous session repository detection across multiple Git checkouts.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -100,59 +100,62 @@ function Get-RecentCliSessions {
     return $sessions
 }
 
-# Repository identification prioritizes evidence scoped to the selected session.
-# Never search arbitrary folders or silently retain another session's repository.
+# Repository candidates must be compared across the selected conversation.
+# A valid startup repository is not necessarily the checkout with unfinished work.
+# Ambiguous evidence must require an explicit Browse choice, never a guess.
 function Find-SessionRepository {
     param($Session)
     if (-not $Session) { return $null }
+    $candidates = [System.Collections.Generic.List[string]]::new()
     $direct = Get-RepositoryRoot ([string]$Session.Cwd)
-    if ($direct) { return [pscustomobject]@{ Root = $direct; Source = 'session working directory' } }
+    if ($direct) { $candidates.Add($direct) }
 
-    # Previously selected repository for the same session is a verified user choice.
+    # A prior schedule is evidence, not proof that it targeted the right checkout.
     if (Test-Path -LiteralPath $appDir -PathType Container) {
-        foreach ($saved in @(Get-ChildItem -LiteralPath $appDir -Filter 'CodexResume-*.json' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)) {
+        foreach ($saved in @(Get-ChildItem -LiteralPath $appDir -Filter 'CodexResume-*.json' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5)) {
             try {
                 $job = Get-Content -LiteralPath $saved.FullName -Raw -ErrorAction Stop | ConvertFrom-Json
                 if ([string]$job.sessionId -ne [string]$Session.Id) { continue }
                 $root = Get-RepositoryRoot ([string]$job.repo)
                 if ($root -and $root.TrimEnd([char[]]@('/','\')) -ieq ([string]$job.repo).TrimEnd([char[]]@('/','\'))) {
-                    return [pscustomobject]@{ Root = $root; Source = 'previous schedule for this conversation' }
+                    $candidates.Add($root)
                 }
             } catch { continue }
         }
     }
 
-    # A CLI session may have started in the user's home folder and moved to a
-    # repository later. Examine only structured directory fields in its recent
-    # rollout history; arbitrary command text is not trustworthy location data.
-    if (-not (Test-Path -LiteralPath $Session.File -PathType Leaf)) { return $null }
-    $contexts = [System.Collections.Generic.List[string]]::new()
-    $toolDirs = [System.Collections.Generic.List[string]]::new()
-    try {
-        foreach ($line in @(Get-Content -LiteralPath $Session.File -Tail 800 -ErrorAction Stop)) {
-            if ($line -notmatch '"(?:cwd|workdir|arguments)"') { continue }
-            try {
-                $record = $line | ConvertFrom-Json -ErrorAction Stop
-                if ($record.type -eq 'turn_context' -and -not [string]::IsNullOrWhiteSpace([string]$record.payload.cwd)) {
-                    $contexts.Add([string]$record.payload.cwd)
-                } elseif ($record.type -eq 'response_item' -and $record.payload.type -eq 'function_call' -and $record.payload.arguments) {
-                    $arguments = $record.payload.arguments | ConvertFrom-Json -ErrorAction Stop
-                    if ($arguments.workdir -is [string] -and $arguments.workdir) { $toolDirs.Add([string]$arguments.workdir) }
-                }
-            } catch { continue }
+    # Use only structured cwd/workdir fields belonging to this session.
+    # CLI sessions can move from their starting repository to an isolated worktree.
+    if (Test-Path -LiteralPath $Session.File -PathType Leaf) {
+        $contexts = [System.Collections.Generic.List[string]]::new()
+        $toolDirs = [System.Collections.Generic.List[string]]::new()
+        try {
+            foreach ($line in @(Get-Content -LiteralPath $Session.File -Tail 800 -ErrorAction Stop)) {
+                if ($line -notmatch '"(?:cwd|workdir|arguments)"') { continue }
+                try {
+                    $record = $line | ConvertFrom-Json -ErrorAction Stop
+                    if ($record.type -eq 'turn_context' -and -not [string]::IsNullOrWhiteSpace([string]$record.payload.cwd)) {
+                        $contexts.Add([string]$record.payload.cwd)
+                    } elseif ($record.type -eq 'response_item' -and $record.payload.type -eq 'function_call' -and $record.payload.arguments) {
+                        $arguments = $record.payload.arguments | ConvertFrom-Json -ErrorAction Stop
+                        if ($arguments.workdir -is [string] -and $arguments.workdir) { $toolDirs.Add([string]$arguments.workdir) }
+                    }
+                } catch { continue }
+            }
+            foreach ($directory in @($contexts.ToArray() | Select-Object -Last 8) + @($toolDirs.ToArray() | Select-Object -Last 12)) {
+                $root = Get-RepositoryRoot $directory
+                if ($root) { $candidates.Add($root) }
+            }
+        } catch {
+            # Preserve other evidence, but never infer a root from malformed rollout text.
         }
-    } catch { return $null }
-    for ($i = $contexts.Count - 1; $i -ge 0 -and $i -ge ($contexts.Count - 8); $i--) {
-        $root = Get-RepositoryRoot $contexts[$i]
-        if ($root) { return [pscustomobject]@{ Root = $root; Source = 'recent conversation working directory' } }
     }
-    # Tool calls may use unrelated worktrees. Only use these hints when exactly
-    # one distinct valid repository root is present, otherwise require browsing.
-    $roots = @($toolDirs.ToArray() | Select-Object -Unique | Select-Object -Last 12 | ForEach-Object { Get-RepositoryRoot $_ } | Where-Object { $_ } | Select-Object -Unique)
-    if ($roots.Count -eq 1) { return [pscustomobject]@{ Root = $roots[0]; Source = 'recent tool working directory' } }
+
+    $roots = @($candidates.ToArray() | Sort-Object -Unique)
+    if ($roots.Count -eq 1) { return [pscustomobject]@{ Root = $roots[0]; Source = 'consistent session repository evidence'; Candidates = $roots } }
+    if ($roots.Count -gt 1) { return [pscustomobject]@{ Root = $null; Source = 'conflicting worktrees'; Candidates = $roots } }
     return $null
 }
-
 function Get-UpcomingCodexTasks {
     $items = @()
     foreach ($task in @(Get-ScheduledTask -ErrorAction Stop)) {
@@ -550,12 +553,16 @@ $useReset.Add_Click({
 $sessionBox.Add_SelectedIndexChanged({
     if (-not $sessionBox.SelectedItem) { $repoBox.Clear(); return }
     $found = Find-SessionRepository $sessionBox.SelectedItem
-    if ($found) {
+    if ($found -and $found.Root) {
         $repoBox.Text = [string]$found.Root
-        Update-Status "Repository auto-located from $($found.Source). Verify the branch before scheduling."
+        Update-Status "Repository auto-located from $($found.Source). Verify the active checkout before scheduling."
     } else {
         $repoBox.Clear()
-        Update-Status 'Repository not reliably identified from this conversation. Choose Browse.'
+        if ($found -and $found.Candidates.Count -gt 1) {
+            Update-Status "Multiple Git checkouts detected in this conversation. Use Browse to select the checkout containing unfinished work."
+        } else {
+            Update-Status 'Repository not reliably identified from this conversation. Choose Browse.'
+        }
     }
 })
 $refreshSessions.Add_Click({ try { Refresh-SessionList } catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Sessions error') | Out-Null } })

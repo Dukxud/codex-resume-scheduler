@@ -12,6 +12,9 @@ jobs:
           node-version: '22'
       - name: Codex usage tests
         run: node --test tests/*.test.js
+      - name: Repository ambiguity checks
+        shell: pwsh
+        run: ./tests/repository-detection.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

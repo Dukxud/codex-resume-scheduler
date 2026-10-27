@@ -41,14 +41,14 @@ The usage helper currently supports the **npm Codex installation** on Windows. W
 
 ## Repository auto-detection
 
-On selecting a conversation, the app tries these sources in order:
+On selecting a conversation, the app compares these session-specific sources:
 
-1. The selected CLI session's recorded working directory, if inside a Git repository.
-2. The repository previously selected for **the same session ID** in an earlier scheduler job.
-3. A recent structured `cwd` in that session's saved rollout history.
-4. A unique Git root supported by recent structured tool `workdir` fields.
+1. The selected CLI session's starting working directory, if inside a Git repository.
+2. Repositories previously scheduled for **the same session ID**.
+3. Recent structured `cwd` values in the saved conversation.
+4. Recent structured tool `workdir` values in the same conversation.
 
-If none are conclusive, the repository field is cleared and you must use **Browse**. It never scans the entire drive, guesses a root from an unrelated conversation, or assumes an initial home-directory `cwd` is your project. The runner still verifies the saved branch when execution starts.
+If multiple distinct Git roots are present, **the repository field is cleared** instead of silently preferring the conversation's original checkout. Use **Browse** to select the checkout containing unfinished work; its branch is validated when scheduling and running. The app does not scan the drive or guess from arbitrary command text. If session evidence is incomplete, manual verification remains necessary.
 
 ## License
 
@@ -61,7 +61,7 @@ MIT License. See [LICENSE](LICENSE).
 - The GUI validates repository root and branch at scheduling time, and the runner checks them again before execution. It does not revalidate the current task's full instruction/history. Concurrent sessions may conflict.
 - Tasks run once, not every day; Windows Task Scheduler can launch them after a missed time if `StartWhenAvailable` is enabled.
 - Scheduled tasks and job settings are kept locally. No code, repository content, or saved Codex conversations are uploaded by this app.
-- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.3.1 must still be tested on Windows**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
+- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.3.2 must still be tested on Windows**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
 
 ## Development
 

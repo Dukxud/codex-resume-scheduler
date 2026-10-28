@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.5.1: recognize Windows target-suffixed Codex CLI processes as possible conflicts.
+# v1.6.0: responsive background data refresh; removed unreliable CLI process scanning.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -11,16 +11,9 @@ $ErrorActionPreference = 'Stop'
 $appDir = Join-Path $env:LOCALAPPDATA 'CodexResumeScheduler'
 $sessionIdPattern = '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
 $script:appSourcePath = $PSCommandPath
+. (Join-Path $PSScriptRoot 'CodexData.ps1')
 
-function Get-RepositoryRoot {
-    param([string]$Path)
-    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) { return $null }
-    try {
-        $result = & git -C $Path rev-parse --show-toplevel 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $result) { return $null }
-        return ([string]($result | Select-Object -First 1)).Trim()
-    } catch { return $null }
-}
+
 
 function Get-RepositoryBranch {
     param([string]$Path)
@@ -48,37 +41,6 @@ function Read-UsageState {
     $state = ($response | Select-Object -Last 1) | ConvertFrom-Json
     if (-not $state.ok) { throw 'Codex rate-limit response unavailable.' }
     return $state
-}
-
-# Only evidence from OS processes is available for independently opened Codex CLI
-# windows. An explicit resume ID is definite; bare `codex` is ambiguous.
-# An App Server queried here cannot establish what another process has loaded.
-function Get-CodexSessionCollision {
-    param([string]$SessionId, [object[]]$Processes = $null)
-    if ($null -eq $Processes) {
-        try {
-            # Codex CLI may be named codex.exe or codex-<Windows target>.exe.
-            $Processes = @(Get-CimInstance Win32_Process -Filter "Name='node.exe' OR Name LIKE 'codex%'" -ErrorAction Stop)
-        } catch {
-            return [pscustomobject]@{ Status='unknown'; Detail='Could not inspect running Codex processes.' }
-        }
-    }
-    $ambiguous = 0
-    foreach ($process in $Processes) {
-        $name = [string]$process.Name
-        $line = [string]$process.CommandLine
-        if ($name -notmatch '^(?:codex(?:-(?:x86_64|aarch64)-[a-z0-9_-]+)?|node)\.exe$') { continue }
-        if ($name -ieq 'node.exe' -and $line -notmatch '(?i)(?:\\|/)@openai(?:\\|/)codex(?:\\|/)bin(?:\\|/)codex\.js') { continue }
-        if ($line -match '(?i)\b(?:app-server|remote-control)\b') { continue }
-        $match = [regex]::Match($line, '(?i)\bresume\s+([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\b')
-        if ($match.Success) {
-            if ($match.Groups[1].Value -ieq $SessionId) {
-                return [pscustomobject]@{ Status='matched'; Detail='A running Codex process explicitly references this conversation.' }
-            }
-        } else { $ambiguous++ }
-    }
-    if ($ambiguous -gt 0) { return [pscustomobject]@{ Status='possible'; Detail="$ambiguous Codex process(es) without a visible session ID. The conversation may be open in another window." } }
-    return [pscustomobject]@{ Status='not-detected'; Detail='No matching CLI process found. This cannot exclude all other clients.' }
 }
 
 function Get-SavedAccessPreference {
@@ -169,8 +131,6 @@ if ($RunJob) {
         Write-Host "Codex scheduled continuation | $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Cyan
         Write-Host "Session: $($job.sessionId) | Repository: $root | Branch: $branch"
         Write-Host "Model: $($job.model) | Reasoning: $($job.effort) | Access: $($job.access) | Message: $($job.message)"
-        $collision = Get-CodexSessionCollision ([string]$job.sessionId)
-        if ($collision.Status -ne 'not-detected') { throw "Cannot safely start: $($collision.Detail) Close the other Codex CLI window or resolve process visibility before rescheduling." }
         $model = [string]$job.model
         Assert-ModelEffortSupported (Read-CodexModelCatalog) $model ([string]$job.effort)
         $auto = $job.autoResume -eq $true
@@ -225,131 +185,16 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-function Get-RecentCliSessions {
-    $sessionRoot = Join-Path $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }) 'sessions'
-    $sessions = @()
-    if (Test-Path -LiteralPath $sessionRoot -PathType Container) {
-        $rollouts = @(Get-ChildItem -LiteralPath $sessionRoot -File -Recurse -Filter 'rollout-*.jsonl' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
-        foreach ($item in $rollouts) {
-            try {
-                $line = Get-Content -LiteralPath $item.FullName -TotalCount 1 -ErrorAction Stop
-                $meta = ($line | ConvertFrom-Json).payload
-                if ($meta.source -ne 'cli' -or $meta.id -notmatch $sessionIdPattern) { continue }
-                if ($sessions | Where-Object Id -eq $meta.id) { continue }
-                $name = if ($meta.cwd) { Split-Path -Leaf ([string]$meta.cwd) } else { 'CLI session' }
-                $sessions += [pscustomobject]@{
-                    Id = [string]$meta.id
-                    Cwd = [string]$meta.cwd
-                    File = [string]$item.FullName
-                    Display = ('{0} | {1:MM/dd HH:mm} | {2}' -f $name,$item.LastWriteTime,$meta.id)
-                }
-                if ($sessions.Count -ge 30) { break }
-            } catch { continue }
-        }
-    }
-    return $sessions
-}
+
 
 # Repository candidates must be compared across the selected conversation.
 # A valid startup repository is not necessarily the checkout with unfinished work.
 # Ambiguous evidence must require an explicit Browse choice, never a guess.
-function Find-SessionRepository {
-    param($Session)
-    if (-not $Session) { return $null }
-    $candidates = [System.Collections.Generic.List[string]]::new()
-    $direct = Get-RepositoryRoot ([string]$Session.Cwd)
-    if ($direct) { $candidates.Add($direct) }
 
-    # A prior schedule is evidence, not proof that it targeted the right checkout.
-    if (Test-Path -LiteralPath $appDir -PathType Container) {
-        foreach ($saved in @(Get-ChildItem -LiteralPath $appDir -Filter 'CodexResume-*.json' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5)) {
-            try {
-                $job = Get-Content -LiteralPath $saved.FullName -Raw -ErrorAction Stop | ConvertFrom-Json
-                if ([string]$job.sessionId -ne [string]$Session.Id) { continue }
-                $root = Get-RepositoryRoot ([string]$job.repo)
-                if ($root -and $root.TrimEnd([char[]]@('/','\')) -ieq ([string]$job.repo).TrimEnd([char[]]@('/','\'))) {
-                    $candidates.Add($root)
-                }
-            } catch { continue }
-        }
-    }
 
-    # Use only structured cwd/workdir fields belonging to this session.
-    # CLI sessions can move from their starting repository to an isolated worktree.
-    if (Test-Path -LiteralPath $Session.File -PathType Leaf) {
-        $contexts = [System.Collections.Generic.List[string]]::new()
-        $toolDirs = [System.Collections.Generic.List[string]]::new()
-        try {
-            foreach ($line in @(Get-Content -LiteralPath $Session.File -Tail 800 -ErrorAction Stop)) {
-                if ($line -notmatch '"(?:cwd|workdir|arguments)"') { continue }
-                try {
-                    $record = $line | ConvertFrom-Json -ErrorAction Stop
-                    if ($record.type -eq 'turn_context' -and -not [string]::IsNullOrWhiteSpace([string]$record.payload.cwd)) {
-                        $contexts.Add([string]$record.payload.cwd)
-                    } elseif ($record.type -eq 'response_item' -and $record.payload.type -eq 'function_call' -and $record.payload.arguments) {
-                        $arguments = $record.payload.arguments | ConvertFrom-Json -ErrorAction Stop
-                        if ($arguments.workdir -is [string] -and $arguments.workdir) { $toolDirs.Add([string]$arguments.workdir) }
-                    }
-                } catch { continue }
-            }
-            foreach ($directory in @($contexts.ToArray() | Select-Object -Last 8) + @($toolDirs.ToArray() | Select-Object -Last 12)) {
-                $root = Get-RepositoryRoot $directory
-                if ($root) { $candidates.Add($root) }
-            }
-        } catch {
-            # Preserve other evidence, but never infer a root from malformed rollout text.
-        }
-    }
-
-    $roots = @($candidates.ToArray() | Sort-Object -Unique)
-    if ($roots.Count -eq 1) { return [pscustomobject]@{ Root = $roots[0]; Source = 'consistent session repository evidence'; Candidates = $roots } }
-    if ($roots.Count -gt 1) { return [pscustomobject]@{ Root = $null; Source = 'conflicting worktrees'; Candidates = $roots } }
-    return $null
-}
-function Get-UpcomingCodexTasks {
-    $items = @()
-    foreach ($task in @(Get-ScheduledTask -ErrorAction Stop)) {
-        if ($task.TaskName -notmatch '^(CodexResume-|BP\d+-Codex-(?:Resume|Test)$)') { continue }
-        if ($task.State -eq 'Disabled' -or $task.State -eq 'Running') { continue }
-        $trig = @($task.Triggers | Where-Object { $_.StartBoundary }) | Select-Object -First 1
-        if (-not $trig) { continue }
-        try { $when = [datetime]$trig.StartBoundary } catch { continue }
-        if ($when -le (Get-Date)) { continue }
-        $name = [string]$task.TaskName
-        $json = Join-Path $appDir ($name + '.json')
-        $description = 'Existing scheduled task'
-        $session = '-'
-        $repo = '-'
-        if (Test-Path -LiteralPath $json) {
-            try {
-                $job = Get-Content -LiteralPath $json -Raw | ConvertFrom-Json
-                $description = "$($job.model) / $($job.effort) | $($job.access) | $($job.message)"
-                $session = [string]$job.sessionId
-                $repo = [string]$job.repo
-            } catch { $description = 'Scheduled task (job data unreadable)' }
-        } elseif ($name -match '^BP\d+-Codex-') {
-            # Surface existing BPxx tasks without modifying their definitions.
-            $repo = [string]$task.Actions[0].WorkingDirectory
-            $match = [regex]::Match([string]$task.Actions[0].Arguments, '-File\s+"([^"]+)"')
-            if ($match.Success -and (Test-Path -LiteralPath $match.Groups[1].Value -PathType Leaf)) {
-                try {
-                    $legacy = Get-Content -LiteralPath $match.Groups[1].Value -Raw
-                    $sidMatch = [regex]::Match($legacy, 'resume\s+"([0-9a-fA-F-]{36})"')
-                    if ($sidMatch.Success) { $session = $sidMatch.Groups[1].Value }
-                    $effortMatch = [regex]::Match($legacy, 'model_reasoning_effort=(medium|high|xhigh)')
-                    $effortName = if ($effortMatch.Success) { $effortMatch.Groups[1].Value } else { 'unspecified' }
-                    $accessName = if ($legacy.Contains('--dangerously-bypass-approvals-and-sandbox')) { 'YOLO' } elseif ($legacy.Contains('--sandbox read-only')) { 'read-only' } else { 'other' }
-                    $description = "$effortName | $accessName | existing BP task"
-                } catch { }
-            }
-        }
-        $items += [pscustomobject]@{ Name = $name; When = $when; Repo = $repo; Session = $session; Description = $description }
-    }
-    return ($items | Sort-Object When)
-}
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.4'
+$form.Text = 'Codex Resume Scheduler v1.6'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
@@ -462,18 +307,7 @@ function Select-AvailableEfforts {
     }
     $schedule.Enabled = ($null -ne $entry -and $effortBox.SelectedIndex -ge 0)
 }
-function Read-SessionModel {
-    param($Session)
-    if (-not $Session -or -not (Test-Path -LiteralPath $Session.File -PathType Leaf)) { return $null }
-    try {
-        foreach ($line in @(Get-Content -LiteralPath $Session.File -Tail 600) | Select-Object -Last 600) {
-            if ($line -notmatch '"model"') { continue }
-            $record = $line | ConvertFrom-Json -ErrorAction Stop
-            if ($record.type -eq 'turn_context' -and $record.payload.model -is [string]) { $found = [string]$record.payload.model }
-        }
-        return $found
-    } catch { return $null }
-}
+
 
 # Launch the existing CodexUsage.js reader without blocking the Windows Forms
 # message loop. The UI polls only for process completion; no persistent service.
@@ -607,24 +441,127 @@ function Update-Status {
     $status.Text = $Text
 }
 
-function Refresh-SessionList {
-    $sessionBox.Items.Clear()
-    $sessions = @(Get-RecentCliSessions)
-    foreach ($item in $sessions) { [void]$sessionBox.Items.Add($item) }
-    if ($sessionBox.Items.Count -gt 0) { $sessionBox.SelectedIndex = 0 }
-    Update-Status "Found $($sessionBox.Items.Count) saved CLI conversations."
+# Keep filesystem, Git, and Task Scheduler reads off the Windows Forms thread.
+# Each operation has at most one active job and one coalesced follow-up request.
+$script:dataJobs = @{}
+$script:dataQueued = @{}
+$script:pendingSnapshot = @()
+$script:selectionGeneration = 0
+$script:selectionJobGeneration = 0
+$script:selectionOriginalModel = $null
+$script:loadingSessions = $false
+$script:models = @()
+
+function Start-DataRead {
+    param([ValidateSet('sessions','pending','selection')][string]$Kind, $Session = $null)
+    if ($script:dataJobs[$Kind]) { $script:dataQueued[$Kind] = $true; return }
+    try {
+        $sourceFolder = $PSScriptRoot
+        $localAppDir = $appDir
+        $job = Start-ThreadJob -ArgumentList @($sourceFolder,$localAppDir,$Kind,$Session) -ScriptBlock {
+            param($Folder,$LocalAppDir,$Operation,$SelectedSession)
+            $ErrorActionPreference = 'Stop'
+            $appDir = $LocalAppDir
+            $sessionIdPattern = '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
+            . (Join-Path $Folder 'CodexData.ps1')
+            switch ($Operation) {
+                'sessions'  { Get-RecentCliSessions }
+                'pending'   { Get-UpcomingCodexTasks }
+                'selection' {
+                    [pscustomobject]@{ Id = [string]$SelectedSession.Id;
+                        Model = Read-SessionModel $SelectedSession;
+                        Found = Find-SessionRepository $SelectedSession }
+                }
+            }
+        }
+        $script:dataJobs[$Kind] = $job
+        if ($Kind -eq 'selection') { $script:selectionJobGeneration = $script:selectionGeneration }
+    } catch { Update-Status "$Kind refresh failed to start: $($_.Exception.Message)" }
 }
 
-function Refresh-PendingList {
+function Refresh-SessionList { Start-DataRead 'sessions' }
+function Refresh-PendingList { Start-DataRead 'pending' }
+
+function Request-SelectionLookup {
+    if ($script:loadingSessions) { return }
+    $script:selectionGeneration++
+    $selected = $sessionBox.SelectedItem
+    $repoBox.Clear()
+    if (-not $selected) { return }
+    $script:selectionOriginalModel = Get-SelectedModel
+    Update-Status 'Locating conversation repository in background...'
+    Start-DataRead 'selection' $selected
+}
+
+function Apply-SessionList {
+    param([object[]]$Sessions)
+    $selectedId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } else { $null }
+    $script:loadingSessions = $true
+    try {
+        $sessionBox.BeginUpdate()
+        $sessionBox.Items.Clear()
+        foreach ($item in $Sessions) { [void]$sessionBox.Items.Add($item) }
+        $sessionBox.EndUpdate()
+        $chosen = $null
+        if ($selectedId) { $chosen = @($sessionBox.Items | Where-Object { $_.Id -eq $selectedId }) | Select-Object -First 1 }
+        if ($chosen) { $sessionBox.SelectedItem = $chosen }
+        elseif ($sessionBox.Items.Count -gt 0) { $sessionBox.SelectedIndex = 0 }
+    } finally { $script:loadingSessions = $false }
+    Update-Status "Found $($sessionBox.Items.Count) saved CLI conversations."
+    Request-SelectionLookup
+}
+
+function Apply-PendingList {
+    param([object[]]$Items)
+    $script:pendingSnapshot = @($Items)
     $grid.Rows.Clear()
-    $items = @(Get-UpcomingCodexTasks)
-    foreach ($item in $items) {
+    foreach ($item in $Items) {
         $index = $grid.Rows.Add($item.When.ToString('MMM dd, h:mm tt'),$item.Name,$item.Repo,$item.Description)
         $grid.Rows[$index].Tag = $item.Name
     }
     $grid.ClearSelection()
-    Update-Status "$($items.Count) upcoming Codex task(s). One-time schedules only."
+    Update-Status "$($Items.Count) upcoming Codex task(s). One-time schedules only."
 }
+
+$dataPoll = New-Object System.Windows.Forms.Timer
+$dataPoll.Interval = 250
+$dataPoll.Add_Tick({
+    foreach ($kind in @('sessions','pending','selection')) {
+        $job = $script:dataJobs[$kind]
+        if (-not $job -or $job.State -notin @('Completed','Failed','Stopped')) { continue }
+        $script:dataJobs.Remove($kind)
+        try {
+            $result = @(Receive-Job -Job $job -ErrorAction Stop)
+            switch ($kind) {
+                'sessions' { Apply-SessionList $result }
+                'pending' { Apply-PendingList $result }
+                'selection' {
+                    if ($script:selectionJobGeneration -ne $script:selectionGeneration) { break }
+                    $info = $result | Select-Object -First 1
+                    if (-not $info -or -not $sessionBox.SelectedItem -or $info.Id -ne $sessionBox.SelectedItem.Id) { break }
+                    if ($info.Model -and (Get-SelectedModel) -eq $script:selectionOriginalModel) {
+                        $script:preferredSessionModel = [string]$info.Model
+                        $chosen = @($modelBox.Items | Where-Object { $_.Id -eq $info.Model }) | Select-Object -First 1
+                        if ($chosen) { $modelBox.SelectedItem = $chosen; Select-AvailableEfforts }
+                    }
+                    if ($info.Found -and $info.Found.Root) {
+                        $repoBox.Text = [string]$info.Found.Root
+                        Update-Status 'Conversation repository located; verify it before scheduling.'
+                    } elseif ($info.Found -and @($info.Found.Candidates).Count -gt 1) {
+                        Update-Status 'Conflicting worktrees found. Use Browse to choose the active checkout.'
+                    } else { Update-Status 'Repository could not be identified. Use Browse.' }
+                }
+            }
+        } catch { Update-Status "$kind refresh failed: $($_.Exception.Message)" }
+        finally { Remove-Job -Job $job -Force -ErrorAction SilentlyContinue }
+        if ($script:dataQueued[$kind]) {
+            $script:dataQueued[$kind] = $false
+            if ($kind -eq 'selection') {
+                if ($sessionBox.SelectedItem) { Start-DataRead 'selection' $sessionBox.SelectedItem }
+            } else { Start-DataRead $kind }
+        }
+    }
+})
 
 $script:usageSnapshot = $null
 $script:usageProcess = $null
@@ -774,28 +711,7 @@ $modelBox.Add_SelectedIndexChanged({
         Request-UsageRefresh
     }
 })
-$sessionBox.Add_SelectedIndexChanged({
-    $preferred = Read-SessionModel $sessionBox.SelectedItem
-    $script:preferredSessionModel = $preferred
-    if ($preferred -and $script:models.Count -gt 0) {
-        $chosen = @($modelBox.Items | Where-Object { $_.Id -eq $preferred }) | Select-Object -First 1
-        if ($chosen) { $modelBox.SelectedItem = $chosen; Select-AvailableEfforts }
-        else { Update-Status "Saved conversation model '$preferred' is not in the available catalog. Select a supported model." }
-    }
-    if (-not $sessionBox.SelectedItem) { $repoBox.Clear(); return }
-    $found = Find-SessionRepository $sessionBox.SelectedItem
-    if ($found -and $found.Root) {
-        $repoBox.Text = [string]$found.Root
-        Update-Status "Repository auto-located from $($found.Source). Verify the active checkout before scheduling."
-    } else {
-        $repoBox.Clear()
-        if ($found -and $found.Candidates.Count -gt 1) {
-            Update-Status "Multiple Git checkouts detected in this conversation. Use Browse to select the checkout containing unfinished work."
-        } else {
-            Update-Status 'Repository not reliably identified from this conversation. Choose Browse.'
-        }
-    }
-})
+$sessionBox.Add_SelectedIndexChanged({ Request-SelectionLookup })
 $refreshSessions.Add_Click({ try { Refresh-SessionList } catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Sessions error') | Out-Null } })
 $browse.Add_Click({
     $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -803,7 +719,7 @@ $browse.Add_Click({
     if (Test-Path -LiteralPath $repoBox.Text -PathType Container) { $dialog.SelectedPath = $repoBox.Text }
     if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $root = Get-RepositoryRoot $dialog.SelectedPath
-        if ($root) { $repoBox.Text = $root }
+        if ($root) { $script:selectionGeneration++; $script:dataQueued['selection'] = $false; $repoBox.Text = $root }
         else { [System.Windows.Forms.MessageBox]::Show('Select a folder inside a Git repository.','Invalid folder') | Out-Null }
     }
     $dialog.Dispose()
@@ -851,12 +767,7 @@ $schedule.Add_Click({
         Assert-ModelEffortSupported $script:models $model $effort
         # A GUI catalog snapshot can age before the scheduled task starts;
         # the runner independently revalidates the model and effort.
-        $collision = Get-CodexSessionCollision $sessionId
-        if ($collision.Status -ne 'not-detected') {
-            $response = [System.Windows.Forms.MessageBox]::Show("$($collision.Detail)`n`nThe scheduled runner will refuse to start while the conflict remains. Schedule anyway?",'Conversation may already be open','YesNo','Warning')
-            if ($response -ne 'Yes') { return }
-        }
-        $overlaps = @(Get-UpcomingCodexTasks | Where-Object { $_.Repo -ne '-' -and $_.Repo.TrimEnd([char[]]@('/','\')) -ieq $root.TrimEnd([char[]]@('/','\')) })
+        $overlaps = @($script:pendingSnapshot | Where-Object { $_.Repo -ne '-' -and $_.Repo.TrimEnd([char[]]@('/','\')) -ieq $root.TrimEnd([char[]]@('/','\')) })
         if ($overlaps.Count -gt 0) {
             $answer = [System.Windows.Forms.MessageBox]::Show("There are already $($overlaps.Count) upcoming task(s) targeting this repository. Creating another may cause concurrent work if times overlap. Continue?",'Existing scheduled work','YesNo','Warning')
             if ($answer -ne 'Yes') { return }
@@ -864,7 +775,7 @@ $schedule.Add_Click({
         [void](New-Item -Path $appDir -ItemType Directory -Force)
         $installedScript = Join-Path $appDir 'CodexResumeScheduler.ps1'
         if ($script:appSourcePath -ine $installedScript) { Copy-Item -LiteralPath $script:appSourcePath -Destination $installedScript -Force }
-        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js')) {
+        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js','CodexData.ps1')) {
             $source = Join-Path $PSScriptRoot $helperFile
             if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "$helperFile missing from installation." }
             $destination = Join-Path $appDir $helperFile
@@ -915,10 +826,15 @@ $form.Add_Shown({
     try { Refresh-SessionList; Refresh-PendingList } catch { Update-Status "Startup warning: $($_.Exception.Message)" }
     Request-UsageRefresh
     $autoRefresh.Start()
+    $dataPoll.Start()
 })
 $form.Add_FormClosed({
     $autoRefresh.Stop()
     $usagePoll.Stop()
+    $dataPoll.Stop()
+    foreach ($job in @($script:dataJobs.Values)) {
+        try { Stop-Job -Job $job -ErrorAction SilentlyContinue; Remove-Job -Job $job -Force -ErrorAction SilentlyContinue } catch { }
+    }
     if ($script:usageProcess) {
         try { if (-not $script:usageProcess.HasExited) { $script:usageProcess.Kill($true) } } catch { }
         $script:usageProcess.Dispose()
@@ -928,4 +844,5 @@ $form.Add_FormClosed({
 [void]$form.ShowDialog()
 $autoRefresh.Dispose()
 $usagePoll.Dispose()
+$dataPoll.Dispose()
 $form.Dispose()

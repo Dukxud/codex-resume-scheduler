@@ -51,7 +51,7 @@ function summarizeRateLimits(result, now = Math.floor(Date.now()/1000), model = 
   const exhausted = windows.filter(w => w.usedPercent !== null && w.usedPercent >= 100);
   const isBlocked = ordinaryUsageAllowed === false || exhausted.length > 0 || !!rate.rateLimitReachedType || rate.spendControlReached === true;
   const resetKnown = exhausted.length > 0 && exhausted.every(w => w.resetsAt !== null && w.resetsAt > now);
-  const recommendedResetAt = isBlocked && resetKnown && rate.spendControlReached !== true && !/credits|usageLimit/i.test(rate.rateLimitReachedType || '')
+  const recommendedResetAt = isBlocked && resetKnown && rate.spendControlReached !== true && (!rate.rateLimitReachedType || rate.rateLimitReachedType === 'rate_limit_reached')
     ? Math.max(...exhausted.map(w => w.resetsAt)) : null;
   const canAttempt = ordinaryUsageAllowed === true && !isBlocked;
   const future = windows.filter(w => w.resetsAt !== null && w.resetsAt > now);

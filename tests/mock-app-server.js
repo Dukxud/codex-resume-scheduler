@@ -1,16 +1,14 @@
-"use strict";
-const readline = require("node:readline");
-const rl = readline.createInterface({ input: process.stdin });
-let initialized = false;
-rl.on("line", line => {
-  const msg = JSON.parse(line);
-  if (msg.method === "initialize" && msg.id === 1) {
-    process.stdout.write(JSON.stringify({ id: 1, result: { userAgent: "mock" } }) + "\n");
-  } else if (msg.method === "initialized") {
-    initialized = true;
-  } else if (msg.method === "account/rateLimits/read" && msg.id === 2 && initialized) {
-    process.stdout.write(JSON.stringify({ id: 2, result: { rateLimits: {
-      primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: Math.floor(Date.now() / 1000) + 200 },
-    } } }) + "\n");
-  }
+'use strict';
+const readline=require('node:readline');
+const rl=readline.createInterface({input:process.stdin});
+let initialized=false;
+rl.on('line',line=>{
+  const m=JSON.parse(line);
+  if(m.method==='initialize')process.stdout.write(JSON.stringify({id:m.id,result:{userAgent:'mock'}})+'\n');
+  if(m.method==='initialized')initialized=true;
+  if(m.method==='model/list'&&initialized)process.stdout.write(JSON.stringify({id:m.id,result:{data:[
+    {model:'gpt-6-astra',displayName:'Astra',defaultReasoningEffort:'high',supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'medium'},{reasoningEffort:'high'},{reasoningEffort:'xhigh'}],isDefault:true},
+    {model:'gpt-6.1-sol',displayName:'Sol',defaultReasoningEffort:'medium',supportedReasoningEfforts:[{reasoningEffort:'medium'}]}],nextCursor:null}})+'\n');
+  if(m.method==='account/rateLimits/read'&&initialized)process.stdout.write(JSON.stringify({id:m.id,result:{ordinaryUsageAllowed:false,
+    rateLimits:{limitId:'codex',primary:{usedPercent:100,windowDurationMins:300,resetsAt:Math.floor(Date.now()/1000)+200}}}})+'\n');
 });

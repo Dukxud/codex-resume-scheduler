@@ -1,51 +1,62 @@
-"use strict";
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const { summarizeRateLimits, describeWindow, readRateLimits } = require("../CodexUsage.js");
-const path = require("node:path");
-
-const time = 1793000000;
-const window = (percent, delta, duration) => ({ usedPercent: percent, resetsAt: time + delta, windowDurationMins: duration });
-
-test("shows both windows and uses latest reset when both are exhausted", () => {
-  const v = summarizeRateLimits({ ordinaryUsageAllowed: false, rateLimits: {
-    primary: window(100, 600, 300), secondary: window(100, 900, 10080), rateLimitReachedType: "primary",
-  } }, time);
-  assert.deepEqual(v.windows.map(w => w.label), ["5-hour", "Weekly"]);
-  assert.equal(v.recommendedResetAt, time + 900);
-  assert.equal(v.recommendationKind, "exhausted-window");
+'use strict';
+const test=require('node:test');const assert=require('node:assert/strict');const path=require('node:path');
+const {summarizeRateLimits,describeWindow,normalizeModels,readCodexState,isLimitErrorLine}=require('../CodexUsage.js');
+const {decide,failureSeen}=require('../CodexRetry.js');
+const now=1793000000;const win=(used,delta,duration=300)=>({usedPercent:used,resetsAt:now+delta,windowDurationMins:duration});
+const bucket=(used,delta,model,duration=300)=>({normalModelSlug:model,primary:win(used,delta,duration)});
+test('multiple active 5-hour and weekly windows use last blocking reset',()=>{
+ const v=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimits:{primary:win(100,300),secondary:win(100,2000,10080)}},now,'new-model');
+ assert.equal(v.recommendedResetAt,now+2000);assert.equal(v.recommendationKind,'exhausted-window');
+ assert.equal(v.windows[1].label,'Weekly');
 });
-
-test("prefers codex bucket over another model meter", () => {
-  const v = summarizeRateLimits({ rateLimits: { primary: window(10, 100, 60) },
-    rateLimitsByLimitId: { codex: { primary: window(90, 300, 300) }, codex_other: { primary: window(100, 500, 60) } },
-  }, time);
-  assert.equal(v.windows[0].label, "5-hour");
-  assert.equal(v.recommendedResetAt, time + 300);
-  assert.equal(v.recommendationKind, "next-window");
+test('unknown quota binding never borrows reset from another model',()=>{
+ const v=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimitsByLimitId:{terra:bucket(100,100,'terra'),luna:bucket(100,300,'luna')}},now,'sol');
+ assert.equal(v.recommendedResetAt,null);assert.equal(v.selectionVerified,false);
 });
-
-test("doesn't infer an unblock time when backend disallows usage but windows aren't exhausted", () => {
-  const v = summarizeRateLimits({ ordinaryUsageAllowed: false, rateLimits: { primary: window(40, 100, 300) } }, time);
-  assert.equal(v.recommendedResetAt, null);
+test('per-model bucket overrides unrelated exhausted bucket',()=>{
+ const rates={ordinaryUsageAllowed:true,rateLimitsByLimitId:{astra:bucket(100,200,'astra'),sol:bucket(25,400,'sol')}};
+ const v=summarizeRateLimits(rates,now,'sol');assert.equal(v.bucketId,'sol');assert.equal(v.recommendationKind,'next-window');
+ assert.equal(v.recommendedResetAt,now+400);
 });
-
-test("missing reset timestamps do not yield a schedule", () => {
-  const v = summarizeRateLimits({ rateLimits: { primary: { usedPercent: 100, resetsAt: null } } }, time);
-  assert.equal(v.recommendedResetAt, null);
+test('no inferred time when exhausted window lacks reset or backend restricts without exhaustion',()=>{
+ const a=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimits:{primary:{usedPercent:100}}},now,'any');
+ const b=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimits:{primary:win(20,200)}},now,'any');
+ assert.equal(a.recommendedResetAt,null);assert.equal(b.recommendedResetAt,null);
 });
-
-test("reads Codex app-server with initialize and authenticated rateLimits request", async () => {
-  const v = await readRateLimits(path.join(__dirname, "mock-app-server.js"), 3000);
-  assert.equal(v.windows[0].usedPercent, 100);
-  assert.equal(v.recommendationKind, "exhausted-window");
+test('spend controls cannot be treated as a timed quota',()=>{
+ const a=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimits:{...bucket(100,300,'model'),spendControlReached:true}},now,'model');
+ assert.equal(a.recommendedResetAt,null);
 });
-
-
-test("remaining quota is the complement of usage and is bounded", () => {
-  assert.equal(describeWindow({ usedPercent: 73.5 }, "Primary").remainingPercent, 26.5);
-  assert.equal(describeWindow({ usedPercent: 100 }, "Primary").remainingPercent, 0);
-  assert.equal(describeWindow({ usedPercent: 110 }, "Primary").remainingPercent, 0);
-  assert.equal(describeWindow({ usedPercent: -4 }, "Primary").remainingPercent, 100);
-  assert.equal(describeWindow({ usedPercent: null }, "Primary").remainingPercent, null);
+test('dynamic model and reasoning catalog retains unknown effort ids',()=>{
+ assert.deepEqual(normalizeModels([{data:[{id:'future',displayName:'Future',isDefault:true,defaultReasoningEffort:'superdeep',supportedReasoningEfforts:[{reasoningEffort:'superdeep'}]}]}])[0].efforts,['superdeep']);
+});
+test('app-server discovery and rate limits work using same handshake',async()=>{
+ const v=await readCodexState(path.join(__dirname,'mock-app-server.js'));
+ assert.equal(v.models.length,2);assert.equal(v.models[0].id,'gpt-6-astra');
+ assert.equal(v.recommendationKind,'exhausted-window');
+});
+test('only actual structured limit errors trigger retry analysis',()=>{
+ assert.equal(isLimitErrorLine(JSON.stringify({type:'user',message:'usage limit'})),false);
+ assert.equal(isLimitErrorLine(JSON.stringify({type:'turn.failed',error:{message:'Usage limit exceeded'}})),true);
+ assert.equal(failureSeen('ERROR: You have hit your usage limit'),true);
+ assert.equal(failureSeen('ERROR: unsupported model'),false);
+});
+test('retries only with actual error and verified future reset',()=>{
+ const snapshot=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimits:{primary:win(100,600)}},now,'any');
+ const error='{"type":"turn.failed","error":{"message":"Usage limit exceeded"}}';
+ assert.equal(decide(error,snapshot,now).runAt,now+720);
+ assert.equal(decide('complete',snapshot,now).kind,'not-limit');
+ assert.equal(decide(error,{...snapshot,selectionVerified:false},now).kind,'unknown');
+});
+test('quota percentages are remaining and bounded',()=>{
+ assert.equal(describeWindow({usedPercent:75},'Primary').remainingPercent,25);
+ assert.equal(describeWindow({usedPercent:111},'Primary').remainingPercent,0);
+});
+test('single explicitly model-labelled bucket is not automatically treated as a global quota',()=>{
+ const s=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimitsByLimitId:{luna:bucket(100,300,'luna')}},now,'astra');
+ assert.equal(s.selectionVerified,false);assert.equal(s.recommendedResetAt,null);
+});
+test('unknown backend payload fails safely and never synthesizes a reset',()=>{
+ const s=summarizeRateLimits({rateLimitsByLimitId:{a:{primary:{usedPercent:'100',resetsAt:'tomorrow'}}}},now,'a');
+ assert.equal(s.recommendedResetAt,null);assert.equal(s.canAttempt,false);
 });

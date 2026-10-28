@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.3.2: refuse ambiguous session repository detection across multiple Git checkouts.
+# v1.4.0: discover models/efforts, model-specific limits, bounded automatic resumption.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -29,13 +29,63 @@ function Get-RepositoryBranch {
     return ([string]($branch | Select-Object -First 1)).Trim()
 }
 
+function Get-CodexCliJs {
+    $shim = (Get-Command codex.cmd -ErrorAction Stop).Source
+    $entry = Join-Path (Split-Path -Parent $shim) 'node_modules\@openai\codex\bin\codex.js'
+    if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw 'Cannot locate npm Codex App Server entrypoint.' }
+    return $entry
+}
+
+function Read-UsageState {
+    param([string]$Model)
+    $helper = Join-Path $PSScriptRoot 'CodexUsage.js'
+    if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'CodexUsage.js missing.' }
+    $cli = Get-CodexCliJs
+    $params = @($helper,'--cli-js',$cli,'--rates-only')
+    if ($Model) { $params += @('--model',$Model) }
+    $response = & node @params
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read Codex usage.' }
+    $state = ($response | Select-Object -Last 1) | ConvertFrom-Json
+    if (-not $state.ok) { throw 'Codex rate-limit response unavailable.' }
+    return $state
+}
+
+function Schedule-LimitRetry {
+    param($Job, [long]$ResetAt, [long]$RunAt, [string]$BucketId)
+    $attempt = [int]$Job.retryAttempt + 1
+    if ($attempt -gt 4) { Write-Host 'Automatic resume stopped: maximum four attempts reached.' -ForegroundColor Yellow; return }
+    $when = [DateTimeOffset]::FromUnixTimeSeconds($RunAt).LocalDateTime
+    $when = [datetime]::new($when.Year,$when.Month,$when.Day,$when.Hour,$when.Minute,0).AddMinutes(1)
+    if ($when -le (Get-Date).AddSeconds(60)) { Write-Host 'Reset time is not safely in the future; no retry scheduled.' -ForegroundColor Yellow; return }
+    $name = 'CodexResume-' + $when.ToString('yyyyMMdd-HHmm') + '-' + ([guid]::NewGuid().ToString('N').Substring(0,8))
+    $jobFile = Join-Path $appDir ($name + '.json')
+    $next = [pscustomobject]@{ sessionId=$Job.sessionId; repo=$Job.repo; branch=$Job.branch; model=$Job.model;
+        effort=$Job.effort; access=$Job.access; message=$Job.message; autoResume=$true;
+        accountId=$Job.accountId; retryAttempt=$attempt; previousResetAt=$ResetAt;
+        log=(Join-Path $appDir ($name + '.log')) }
+    $next | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFile -Encoding utf8
+    # Use the same application copy that is executing the current job.
+    $arguments = '-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "' + $script:appSourcePath + '" -RunJob -JobFile "' + $jobFile + '"'
+    $action = New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'pwsh.exe') -Argument $arguments -WorkingDirectory $Job.repo
+    $trigger = New-ScheduledTaskTrigger -Once -At $when
+    $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
+    try {
+        Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Principal $principal -Settings (New-ScheduledTaskSettingsSet -StartWhenAvailable) -ErrorAction Stop | Out-Null
+        Write-Host "Confirmed quota '$BucketId' blocked; attempt $attempt/4 scheduled for $($when.ToString('yyyy-MM-dd HH:mm:ss zzz')) (local), after reported reset $([DateTimeOffset]::FromUnixTimeSeconds($ResetAt).LocalDateTime)." -ForegroundColor Yellow
+    } catch {
+        Remove-Item -LiteralPath $jobFile -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
 if ($RunJob) {
     $transcribing = $false
     try {
         if (-not $JobFile -or -not (Test-Path -LiteralPath $JobFile -PathType Leaf)) { throw 'Scheduled job file is missing.' }
         $job = Get-Content -LiteralPath $JobFile -Raw | ConvertFrom-Json
         if ($job.sessionId -notmatch $sessionIdPattern) { throw 'Invalid saved session ID.' }
-        if ($job.effort -notin @('medium','high','xhigh')) { throw 'Invalid saved reasoning effort.' }
+        if ($job.effort -notmatch '^[a-zA-Z][a-zA-Z0-9_-]{0,40}$') { throw 'Invalid reasoning effort.' }
+        if ($job.model -and $job.model -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$') { throw 'Invalid model identifier.' }
         if ($job.access -notin @('read-only','workspace-write','yolo')) { throw 'Invalid saved access setting.' }
         if (-not (Test-Path -LiteralPath $job.repo -PathType Container)) { throw 'Repository no longer exists.' }
         $root = Get-RepositoryRoot $job.repo
@@ -49,8 +99,21 @@ if ($RunJob) {
         Set-Location -LiteralPath $root
         Write-Host "Codex scheduled continuation | $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Cyan
         Write-Host "Session: $($job.sessionId) | Repository: $root | Branch: $branch"
-        Write-Host "Reasoning: $($job.effort) | Access: $($job.access) | Message: $($job.message)"
-        $argsList = @('exec','-c',"model_reasoning_effort=$($job.effort)",'-C',$root)
+        Write-Host "Model: $($job.model) | Reasoning: $($job.effort) | Access: $($job.access) | Message: $($job.message)"
+        $model = [string]$job.model
+        $auto = $job.autoResume -eq $true
+        if ($auto -and [int]$job.retryAttempt -gt 0) {
+            $state = Read-UsageState $model
+            if ($job.accountId -and $state.accountId -and $job.accountId -ne $state.accountId) { throw 'Codex account changed since initial scheduling.' }
+            if (-not $state.canAttempt) {
+                if ($state.recommendationKind -eq 'exhausted-window' -and $state.recommendedResetAt -and [int]$job.retryAttempt -lt 4) {
+                    Schedule-LimitRetry $job ([long]$state.recommendedResetAt) ([long]$state.recommendedResetAt + 120) ([string]$state.bucketId)
+                } else { Write-Host "Usage still unavailable; no reliable future retry: $($state.blockedReason)" -ForegroundColor Yellow }
+                return
+            }
+        }
+        $argsList = @('exec','--json','-m',$model,'-c',"model_reasoning_effort=$($job.effort)",'-C',$root)
+        if (-not $model) { $argsList = @('exec','--json','-c',"model_reasoning_effort=$($job.effort)",'-C',$root) }
         switch ($job.access) {
             'yolo'            { $argsList += '--dangerously-bypass-approvals-and-sandbox' }
             'workspace-write' { $argsList += @('--sandbox','workspace-write') }
@@ -58,9 +121,24 @@ if ($RunJob) {
         }
         $argsList += @('resume', [string]$job.sessionId, [string]$job.message)
         $codex = (Get-Command codex.cmd -ErrorAction Stop).Source
-        & $codex @argsList
+        $events = Join-Path $appDir (([IO.Path]::GetFileNameWithoutExtension($JobFile)) + '.jsonl')
+        & $codex @argsList 2>&1 | Tee-Object -FilePath $events
         $result = $LASTEXITCODE
         Write-Host "Codex exit code: $result" -ForegroundColor $(if ($result -eq 0) { 'Green' } else { 'Yellow' })
+        if ($auto) {
+            $retryHelper = Join-Path $PSScriptRoot 'CodexRetry.js'
+            $cli = Get-CodexCliJs
+            $assessment = & node $retryHelper --events $events --cli-js $cli --model $model | Select-Object -Last 1 | ConvertFrom-Json
+            if ($assessment.kind -eq 'retry') {
+                if ($job.accountId) {
+                    $account = Read-UsageState $model
+                    if ($account.accountId -and $account.accountId -ne $job.accountId) { throw 'Codex account changed; refusing retry.' }
+                }
+                Schedule-LimitRetry $job ([long]$assessment.resetAt) ([long]$assessment.runAt) ([string]$assessment.bucketId)
+            } elseif ($assessment.kind -eq 'unknown') {
+                Write-Host "Not auto-resuming: $($assessment.reason)" -ForegroundColor Yellow
+            }
+        }
     } catch {
         Write-Host "Scheduled run failed: $($_.Exception.Message)" -ForegroundColor Red
     } finally {
@@ -173,7 +251,7 @@ function Get-UpcomingCodexTasks {
         if (Test-Path -LiteralPath $json) {
             try {
                 $job = Get-Content -LiteralPath $json -Raw | ConvertFrom-Json
-                $description = "$($job.effort) | $($job.access) | $($job.message)"
+                $description = "$($job.model) / $($job.effort) | $($job.access) | $($job.message)"
                 $session = [string]$job.sessionId
                 $repo = [string]$job.repo
             } catch { $description = 'Scheduled task (job data unreadable)' }
@@ -199,8 +277,8 @@ function Get-UpcomingCodexTasks {
 }
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.3'
-$form.ClientSize = [System.Drawing.Size]::new(920,845)
+$form.Text = 'Codex Resume Scheduler v1.4'
+$form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
 $form.BackColor = [System.Drawing.Color]::White
@@ -259,8 +337,8 @@ $effortBox = New-Object System.Windows.Forms.ComboBox
 $effortBox.Location = [System.Drawing.Point]::new(597,154)
 $effortBox.Size = [System.Drawing.Size]::new(163,30)
 $effortBox.DropDownStyle = 'DropDownList'
-[void]$effortBox.Items.AddRange([object[]]@('medium','high','xhigh'))
-$effortBox.SelectedItem = 'high'
+$effortBox.DropDownStyle = 'DropDown'
+$effortBox.Text = 'high'
 $form.Controls.Add($effortBox)
 
 [void](Add-Label 'Access' 18 202)
@@ -271,8 +349,15 @@ $accessBox.DropDownStyle = 'DropDownList'
 [void]$accessBox.Items.AddRange([object[]]@('Workspace write','Full access (YOLO)','Read-only test'))
 $accessBox.SelectedIndex = 0
 $form.Controls.Add($accessBox)
-$accessHelp = Add-Label 'YOLO disables approvals and sandbox protections.' 500 203 395
-$accessHelp.ForeColor = [System.Drawing.Color]::DarkRed
+[void](Add-Label 'Model' 500 203 95)
+$modelBox = New-Object System.Windows.Forms.ComboBox
+$modelBox.Location = [System.Drawing.Point]::new(597,199)
+$modelBox.Size = [System.Drawing.Size]::new(301,30)
+$modelBox.DropDownStyle = 'DropDown'
+$modelBox.DisplayMember = 'Display'
+$form.Controls.Add($modelBox)
+$script:models = @()
+$script:modelCatalogLoaded = $false
 
 [void](Add-Label 'Instruction' 18 247)
 $messageBox = New-Object System.Windows.Forms.TextBox
@@ -281,13 +366,47 @@ $messageBox.Size = [System.Drawing.Size]::new(605,30)
 $messageBox.Text = 'Resume.'
 $form.Controls.Add($messageBox)
 $schedule = Add-Button 'Schedule once' 773 240 125
+$autoResumeCheck = New-Object System.Windows.Forms.CheckBox
+$autoResumeCheck.Text = 'Auto-resume after usage resets (up to 4 attempts)'
+$autoResumeCheck.Location = [System.Drawing.Point]::new(155,276)
+$autoResumeCheck.Size = [System.Drawing.Size]::new(500,21)
+$autoResumeCheck.Checked = $true
+$form.Controls.Add($autoResumeCheck)
+
+function Get-SelectedModel {
+    if ($modelBox.SelectedItem -and $modelBox.SelectedItem.Id) { return [string]$modelBox.SelectedItem.Id }
+    return $modelBox.Text.Trim()
+}
+function Select-AvailableEfforts {
+    $model = Get-SelectedModel
+    $entry = @($script:models | Where-Object { $_.id -eq $model }) | Select-Object -First 1
+    $prior = $effortBox.Text
+    $effortBox.Items.Clear()
+    if ($entry) {
+        foreach ($effort in $entry.efforts) { [void]$effortBox.Items.Add([string]$effort) }
+        if ($entry.efforts -contains $prior) { $effortBox.Text = $prior }
+        elseif ($entry.defaultEffort) { $effortBox.Text = $entry.defaultEffort }
+        elseif ($entry.efforts.Count -gt 0) { $effortBox.Text = $entry.efforts[0] }
+    } else { $effortBox.Text = $prior }
+}
+function Read-SessionModel {
+    param($Session)
+    if (-not $Session -or -not (Test-Path -LiteralPath $Session.File -PathType Leaf)) { return $null }
+    try {
+        foreach ($line in @(Get-Content -LiteralPath $Session.File -Tail 600) | Select-Object -Last 600) {
+            if ($line -notmatch '"model"') { continue }
+            $record = $line | ConvertFrom-Json -ErrorAction Stop
+            if ($record.type -eq 'turn_context' -and $record.payload.model -is [string]) { $found = [string]$record.payload.model }
+        }
+        return $found
+    } catch { return $null }
+}
 
 # Launch the existing CodexUsage.js reader without blocking the Windows Forms
 # message loop. The UI polls only for process completion; no persistent service.
 function Start-UsageRead {
     $node = (Get-Command node.exe -ErrorAction Stop).Source
-    $shim = (Get-Command codex.cmd -ErrorAction Stop).Source
-    $cliJs = Join-Path (Split-Path -Parent $shim) 'node_modules\@openai\codex\bin\codex.js'
+    $cliJs = Get-CodexCliJs
     $helper = Join-Path $PSScriptRoot 'CodexUsage.js'
     if (-not (Test-Path -LiteralPath $cliJs -PathType Leaf)) { throw 'Codex npm entrypoint not found. Update/install Codex via npm.' }
     if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'CodexUsage.js is missing. Extract the complete release.' }
@@ -296,6 +415,8 @@ function Start-UsageRead {
     [void]$start.ArgumentList.Add($helper)
     [void]$start.ArgumentList.Add('--cli-js')
     [void]$start.ArgumentList.Add($cliJs)
+    $chosen = Get-SelectedModel
+    if ($chosen) { [void]$start.ArgumentList.Add('--model'); [void]$start.ArgumentList.Add($chosen) }
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
     $start.UseShellExecute = $false
@@ -319,21 +440,21 @@ function Format-ResetTime {
 
 $separator = New-Object System.Windows.Forms.Label
 $separator.BorderStyle = 'Fixed3D'
-$separator.Location = [System.Drawing.Point]::new(18,293)
+$separator.Location = [System.Drawing.Point]::new(18,309)
 $separator.Size = [System.Drawing.Size]::new(880,2)
 $form.Controls.Add($separator)
 
-$usageHeading = Add-Label 'Codex usage' 18 306 280
+$usageHeading = Add-Label 'Codex usage' 18 322 280
 $usageHeading.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
 $usageHeading.Height = 30
-$refreshUsage = Add-Button 'Refresh now' 605 304 139
-$useReset = Add-Button 'Use reset +2 min' 755 304 143
+$refreshUsage = Add-Button 'Refresh now' 605 320 139
+$useReset = Add-Button 'Use reset +2 min' 755 320 143
 $useReset.Enabled = $false
 
 function New-UsageCard {
     param([int]$X, [string]$InitialTitle)
     $card = New-Object System.Windows.Forms.Panel
-    $card.Location = [System.Drawing.Point]::new($X,342)
+    $card.Location = [System.Drawing.Point]::new($X,358)
     $card.Size = [System.Drawing.Size]::new(428,108)
     $card.BackColor = [System.Drawing.Color]::FromArgb(245,247,250)
     $card.BorderStyle = 'FixedSingle'
@@ -367,21 +488,21 @@ function New-UsageCard {
     return [pscustomobject]@{ Title = $name; Remaining = $remaining; Bar = $bar; Reset = $reset }
 }
 $usageCards = @((New-UsageCard 18 'Primary window'), (New-UsageCard 470 'Secondary window'))
-$usageNotice = Add-Label 'Loading account usage...' 18 461 880
+$usageNotice = Add-Label 'Loading account usage...' 18 477 880
 $usageNotice.ForeColor = [System.Drawing.Color]::DimGray
 
 $separator2 = New-Object System.Windows.Forms.Label
 $separator2.BorderStyle = 'Fixed3D'
-$separator2.Location = [System.Drawing.Point]::new(18,496)
+$separator2.Location = [System.Drawing.Point]::new(18,512)
 $separator2.Size = [System.Drawing.Size]::new(880,2)
 $form.Controls.Add($separator2)
 
-$pending = Add-Label 'Pending scheduled runs' 18 511 400
+$pending = Add-Label 'Pending scheduled runs' 18 527 400
 $pending.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
 $pending.Height = 30
 
 $grid = New-Object System.Windows.Forms.DataGridView
-$grid.Location = [System.Drawing.Point]::new(18,550)
+$grid.Location = [System.Drawing.Point]::new(18,566)
 $grid.Size = [System.Drawing.Size]::new(880,195)
 $grid.ReadOnly = $true
 $grid.AllowUserToAddRows = $false
@@ -402,10 +523,10 @@ $grid.Columns[2].FillWeight = 230
 $grid.Columns[3].FillWeight = 260
 $form.Controls.Add($grid)
 
-$refreshRuns = Add-Button 'Refresh pending' 18 758 154
-$cancelRun = Add-Button 'Cancel selected' 185 758 154
-$openFolder = Add-Button 'Open logs folder' 352 758 154
-$status = Add-Label 'Ready. Runs occur once and require Windows to remain signed in and awake.' 18 807 860
+$refreshRuns = Add-Button 'Refresh pending' 18 774 154
+$cancelRun = Add-Button 'Cancel selected' 185 774 154
+$openFolder = Add-Button 'Open logs folder' 352 774 154
+$status = Add-Label 'Ready. Runs occur once and require Windows to remain signed in and awake.' 18 823 860
 $status.ForeColor = [System.Drawing.Color]::DimGray
 
 function Update-Status {
@@ -465,21 +586,41 @@ function Apply-UsageSnapshot {
     param($Snapshot)
     $script:usageSnapshot = $Snapshot
     $script:usageChecked = Get-Date
+    $script:models = @($Snapshot.models | Where-Object { $_ })
+    $previous = Get-SelectedModel
+    $script:updatingModels = $true
+    if ($script:models.Count -gt 0) {
+        $modelBox.BeginUpdate()
+        $modelBox.Items.Clear()
+        foreach ($m in $script:models) {
+            [void]$modelBox.Items.Add([pscustomobject]@{ Id = $m.id; Display = $m.name; Efforts = $m.efforts; DefaultEffort = $m.defaultEffort })
+        }
+        $modelBox.EndUpdate()
+        $selected = @($script:models | Where-Object { $_.id -eq $previous }) | Select-Object -First 1
+        if (-not $selected -and -not $previous) { $selected = @($script:models | Where-Object { $_.isDefault }) | Select-Object -First 1 }
+        if ($selected) {
+            $found = $false
+            foreach ($item in $modelBox.Items) { if ($item.Id -eq $selected.id) { $modelBox.SelectedItem = $item; $found = $true; break } }
+            if (-not $found) { $modelBox.Text = $previous }
+        } elseif ($previous) { $modelBox.Text = $previous }
+        Select-AvailableEfforts
+    }
+    $script:updatingModels = $false
     $windows = @($Snapshot.windows | Where-Object { $null -ne $_ })
     Render-UsageCard $usageCards[0] $(if ($windows.Count -ge 1) { $windows[0] } else { $null }) 'Primary window'
     Render-UsageCard $usageCards[1] $(if ($windows.Count -ge 2) { $windows[1] } else { $null }) 'Secondary window'
-    $permission = switch ([string]$Snapshot.ordinaryUsageAllowed) {
+    $permission = 'Model ' + [string]$Snapshot.model + ' | Quota ' + [string]$Snapshot.bucketId + ' | ' + (switch ([string]$Snapshot.ordinaryUsageAllowed) {
         'True' { 'Usage allowed' }
         'False' { 'Usage restricted' }
         default { 'Availability not reported' }
-    }
+    })
     if ($Snapshot.limitReachedType) { $permission += "; limit: $($Snapshot.limitReachedType)" }
     $usageNotice.Text = "$permission | updated $($script:usageChecked.ToString('h:mm tt')) | refreshes every minute"
     if ($Snapshot.recommendationKind -eq 'next-window') {
         $usageNotice.Text += ' | Next reset does not guarantee access.'
     }
     $useReset.Enabled = $false
-    if ($Snapshot.recommendedResetAt) {
+    if ($Snapshot.recommendationKind -eq 'exhausted-window' -and $Snapshot.recommendedResetAt) {
         $reset = [DateTimeOffset]::FromUnixTimeSeconds([long]$Snapshot.recommendedResetAt).LocalDateTime
         $useReset.Enabled = ($reset.AddMinutes(2) -gt (Get-Date))
     }
@@ -550,7 +691,16 @@ $useReset.Add_Click({
     Update-Status "Selected reset +2 minutes: $($rounded.ToString('MMM dd, h:mm tt')). Review access before scheduling."
 })
 
+$modelBox.Add_SelectedIndexChanged({
+    Select-AvailableEfforts
+    if (-not $script:updatingModels) {
+        $useReset.Enabled = $false
+        Request-UsageRefresh
+    }
+})
 $sessionBox.Add_SelectedIndexChanged({
+    $preferred = Read-SessionModel $sessionBox.SelectedItem
+    if ($preferred) { $modelBox.Text = $preferred; Select-AvailableEfforts }
     if (-not $sessionBox.SelectedItem) { $repoBox.Clear(); return }
     $found = Find-SessionRepository $sessionBox.SelectedItem
     if ($found -and $found.Root) {
@@ -613,7 +763,12 @@ $schedule.Add_Click({
             $confirmation = [System.Windows.Forms.MessageBox]::Show('Full access (YOLO) allows unattended commands with NO sandbox or approval prompts, including changes outside this repository. Schedule anyway?','Unrestricted access','YesNo','Warning')
             if ($confirmation -ne 'Yes') { return }
         }
-        $effort = [string]$effortBox.SelectedItem
+        $model = Get-SelectedModel
+        if ($model -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$') { throw 'Select a valid Codex model.' }
+        $effort = $effortBox.Text.Trim()
+        if ($effort -notmatch '^[a-zA-Z][a-zA-Z0-9_-]{0,40}$') { throw 'Select a valid reasoning effort.' }
+        $catalogEntry = @($script:models | Where-Object { $_.id -eq $model }) | Select-Object -First 1
+        if ($catalogEntry -and $catalogEntry.efforts.Count -gt 0 -and $catalogEntry.efforts -notcontains $effort) { throw "Model '$model' does not advertise reasoning effort '$effort'." }
         $overlaps = @(Get-UpcomingCodexTasks | Where-Object { $_.Repo -ne '-' -and $_.Repo.TrimEnd([char[]]@('/','\')) -ieq $root.TrimEnd([char[]]@('/','\')) })
         if ($overlaps.Count -gt 0) {
             $answer = [System.Windows.Forms.MessageBox]::Show("There are already $($overlaps.Count) upcoming task(s) targeting this repository. Creating another may cause concurrent work if times overlap. Continue?",'Existing scheduled work','YesNo','Warning')
@@ -622,10 +777,16 @@ $schedule.Add_Click({
         [void](New-Item -Path $appDir -ItemType Directory -Force)
         $installedScript = Join-Path $appDir 'CodexResumeScheduler.ps1'
         if ($script:appSourcePath -ine $installedScript) { Copy-Item -LiteralPath $script:appSourcePath -Destination $installedScript -Force }
+        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js')) {
+            $source = Join-Path $PSScriptRoot $helperFile
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "$helperFile missing from installation." }
+            $destination = Join-Path $appDir $helperFile
+            if ($source -ine $destination) { Copy-Item -LiteralPath $source -Destination $destination -Force }
+        }
         $name = 'CodexResume-' + $when.ToString('yyyyMMdd-HHmm') + '-' + ([guid]::NewGuid().ToString('N').Substring(0,8))
         $jobFilePath = Join-Path $appDir ($name + '.json')
         $log = Join-Path $appDir ($name + '.log')
-        [pscustomobject]@{ sessionId = $sessionId; repo = $root; branch = $branch; effort = $effort; access = $access; message = $message; log = $log } |
+        [pscustomobject]@{ sessionId = $sessionId; repo = $root; branch = $branch; model = $model; effort = $effort; access = $access; message = $message; autoResume = $autoResumeCheck.Checked; retryAttempt = 0; accountId = $script:usageSnapshot.accountId; log = $log } |
             ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $jobFilePath -Encoding utf8
         $runnerArgs = '-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "' + $installedScript + '" -RunJob -JobFile "' + $jobFilePath + '"'
         $action = New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'pwsh.exe') -Argument $runnerArgs -WorkingDirectory $root

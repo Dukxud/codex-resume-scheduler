@@ -609,11 +609,12 @@ function Apply-UsageSnapshot {
     $windows = @($Snapshot.windows | Where-Object { $null -ne $_ })
     Render-UsageCard $usageCards[0] $(if ($windows.Count -ge 1) { $windows[0] } else { $null }) 'Primary window'
     Render-UsageCard $usageCards[1] $(if ($windows.Count -ge 2) { $windows[1] } else { $null }) 'Secondary window'
-    $permission = 'Model ' + [string]$Snapshot.model + ' | Quota ' + [string]$Snapshot.bucketId + ' | ' + (switch ([string]$Snapshot.ordinaryUsageAllowed) {
+    $availability = switch ([string]$Snapshot.ordinaryUsageAllowed) {
         'True' { 'Usage allowed' }
         'False' { 'Usage restricted' }
         default { 'Availability not reported' }
-    })
+    }
+    $permission = "Model $($Snapshot.model) | Quota $($Snapshot.bucketId) | $availability"
     if ($Snapshot.limitReachedType) { $permission += "; limit: $($Snapshot.limitReachedType)" }
     $usageNotice.Text = "$permission | updated $($script:usageChecked.ToString('h:mm tt')) | refreshes every minute"
     if ($Snapshot.recommendationKind -eq 'next-window') {

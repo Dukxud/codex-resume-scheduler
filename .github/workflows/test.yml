@@ -15,6 +15,9 @@ jobs:
       - name: Repository ambiguity checks
         shell: pwsh
         run: ./tests/repository-detection.test.ps1
+      - name: Scheduled retry behavior
+        shell: pwsh
+        run: ./tests/scheduler-retry.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

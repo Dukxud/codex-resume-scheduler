@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $root 'CodexResumeScheduler.ps1'
+if ((Get-Content -LiteralPath $source -Raw) -notmatch "Name LIKE 'codex%'") { throw 'Windows Codex process-name discovery is incomplete.' }
 $tokens=$null; $errors=$null
 $ast=[System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$errors)
 if($errors){throw ($errors | Out-String)}
@@ -15,6 +16,9 @@ $exact=@([pscustomobject]@{Name='codex.exe';CommandLine="codex.exe resume $id"})
 Assert-Equal (Get-CodexSessionCollision $id $exact).Status 'matched' 'exact session collision'
 Assert-Equal (Get-CodexSessionCollision $id @([pscustomobject]@{Name='codex.exe';CommandLine="codex.exe resume $other"})).Status 'not-detected' 'different explicit session'
 Assert-Equal (Get-CodexSessionCollision $id @([pscustomobject]@{Name='codex.exe';CommandLine='codex.exe'})).Status 'possible' 'bare codex'
+Assert-Equal (Get-CodexSessionCollision $id @([pscustomobject]@{Name='codex-x86_64-pc-windows-msvc.exe';CommandLine='codex-x86_64-pc-windows-msvc.exe'})).Status 'possible' 'Windows target-suffixed Codex CLI'
+Assert-Equal (Get-CodexSessionCollision $id @([pscustomobject]@{Name='codex-x86_64-pc-windows-msvc.exe';CommandLine="codex-x86_64-pc-windows-msvc.exe resume $id"})).Status 'matched' 'target-suffixed explicit resume ID'
+Assert-Equal (Get-CodexSessionCollision $id @([pscustomobject]@{Name='codex-code-mode-host.exe';CommandLine='codex-code-mode-host.exe'})).Status 'not-detected' 'auxiliary Codex host should not count as interactive CLI'
 Assert-Equal (Get-CodexSessionCollision $id @([pscustomobject]@{Name='codex.exe';CommandLine='codex.exe app-server --listen stdio://'})).Status 'not-detected' 'app-server is not interactive session'
 Assert-Equal (Get-CodexSessionCollision $id @([pscustomobject]@{Name='node.exe';CommandLine='node.exe C:\codex\bin\codex.js'})).Status 'not-detected' 'unrelated Node script'
 Assert-Equal (Get-CodexSessionCollision $id @([pscustomobject]@{Name='node.exe';CommandLine='node.exe C:\node_modules\@openai\codex\bin\codex.js'})).Status 'possible' 'npm codex without explicit id'

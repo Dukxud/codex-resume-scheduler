@@ -178,3 +178,35 @@ function Read-SessionModel {
         return $found
     } catch { return $null }
 }
+
+# UI draft settings are local to this Windows account, not part of a scheduled job.
+function Read-CodexUiSettings {
+    param([string]$Directory)
+    $file = Join-Path $Directory 'settings.json'
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return $null }
+    try { return (Get-Content -LiteralPath $file -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop) }
+    catch { return $null }
+}
+
+function Write-CodexUiSettings {
+    param([string]$Directory, $State)
+    [void](New-Item -ItemType Directory -Path $Directory -Force -ErrorAction Stop)
+    $destination = Join-Path $Directory 'settings.json'
+    $temporary = Join-Path $Directory ('.settings-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        $State | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $temporary -Encoding utf8 -ErrorAction Stop
+        [System.IO.File]::Move($temporary, $destination, $true)
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+function Get-RestoredRunTime {
+    param([string]$Value, [datetime]$Now)
+    $parsed = [datetime]::MinValue
+    if ($Value -and [datetime]::TryParseExact($Value, 'yyyy-MM-ddTHH:mm:ss',
+        [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$parsed)) {
+        if ($parsed -gt $Now.AddSeconds(30)) { return $parsed }
+    }
+    return $null
+}

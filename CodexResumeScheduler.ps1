@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.8.0: clearer scheduling controls, actionable pending list, and stable UI status.
+# v1.9.0: restore and autosave all editable scheduling fields without changing job execution.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -43,20 +43,21 @@ function Read-UsageState {
     return $state
 }
 
+# Legacy settings.json files contain only lastAccess. A draft is optional.
+$script:uiSettings = Read-CodexUiSettings $appDir
+$script:savedDraft = if ($script:uiSettings -and $script:uiSettings.draft) { $script:uiSettings.draft } else { $null }
+$script:preferredSessionId = if ($script:savedDraft) { [string]$script:savedDraft.sessionId } else { '' }
+$script:preferredModelId = if ($script:savedDraft) { [string]$script:savedDraft.model } else { '' }
+$script:preferredEffort = if ($script:savedDraft) { [string]$script:savedDraft.effort } else { '' }
+$script:startupSavedSessionId = $script:preferredSessionId
+$script:startupSavedModelId = $script:preferredModelId
+$script:repoSelectionSessionId = ''
+$script:settingsReady = $false
+
 function Get-SavedAccessPreference {
-    $settings = Join-Path $appDir 'settings.json'
-    if (-not (Test-Path -LiteralPath $settings -PathType Leaf)) { return 'workspace-write' }
-    try {
-        $saved = Get-Content -LiteralPath $settings -Raw -ErrorAction Stop | ConvertFrom-Json
-        if ($saved.lastAccess -in @('workspace-write','yolo','read-only')) { return [string]$saved.lastAccess }
-    } catch { }
+    if ($script:savedDraft -and $script:savedDraft.access -in @('workspace-write','yolo','read-only')) { return [string]$script:savedDraft.access }
+    if ($script:uiSettings -and $script:uiSettings.lastAccess -in @('workspace-write','yolo','read-only')) { return [string]$script:uiSettings.lastAccess }
     return 'workspace-write'
-}
-function Save-AccessPreference {
-    param([string]$Access)
-    if ($Access -notin @('workspace-write','yolo','read-only')) { throw 'Invalid access preference.' }
-    [void](New-Item -ItemType Directory -Path $appDir -Force)
-    [pscustomobject]@{ lastAccess=$Access } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $appDir 'settings.json') -Encoding utf8
 }
 
 function Assert-ModelEffortSupported {
@@ -194,7 +195,7 @@ Add-Type -AssemblyName System.Drawing
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.8'
+$form.Text = 'Codex Resume Scheduler v1.9'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
@@ -251,6 +252,10 @@ $whenBox.Format = 'Custom'
 $whenBox.CustomFormat = 'ddd MMM dd, yyyy  hh:mm tt'
 $suggested = (Get-Date).AddMinutes(11)
 $whenBox.Value = [datetime]::new($suggested.Year,$suggested.Month,$suggested.Day,$suggested.Hour,$suggested.Minute,0)
+if ($script:savedDraft) {
+    $restoredTime = Get-RestoredRunTime ([string]$script:savedDraft.runAt) (Get-Date)
+    if ($restoredTime) { $whenBox.Value = $restoredTime }
+}
 $form.Controls.Add($whenBox)
 
 [void](Add-Label 'Access' 500 157 95)
@@ -283,7 +288,7 @@ $script:modelCatalogLoaded = $false
 $messageBox = New-Object System.Windows.Forms.TextBox
 $messageBox.Location = [System.Drawing.Point]::new(155,243)
 $messageBox.Size = [System.Drawing.Size]::new(743,30)
-$messageBox.Text = 'Resume.'
+$messageBox.Text = if ($script:savedDraft -and $null -ne $script:savedDraft.message) { [string]$script:savedDraft.message } else { 'Resume.' }
 $form.Controls.Add($messageBox)
 $schedule = Add-Button 'Schedule once' 720 274 178
 $schedule.Height = 31
@@ -293,7 +298,7 @@ $autoResumeCheck = New-Object System.Windows.Forms.CheckBox
 $autoResumeCheck.Text = 'Retry if Codex hits a usage limit (max 4)'
 $autoResumeCheck.Location = [System.Drawing.Point]::new(155,276)
 $autoResumeCheck.Size = [System.Drawing.Size]::new(520,21)
-$autoResumeCheck.Checked = $true
+$autoResumeCheck.Checked = if ($script:savedDraft -and $script:savedDraft.autoResume -is [bool]) { [bool]$script:savedDraft.autoResume } else { $true }
 $form.Controls.Add($autoResumeCheck)
 
 function Get-SelectedModel {
@@ -307,7 +312,8 @@ function Select-AvailableEfforts {
     $effortBox.Items.Clear()
     if ($entry) {
         foreach ($effort in @($entry.efforts | Where-Object { $_ -ne 'ultra' })) { [void]$effortBox.Items.Add([string]$effort) }
-        if ($effortBox.Items.Contains($prior)) { $effortBox.SelectedItem = $prior }
+        if ($model -eq $script:preferredModelId -and $effortBox.Items.Contains($script:preferredEffort)) { $effortBox.SelectedItem = $script:preferredEffort }
+        elseif ($effortBox.Items.Contains($prior)) { $effortBox.SelectedItem = $prior }
         elseif ($effortBox.Items.Contains([string]$entry.defaultEffort)) { $effortBox.SelectedItem = [string]$entry.defaultEffort }
         elseif ($effortBox.Items.Count -gt 0) { $effortBox.SelectedIndex = 0 }
     }
@@ -509,8 +515,12 @@ function Request-SelectionLookup {
     if ($script:loadingSessions) { return }
     $script:selectionGeneration++
     $selected = $sessionBox.SelectedItem
-    $repoBox.Clear()
-    $repoHints.SetToolTip($repoBox, '')
+    $selectedId = if ($selected) { [string]$selected.Id } else { '' }
+    if ($selectedId -ne $script:repoSelectionSessionId) {
+        $script:repoSelectionSessionId = $selectedId
+        $repoBox.Clear()
+        $repoHints.SetToolTip($repoBox, '')
+    }
     if (-not $selected) { return }
     $script:selectionOriginalModel = Get-SelectedModel
     Update-Status 'Locating conversation repository in background...'
@@ -519,7 +529,7 @@ function Request-SelectionLookup {
 
 function Apply-SessionList {
     param([object[]]$Sessions)
-    $selectedId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } else { $null }
+    $selectedId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } elseif ($script:preferredSessionId) { $script:preferredSessionId } else { $null }
     $script:loadingSessions = $true
     try {
         $sessionBox.BeginUpdate()
@@ -531,6 +541,12 @@ function Apply-SessionList {
         if ($chosen) { $sessionBox.SelectedItem = $chosen }
         elseif ($sessionBox.Items.Count -gt 0) { $sessionBox.SelectedIndex = 0 }
     } finally { $script:loadingSessions = $false }
+    if ($sessionBox.SelectedItem -and [string]$sessionBox.SelectedItem.Id -eq $script:preferredSessionId -and
+        $script:savedDraft -and [string]::IsNullOrWhiteSpace($repoBox.Text) -and
+        -not [string]::IsNullOrWhiteSpace([string]$script:savedDraft.repo)) {
+        $script:repoSelectionSessionId = [string]$sessionBox.SelectedItem.Id
+        $repoBox.Text = [string]$script:savedDraft.repo
+    }
     if ($selectedId -and $chosen -and -not [string]::IsNullOrWhiteSpace($repoBox.Text)) {
         # Refreshing the conversation list must not discard a manually selected root.
         Update-Status "Conversations updated; repository selection retained."
@@ -576,7 +592,8 @@ $dataPoll.Add_Tick({
                     if ($script:selectionJobGeneration -ne $script:selectionGeneration) { break }
                     $info = $result | Select-Object -First 1
                     if (-not $info -or -not $sessionBox.SelectedItem -or $info.Id -ne $sessionBox.SelectedItem.Id) { break }
-                    if ($info.Model -and (Get-SelectedModel) -eq $script:selectionOriginalModel) {
+                    if ($info.Model -and (Get-SelectedModel) -eq $script:selectionOriginalModel -and
+                        -not ($script:startupSavedModelId -and $script:startupSavedSessionId -eq [string]$sessionBox.SelectedItem.Id)) {
                         $script:preferredSessionModel = [string]$info.Model
                         $chosen = @($modelBox.Items | Where-Object { $_.Id -eq $info.Model }) | Select-Object -First 1
                         if ($chosen) { $modelBox.SelectedItem = $chosen; Select-AvailableEfforts }
@@ -648,7 +665,7 @@ function Apply-UsageSnapshot {
     $script:usageSnapshot = $Snapshot
     $script:usageChecked = Get-Date
     $script:models = @($Snapshot.models | Where-Object { $_ })
-    $previous = if ($script:preferredSessionModel) { [string]$script:preferredSessionModel } else { Get-SelectedModel }
+    $previous = if ($script:preferredModelId) { [string]$script:preferredModelId } elseif ($script:preferredSessionModel) { [string]$script:preferredSessionModel } else { Get-SelectedModel }
     $script:preferredSessionModel = $null # Do not override a subsequent manual model choice.
     $script:updatingModels = $true
     if ($script:models.Count -gt 0) {
@@ -667,6 +684,10 @@ function Apply-UsageSnapshot {
             if (-not $found) { $modelBox.SelectedIndex = -1 }
         }
         Select-AvailableEfforts
+        if ($selected) {
+            $script:preferredModelId = '' # Later catalog refresh preserves the live selection.
+            $script:preferredEffort = ''
+        }
     }
     $script:updatingModels = $false
     $windows = @($Snapshot.windows | Where-Object { $null -ne $_ })
@@ -763,14 +784,67 @@ $useReset.Add_Click({
     Update-Status "Selected reset +2 minutes: $($rounded.ToString('MMM dd, h:mm tt')). Review access before scheduling."
 })
 
+# Persist edited fields independently of scheduling. Debounce typing to avoid disk writes per keystroke.
+$script:settingsTimer = New-Object System.Windows.Forms.Timer
+$script:settingsTimer.Interval = 650
+function Save-CurrentFormState {
+    if (-not $script:settingsReady) { return }
+    $sessionId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } else { $script:preferredSessionId }
+    $model = Get-SelectedModel
+    if (-not $model) { $model = $script:preferredModelId }
+    $effort = if ($effortBox.SelectedItem) { [string]$effortBox.SelectedItem } else { $script:preferredEffort }
+    $access = switch ($accessBox.SelectedIndex) { 1 { 'yolo' } 2 { 'read-only' } default { 'workspace-write' } }
+    $savedRoot = [string]$repoBox.Text
+    if (-not $sessionBox.SelectedItem -and -not $savedRoot -and $script:savedDraft) { $savedRoot = [string]$script:savedDraft.repo }
+    $draft = [pscustomobject]@{
+        sessionId = $sessionId
+        repo = $savedRoot
+        model = $model
+        effort = $effort
+        access = $access
+        message = [string]$messageBox.Text
+        autoResume = [bool]$autoResumeCheck.Checked
+        runAt = $whenBox.Value.ToString('yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)
+    }
+    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; draft = $draft })
+    $script:savedDraft = $draft
+    $script:preferredSessionId = $sessionId
+}
+function Queue-FormStateSave {
+    if (-not $script:settingsReady -or $script:loadingSessions -or $script:updatingModels) { return }
+    $script:settingsTimer.Stop()
+    $script:settingsTimer.Start()
+}
+$script:settingsTimer.Add_Tick({
+    $script:settingsTimer.Stop()
+    try { Save-CurrentFormState } catch { Update-Status "Settings were not saved: $($_.Exception.Message)" }
+})
+$repoBox.Add_TextChanged({ Queue-FormStateSave })
+$whenBox.Add_ValueChanged({ Queue-FormStateSave })
+$accessBox.Add_SelectedIndexChanged({ Queue-FormStateSave })
+$effortBox.Add_SelectedIndexChanged({
+    if (-not $script:updatingModels) {
+        $script:preferredEffort = [string]$effortBox.SelectedItem
+        Queue-FormStateSave
+    }
+})
+$messageBox.Add_TextChanged({ Queue-FormStateSave })
+$autoResumeCheck.Add_CheckedChanged({ Queue-FormStateSave })
+
 $modelBox.Add_SelectedIndexChanged({
+    if (-not $script:updatingModels) { $script:preferredModelId = Get-SelectedModel }
     Select-AvailableEfforts
     if (-not $script:updatingModels) {
         $useReset.Enabled = $false
         Request-UsageRefresh
+        Queue-FormStateSave
     }
 })
-$sessionBox.Add_SelectedIndexChanged({ Request-SelectionLookup })
+$sessionBox.Add_SelectedIndexChanged({
+    if (-not $script:loadingSessions) { $script:preferredSessionId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } else { '' } }
+    Request-SelectionLookup
+    Queue-FormStateSave
+})
 $refreshSessions.Add_Click({ try { Refresh-SessionList } catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Sessions error') | Out-Null } })
 $browse.Add_Click({
     $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -861,7 +935,8 @@ $schedule.Add_Click({
         if ($saved.Actions.Count -ne 1 -or $saved.Actions[0].Arguments -notmatch '(?i)(?:^|\s)-ExecutionPolicy\s+Bypass(?:\s|$)') { $issues += 'PowerShell process execution-policy override missing' }
         if ($saved.Principal.LogonType -ne 'Interactive') { $issues += "Logon type: $($saved.Principal.LogonType)" }
         if ($issues.Count -gt 0) { throw ("Task '$name' WAS registered, but these checks need attention: " + ($issues -join '; ')) }
-        Save-AccessPreference $access
+        $script:settingsTimer.Stop()
+        Save-CurrentFormState
         Refresh-PendingList
         Request-UsageRefresh
         Update-Status "Scheduled once for $($when.ToString('MMM dd, h:mm tt')): $name"
@@ -882,10 +957,17 @@ $autoRefresh.Add_Tick({
     Request-UsageRefresh
 })
 $form.Add_Shown({
+    $script:settingsReady = $true
     try { Refresh-SessionList; Refresh-PendingList } catch { Update-Status "Startup warning: $($_.Exception.Message)" }
     Request-UsageRefresh
     $autoRefresh.Start()
     $dataPoll.Start()
+})
+$form.Add_FormClosing({
+    $script:settingsTimer.Stop()
+    try { Save-CurrentFormState } catch {
+        [System.Windows.Forms.MessageBox]::Show("Could not save preferences: $($_.Exception.Message)", 'Settings save error') | Out-Null
+    }
 })
 $form.Add_FormClosed({
     $autoRefresh.Stop()
@@ -902,6 +984,7 @@ $form.Add_FormClosed({
 })
 [void]$form.ShowDialog()
 $autoRefresh.Dispose()
+$script:settingsTimer.Dispose()
 $usagePoll.Dispose()
 $dataPoll.Dispose()
 $repoHints.Dispose()

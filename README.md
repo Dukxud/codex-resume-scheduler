@@ -10,7 +10,7 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 - Schedules a message (default `Resume.`) at a specific local date and time.
 - Configures the Codex model and *only* that model’s advertised ordinary reasoning efforts (excluding the separate Ultra/multi-agent mode), plus access mode (read-only, workspace-write, or unrestricted/YOLO). The list comes from Codex `model/list`, not a built-in list of model names.
 - Shows pending scheduled runs, supports cancellation, and saves a transcript in `%LOCALAPPDATA%\CodexResumeScheduler`.
-- Remembers the last successfully scheduled access mode (including YOLO) locally for the next launch.
+- Autosaves and restores the complete scheduling draft: conversation, repository, model, reasoning effort, access, instruction, auto-resume, and requested local run time. Saving does not require creating a scheduled run.
 - Starts a visible PowerShell 7 window that **stays open** after Codex finishes.
 - When a scheduled Codex run reports an actual usage-limit failure, **Auto-resume** (enabled by default) reads the current model’s applicable quota and schedules another one-time run after the reported reset **+2 minutes**. A retry is only started when backend permission is explicitly restored; attempts are capped at four.
 - Displays **percentage remaining**, progress bars, and local reset times from Codex's official `account/rateLimits/read` App Server method. **Use reset +2 min** sets the scheduling control to two minutes after the selected reset, rounded up to the next whole minute. It never schedules automatically.
@@ -18,7 +18,7 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 
 ## Responsiveness and concurrent sessions
 
-The GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI. The v1.8 interface groups model and reasoning settings, displays recognizable project names rather than opaque task IDs, keeps full details in tooltips, and shows an empty state when no tasks are pending. Background pending refresh no longer replaces actionable status messages.
+The GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI. The v1.9 interface groups model and reasoning settings, displays recognizable project names rather than opaque task IDs, keeps full details in tooltips, and shows an empty state when no tasks are pending. Background pending refresh no longer replaces actionable status messages.
 
 **Concurrent sessions:** the previous process-based open-session detector was removed because it could not reliably identify an independently opened interactive Codex conversation. Before scheduling a continuation, close any other Codex window that might be using that conversation.
 
@@ -63,18 +63,22 @@ If that path is missing, unavailable or not in an existing Git repository, the s
 
 If Codex's reported root differs from a fallback checkout, **the reported root is selected**, but the other checkout path is displayed in the status line and in a hover tooltip on the repository field; **Browse** can override it. This selection is not proof that unfinished work is in the reported directory. Branch and Git-root validation still apply at scheduling and execution. No entire-drive scanning or process heuristics are used.
 
+## Remembered scheduling draft
+
+Edits are saved automatically after a short pause and again when the window closes. Refreshing models and conversations should not silently replace the saved model or manual repository selection. If a saved run time is already past, the date picker starts at a new safe future time rather than attempting to schedule in the past. Previously created Windows tasks are unaffected. The settings file is local to your Windows profile and contains the instruction text in plain text.
+
 ## License
 
 MIT License. See [LICENSE](LICENSE).
 
 ## Security and limitations
 
-- **YOLO** (`--dangerously-bypass-approvals-and-sandbox`) disables approvals and sandboxing, including **outside the repository**. Use only for trusted sessions. The first-run default is **workspace-write**; later launches restore the last successfully scheduled access mode from `%LOCALAPPDATA%\CodexResumeScheduler\settings.json`. YOLO remains explicitly confirmed for each newly scheduled run.
+- **YOLO** (`--dangerously-bypass-approvals-and-sandbox`) disables approvals and sandboxing, including **outside the repository**. Use only for trusted sessions. The first-run default is **workspace-write**; later launches restore the last edited access mode and other form fields from `%LOCALAPPDATA%\CodexResumeScheduler\settings.json`. This local JSON includes your entered instruction in plain text; do not paste secrets into the instruction. YOLO remains explicitly confirmed for each newly scheduled run.
 - The launcher and scheduled task runner use **`pwsh -ExecutionPolicy Bypass` for their own PowerShell process only**, because the local `.ps1` is not digitally signed. This does not change `CurrentUser` or `LocalMachine` policy; organization Group Policy can still block execution. Use only with source you trust. Existing scheduled jobs created before v1.3.1 retain their original command until repaired or recreated.
 - The GUI validates repository root, branch, model, and effort at scheduling time, and the runner revalidates them before execution. It cannot detect another open copy of the same Codex conversation. Close other copies before scheduling to prevent concurrent activity.
 - Tasks run once, not every day; Windows Task Scheduler can launch them after a missed time if `StartWhenAvailable` is enabled.
 - Scheduled tasks and job settings are kept locally. No code, repository content, or saved Codex conversations are uploaded by this app.
-- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.8 must still be tested end-to-end on BLACK-PUDDLE**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
+- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.9 must still be tested end-to-end on BLACK-PUDDLE**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
 
 ## Development
 

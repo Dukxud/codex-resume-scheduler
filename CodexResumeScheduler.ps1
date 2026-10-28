@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.7.0: resolve repository from Codex thread metadata before historical fallbacks.
+# v1.8.0: clearer scheduling controls, actionable pending list, and stable UI status.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -194,12 +194,13 @@ Add-Type -AssemblyName System.Drawing
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.6'
+$form.Text = 'Codex Resume Scheduler v1.8'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
 $form.BackColor = [System.Drawing.Color]::White
 $form.Font = [System.Drawing.Font]::new('Segoe UI',10)
+$form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
 
 function Add-Label {
     param([string]$Text,[int]$X,[int]$Y,[int]$W = 130)
@@ -219,9 +220,12 @@ function Add-Button {
     return $button
 }
 
-$heading = Add-Label 'Schedule Codex continuation' 18 14 500
+$heading = Add-Label 'Schedule a continuation' 18 14 500
 $heading.Font = [System.Drawing.Font]::new('Segoe UI',15,[System.Drawing.FontStyle]::Bold)
 $heading.Height = 34
+$subtitle = Add-Label 'One-time run · Opens a visible terminal' 544 22 355
+$subtitle.ForeColor = [System.Drawing.Color]::DimGray
+$subtitle.TextAlign = 'MiddleRight'
 
 [void](Add-Label 'Conversation' 18 65)
 $sessionBox = New-Object System.Windows.Forms.ComboBox
@@ -249,26 +253,26 @@ $suggested = (Get-Date).AddMinutes(11)
 $whenBox.Value = [datetime]::new($suggested.Year,$suggested.Month,$suggested.Day,$suggested.Hour,$suggested.Minute,0)
 $form.Controls.Add($whenBox)
 
-[void](Add-Label 'Reasoning' 500 157 95)
+[void](Add-Label 'Access' 500 157 95)
 $effortBox = New-Object System.Windows.Forms.ComboBox
-$effortBox.Location = [System.Drawing.Point]::new(597,154)
-$effortBox.Size = [System.Drawing.Size]::new(163,30)
+$effortBox.Location = [System.Drawing.Point]::new(597,199)
+$effortBox.Size = [System.Drawing.Size]::new(301,30)
 $effortBox.DropDownStyle = 'DropDownList'
 $form.Controls.Add($effortBox)
 
-[void](Add-Label 'Access' 18 202)
+[void](Add-Label 'Model' 18 202)
 $accessBox = New-Object System.Windows.Forms.ComboBox
-$accessBox.Location = [System.Drawing.Point]::new(155,199)
-$accessBox.Size = [System.Drawing.Size]::new(325,30)
+$accessBox.Location = [System.Drawing.Point]::new(597,154)
+$accessBox.Size = [System.Drawing.Size]::new(301,30)
 $accessBox.DropDownStyle = 'DropDownList'
 [void]$accessBox.Items.AddRange([object[]]@('Workspace write','Full access (YOLO)','Read-only test'))
 $script:lastAccessPreference = Get-SavedAccessPreference
 $accessBox.SelectedIndex = switch ($script:lastAccessPreference) { 'yolo' { 1 } 'read-only' { 2 } default { 0 } }
 $form.Controls.Add($accessBox)
-[void](Add-Label 'Model' 500 203 95)
+[void](Add-Label 'Reasoning' 500 203 95)
 $modelBox = New-Object System.Windows.Forms.ComboBox
-$modelBox.Location = [System.Drawing.Point]::new(597,199)
-$modelBox.Size = [System.Drawing.Size]::new(301,30)
+$modelBox.Location = [System.Drawing.Point]::new(155,199)
+$modelBox.Size = [System.Drawing.Size]::new(325,30)
 $modelBox.DropDownStyle = 'DropDownList'
 $modelBox.DisplayMember = 'Display'
 $form.Controls.Add($modelBox)
@@ -278,15 +282,17 @@ $script:modelCatalogLoaded = $false
 [void](Add-Label 'Instruction' 18 247)
 $messageBox = New-Object System.Windows.Forms.TextBox
 $messageBox.Location = [System.Drawing.Point]::new(155,243)
-$messageBox.Size = [System.Drawing.Size]::new(605,30)
+$messageBox.Size = [System.Drawing.Size]::new(743,30)
 $messageBox.Text = 'Resume.'
 $form.Controls.Add($messageBox)
-$schedule = Add-Button 'Schedule once' 773 240 125
+$schedule = Add-Button 'Schedule once' 720 274 178
+$schedule.Height = 31
+$schedule.Font = [System.Drawing.Font]::new('Segoe UI',10,[System.Drawing.FontStyle]::Bold)
 $schedule.Enabled = $false
 $autoResumeCheck = New-Object System.Windows.Forms.CheckBox
-$autoResumeCheck.Text = 'Auto-resume after usage resets (up to 4 attempts)'
+$autoResumeCheck.Text = 'Retry if Codex hits a usage limit (max 4)'
 $autoResumeCheck.Location = [System.Drawing.Point]::new(155,276)
-$autoResumeCheck.Size = [System.Drawing.Size]::new(500,21)
+$autoResumeCheck.Size = [System.Drawing.Size]::new(520,21)
 $autoResumeCheck.Checked = $true
 $form.Controls.Add($autoResumeCheck)
 
@@ -351,7 +357,7 @@ $separator.Location = [System.Drawing.Point]::new(18,309)
 $separator.Size = [System.Drawing.Size]::new(880,2)
 $form.Controls.Add($separator)
 
-$usageHeading = Add-Label 'Codex usage' 18 322 280
+$usageHeading = Add-Label 'Usage remaining' 18 322 280
 $usageHeading.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
 $usageHeading.Height = 30
 $refreshUsage = Add-Button 'Refresh now' 605 320 139
@@ -363,7 +369,7 @@ function New-UsageCard {
     $card = New-Object System.Windows.Forms.Panel
     $card.Location = [System.Drawing.Point]::new($X,358)
     $card.Size = [System.Drawing.Size]::new(428,108)
-    $card.BackColor = [System.Drawing.Color]::FromArgb(245,247,250)
+    $card.BackColor = [System.Drawing.Color]::FromArgb(247,249,252)
     $card.BorderStyle = 'FixedSingle'
     $form.Controls.Add($card)
     $name = New-Object System.Windows.Forms.Label
@@ -404,7 +410,7 @@ $separator2.Location = [System.Drawing.Point]::new(18,512)
 $separator2.Size = [System.Drawing.Size]::new(880,2)
 $form.Controls.Add($separator2)
 
-$pending = Add-Label 'Pending scheduled runs' 18 527 400
+$pending = Add-Label 'Upcoming runs' 18 527 400
 $pending.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
 $pending.Height = 30
 
@@ -421,20 +427,30 @@ $grid.RowHeadersVisible = $false
 $grid.AutoSizeColumnsMode = 'Fill'
 $grid.BackgroundColor = [System.Drawing.Color]::White
 [void]$grid.Columns.Add('When','Scheduled (local)')
-[void]$grid.Columns.Add('Task','Task')
-[void]$grid.Columns.Add('Repository','Repository')
-[void]$grid.Columns.Add('Settings','Settings / instruction')
-$grid.Columns[0].FillWeight = 125
-$grid.Columns[1].FillWeight = 145
-$grid.Columns[2].FillWeight = 230
-$grid.Columns[3].FillWeight = 260
+[void]$grid.Columns.Add('Project','Project')
+[void]$grid.Columns.Add('Details','Model / access / instruction')
+[void]$grid.Columns.Add('Session','Session')
+$grid.Columns[0].FillWeight = 160
+$grid.Columns[1].FillWeight = 175
+$grid.Columns[2].FillWeight = 390
+$grid.Columns[3].FillWeight = 105
+$grid.ShowCellToolTips = $true
 $form.Controls.Add($grid)
+$emptyRuns = New-Object System.Windows.Forms.Label
+$emptyRuns.Text = 'No upcoming runs'
+$emptyRuns.ForeColor = [System.Drawing.Color]::DimGray
+$emptyRuns.TextAlign = 'MiddleCenter'
+$emptyRuns.Dock = 'Fill'
+$grid.Controls.Add($emptyRuns)
+$grid.Add_SelectionChanged({ $cancelRun.Enabled = ($grid.SelectedRows.Count -eq 1) })
 
-$refreshRuns = Add-Button 'Refresh pending' 18 774 154
+$refreshRuns = Add-Button 'Refresh runs' 18 774 154
 $cancelRun = Add-Button 'Cancel selected' 185 774 154
+$cancelRun.Enabled = $false
 $openFolder = Add-Button 'Open logs folder' 352 774 154
-$status = Add-Label 'Ready. Runs occur once and require Windows to remain signed in and awake.' 18 823 860
+$status = Add-Label 'Ready. Keep Windows awake and signed in for scheduled runs.' 18 823 880
 $status.ForeColor = [System.Drawing.Color]::DimGray
+$status.AutoEllipsis = $true
 
 function Update-Status {
     param([string]$Text)
@@ -451,6 +467,11 @@ $script:selectionJobGeneration = 0
 $script:selectionOriginalModel = $null
 $script:loadingSessions = $false
 $repoHints = [System.Windows.Forms.ToolTip]::new()
+$usageHints = [System.Windows.Forms.ToolTip]::new()
+$actionHints = [System.Windows.Forms.ToolTip]::new()
+$actionHints.SetToolTip($schedule, 'Creates one Windows Task Scheduler run. Your settings are rechecked when the task starts.')
+$actionHints.SetToolTip($autoResumeCheck, 'Only retries after a confirmed Codex usage-limit failure; does not monitor other Codex terminals.')
+$actionHints.SetToolTip($useReset, 'Uses the applicable exhausted quota reset time plus two minutes, when Codex reports one.')
 $script:models = @()
 
 function Start-DataRead {
@@ -510,8 +531,12 @@ function Apply-SessionList {
         if ($chosen) { $sessionBox.SelectedItem = $chosen }
         elseif ($sessionBox.Items.Count -gt 0) { $sessionBox.SelectedIndex = 0 }
     } finally { $script:loadingSessions = $false }
-    Update-Status "Found $($sessionBox.Items.Count) saved CLI conversations."
-    Request-SelectionLookup
+    if ($selectedId -and $chosen -and -not [string]::IsNullOrWhiteSpace($repoBox.Text)) {
+        # Refreshing the conversation list must not discard a manually selected root.
+        Update-Status "Conversations updated; repository selection retained."
+    } else {
+        Request-SelectionLookup
+    }
 }
 
 function Apply-PendingList {
@@ -519,11 +544,20 @@ function Apply-PendingList {
     $script:pendingSnapshot = @($Items)
     $grid.Rows.Clear()
     foreach ($item in $Items) {
-        $index = $grid.Rows.Add($item.When.ToString('MMM dd, h:mm tt'),$item.Name,$item.Repo,$item.Description)
-        $grid.Rows[$index].Tag = $item.Name
+        $path = ([string]$item.Repo).TrimEnd([char[]]@('/','\'))
+        $project = if ($path -and $path -ne '-') { [System.IO.Path]::GetFileName($path) } else { 'Unknown project' }
+        $session = if ([string]$item.Session -match '^[0-9a-fA-F]{8}-') { ([string]$item.Session).Substring(0,8) } else { '-' }
+        $index = $grid.Rows.Add($item.When.ToString('MMM dd, h:mm tt'),$project,$item.Description,$session)
+        $row = $grid.Rows[$index]
+        $row.Tag = $item.Name
+        $row.Cells[1].ToolTipText = [string]$item.Repo
+        $row.Cells[2].ToolTipText = [string]$item.Description
+        $row.Cells[3].ToolTipText = "Session: $($item.Session)`nTask: $($item.Name)"
     }
     $grid.ClearSelection()
-    Update-Status "$($Items.Count) upcoming Codex task(s). One-time schedules only."
+    $cancelRun.Enabled = $false
+    $pending.Text = "Upcoming runs ($($Items.Count))"
+    $emptyRuns.Visible = ($Items.Count -eq 0)
 }
 
 $dataPoll = New-Object System.Windows.Forms.Timer
@@ -548,6 +582,8 @@ $dataPoll.Add_Tick({
                         if ($chosen) { $modelBox.SelectedItem = $chosen; Select-AvailableEfforts }
                     }
                     if ($info.Found -and $info.Found.Root) {
+                        # A user-entered root takes precedence over a late asynchronous lookup.
+                        if (-not [string]::IsNullOrWhiteSpace($repoBox.Text)) { break }
                         $repoBox.Text = [string]$info.Found.Root
                         $otherRoots = @($info.Found.AlternativeRoots | Where-Object { $_ })
                         if ($otherRoots.Count -gt 0) {
@@ -601,7 +637,7 @@ function Render-UsageCard {
         $Card.Bar.Value = 0
     } else {
         $remaining = [double]$Window.remainingPercent
-        $Card.Remaining.Text = ('{0:0.#}% left' -f $remaining)
+        $Card.Remaining.Text = ('{0:0.#}% remaining' -f $remaining)
         $Card.Bar.Value = [int][math]::Round($remaining)
     }
     $Card.Reset.Text = Format-ResetTime $Window.resetsAt
@@ -643,10 +679,16 @@ function Apply-UsageSnapshot {
     }
     $permission = "Model $($Snapshot.model) | Quota $($Snapshot.bucketId) | $availability"
     if ($Snapshot.limitReachedType) { $permission += "; limit: $($Snapshot.limitReachedType)" }
-    $usageNotice.Text = "$permission | updated $($script:usageChecked.ToString('h:mm tt')) | refreshes every minute"
-    if ($Snapshot.recommendationKind -eq 'next-window') {
-        $usageNotice.Text += ' | Next reset does not guarantee access.'
+    $stateLabel = switch ([string]$Snapshot.ordinaryUsageAllowed) {
+        'True' { 'Usage available' }
+        'False' { 'Usage restricted' }
+        default { 'Availability not reported' }
     }
+    $usageNotice.Text = "$stateLabel  ·  Updated $($script:usageChecked.ToString('h:mm tt'))  ·  Refreshes every 60 seconds"
+    if ($Snapshot.recommendationKind -eq 'next-window') {
+        $usageNotice.Text += '  ·  Next reset is informational'
+    }
+    $usageHints.SetToolTip($usageNotice, $permission)
     $useReset.Enabled = $false
     if ($Snapshot.recommendationKind -eq 'exhausted-window' -and $Snapshot.recommendedResetAt) {
         $reset = [DateTimeOffset]::FromUnixTimeSeconds([long]$Snapshot.recommendedResetAt).LocalDateTime
@@ -666,7 +708,8 @@ function Request-UsageRefresh {
         $refreshUsage.Enabled = $false
         $usagePoll.Start()
     } catch {
-        $usageNotice.Text = "Usage refresh failed: $($_.Exception.Message)"
+        $usageNotice.Text = 'Usage refresh failed; try again.'
+        $usageHints.SetToolTip($usageNotice, $_.Exception.Message)
         $refreshUsage.Enabled = $true
         $useReset.Enabled = $false
     }
@@ -692,7 +735,8 @@ $usagePoll.Add_Tick({
         if (-not $snapshot.ok) { throw [string]$snapshot.error }
         Apply-UsageSnapshot $snapshot
     } catch {
-        $usageNotice.Text = "Usage refresh failed: $($_.Exception.Message)"
+        $usageNotice.Text = 'Usage refresh failed; last displayed values may be stale.'
+        $usageHints.SetToolTip($usageNotice, $_.Exception.Message)
         $useReset.Enabled = $false
         $schedule.Enabled = $false # Cannot verify current model/effort without the catalog.
     } finally {
@@ -861,4 +905,6 @@ $autoRefresh.Dispose()
 $usagePoll.Dispose()
 $dataPoll.Dispose()
 $repoHints.Dispose()
+$usageHints.Dispose()
+$actionHints.Dispose()
 $form.Dispose()

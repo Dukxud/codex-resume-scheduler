@@ -18,7 +18,7 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 
 ## Responsiveness and concurrent sessions
 
-The GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI.
+The GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI. The v1.8 interface groups model and reasoning settings, displays recognizable project names rather than opaque task IDs, keeps full details in tooltips, and shows an empty state when no tasks are pending. Background pending refresh no longer replaces actionable status messages.
 
 **Concurrent sessions:** the previous process-based open-session detector was removed because it could not reliably identify an independently opened interactive Codex conversation. Before scheduling a continuation, close any other Codex window that might be using that conversation.
 
@@ -74,7 +74,7 @@ MIT License. See [LICENSE](LICENSE).
 - The GUI validates repository root, branch, model, and effort at scheduling time, and the runner revalidates them before execution. It cannot detect another open copy of the same Codex conversation. Close other copies before scheduling to prevent concurrent activity.
 - Tasks run once, not every day; Windows Task Scheduler can launch them after a missed time if `StartWhenAvailable` is enabled.
 - Scheduled tasks and job settings are kept locally. No code, repository content, or saved Codex conversations are uploaded by this app.
-- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.7 must still be tested end-to-end on BLACK-PUDDLE**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
+- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.8 must still be tested end-to-end on BLACK-PUDDLE**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
 
 ## Development
 

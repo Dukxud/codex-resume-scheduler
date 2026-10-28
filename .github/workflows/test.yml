@@ -24,6 +24,9 @@ jobs:
       - name: Background refresh wiring
         shell: pwsh
         run: ./tests/background-refresh.test.ps1
+      - name: UI draft persistence
+        shell: pwsh
+        run: ./tests/settings-persistence.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

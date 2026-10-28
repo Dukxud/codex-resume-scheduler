@@ -55,7 +55,9 @@ function Schedule-LimitRetry {
     $attempt = [int]$Job.retryAttempt + 1
     if ($attempt -gt 4) { Write-Host 'Automatic resume stopped: maximum four attempts reached.' -ForegroundColor Yellow; return }
     $when = [DateTimeOffset]::FromUnixTimeSeconds($RunAt).LocalDateTime
-    $when = [datetime]::new($when.Year,$when.Month,$when.Day,$when.Hour,$when.Minute,0).AddMinutes(1)
+    $rounded = [datetime]::new($when.Year,$when.Month,$when.Day,$when.Hour,$when.Minute,0)
+    if ($when -gt $rounded) { $rounded = $rounded.AddMinutes(1) }
+    $when = $rounded
     if ($when -le (Get-Date).AddSeconds(60)) { Write-Host 'Reset time is not safely in the future; no retry scheduled.' -ForegroundColor Yellow; return }
     $name = 'CodexResume-' + $when.ToString('yyyyMMdd-HHmm') + '-' + ([guid]::NewGuid().ToString('N').Substring(0,8))
     $jobFile = Join-Path $appDir ($name + '.json')

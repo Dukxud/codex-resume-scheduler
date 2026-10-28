@@ -11,11 +11,16 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 - Configures the Codex model and *only* that model’s advertised ordinary reasoning efforts (excluding the separate Ultra/multi-agent mode), plus access mode (read-only, workspace-write, or unrestricted/YOLO). The list comes from Codex `model/list`, not a built-in list of model names.
 - Shows pending scheduled runs, supports cancellation, and saves a transcript in `%LOCALAPPDATA%\CodexResumeScheduler`.
 - Remembers the last successfully scheduled access mode (including YOLO) locally for the next launch.
-- Checks for a selected conversation already running in another CLI process, warns before scheduling, and refuses unattended launch when the process state is ambiguous or conflicting. This is best-effort only; it cannot prove that an unrelated desktop/remote client is closed.
 - Starts a visible PowerShell 7 window that **stays open** after Codex finishes.
 - When a scheduled Codex run reports an actual usage-limit failure, **Auto-resume** (enabled by default) reads the current model’s applicable quota and schedules another one-time run after the reported reset **+2 minutes**. A retry is only started when backend permission is explicitly restored; attempts are capped at four.
 - Displays **percentage remaining**, progress bars, and local reset times from Codex's official `account/rateLimits/read` App Server method. **Use reset +2 min** sets the scheduling control to two minutes after the selected reset, rounded up to the next whole minute. It never schedules automatically.
-- Refreshes **usage and pending runs automatically on startup, every 60 seconds, and after scheduling or cancellation**. Usage reads run in a separate short-lived process so the interface remains responsive.
+- Refreshes **usage and pending runs automatically on startup, every 60 seconds, and after scheduling or cancellation**. Usage reads run in a short-lived process; conversation, repository, and pending-task reads run in background jobs.
+
+## Responsiveness and concurrent sessions
+
+The GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI.
+
+**Concurrent sessions:** the previous process-based open-session detector was removed because it could not reliably identify an independently opened interactive Codex conversation. Before scheduling a continuation, close any other Codex window that might be using that conversation.
 
 ## Requirements
 
@@ -27,7 +32,7 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 ## Run
 
 1. Download a release ZIP or clone this repository.
-2. Keep `CodexResumeScheduler.ps1`, `CodexUsage.js`, `CodexRetry.js`, and `Start-Codex-Scheduler.cmd` in the **same folder**.
+2. Keep `CodexResumeScheduler.ps1`, `CodexData.ps1`, `CodexUsage.js`, `CodexRetry.js`, and `Start-Codex-Scheduler.cmd` in the **same folder**.
 3. Double-click `Start-Codex-Scheduler.cmd` as a normal (non-administrator) Windows user.
 4. Usage and pending jobs load automatically; optionally click **Refresh now**. If a reset time is available, click **Use reset +2 min**, or enter a time manually.
 5. Select the conversation, **model**, repository, model-supported effort, access mode, and instruction, then click **Schedule once**. Leave Auto-resume checked to retry on a confirmed usage-limit failure.
@@ -69,10 +74,10 @@ MIT License. See [LICENSE](LICENSE).
 
 - **YOLO** (`--dangerously-bypass-approvals-and-sandbox`) disables approvals and sandboxing, including **outside the repository**. Use only for trusted sessions. The first-run default is **workspace-write**; later launches restore the last successfully scheduled access mode from `%LOCALAPPDATA%\CodexResumeScheduler\settings.json`. YOLO remains explicitly confirmed for each newly scheduled run.
 - The launcher and scheduled task runner use **`pwsh -ExecutionPolicy Bypass` for their own PowerShell process only**, because the local `.ps1` is not digitally signed. This does not change `CurrentUser` or `LocalMachine` policy; organization Group Policy can still block execution. Use only with source you trust. Existing scheduled jobs created before v1.3.1 retain their original command until repaired or recreated.
-- The GUI validates repository root, branch, model, and effort at scheduling time, and the runner revalidates them before execution. It does not revalidate the current task's full instruction/history. Open CLI conversations may conflict. The scheduler inspects known Codex CLI process names (including Windows target-suffixed executables) and npm Node command lines; explicit matching session IDs are detected, but bare `codex` processes cannot be identified reliably. Processes belonging to other Codex clients or helpers may remain invisible. A possible conflict requires confirmation at scheduling and blocks unattended launch until cleared; other clients may remain invisible.
+- The GUI validates repository root, branch, model, and effort at scheduling time, and the runner revalidates them before execution. It cannot detect another open copy of the same Codex conversation. Close other copies before scheduling to prevent concurrent activity.
 - Tasks run once, not every day; Windows Task Scheduler can launch them after a missed time if `StartWhenAvailable` is enabled.
 - Scheduled tasks and job settings are kept locally. No code, repository content, or saved Codex conversations are uploaded by this app.
-- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.5.1 must still be tested end-to-end on Windows**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
+- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.6 must still be tested end-to-end on BLACK-PUDDLE**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
 
 ## Development
 
@@ -88,7 +93,7 @@ On Windows, check PowerShell syntax:
 $tokens=$null; $errors=$null; [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\CodexResumeScheduler.ps1),[ref]$tokens,[ref]$errors); $errors
 ```
 
-No build step or installed dependencies beyond Windows PowerShell 7, Node, Git and npm Codex.
+No build step or installed dependencies beyond Windows PowerShell 7, Node, Git and npm Codex. Background data refresh uses the `ThreadJob` module bundled with PowerShell 7.
 
 ## Protocol references
 

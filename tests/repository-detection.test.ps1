@@ -1,7 +1,7 @@
 # Runs on windows-latest via GitHub Actions. Exercises the actual app function
 # without launching the Windows Forms interface.
 $ErrorActionPreference = 'Stop'
-$source = Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexResumeScheduler.ps1'
+$source = Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexData.ps1'
 $tokens = $null
 $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($source, [ref]$tokens, [ref]$errors)

@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.4.0: discover models/efforts, model-specific limits, bounded automatic resumption.
+# v1.5.0: strict per-model efforts, best-effort open-session safety, remembered access.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -48,6 +48,72 @@ function Read-UsageState {
     $state = ($response | Select-Object -Last 1) | ConvertFrom-Json
     if (-not $state.ok) { throw 'Codex rate-limit response unavailable.' }
     return $state
+}
+
+# Only evidence from OS processes is available for independently opened Codex CLI
+# windows. An explicit resume ID is definite; bare `codex` is ambiguous.
+# An App Server queried here cannot establish what another process has loaded.
+function Get-CodexSessionCollision {
+    param([string]$SessionId, [object[]]$Processes = $null)
+    if ($null -eq $Processes) {
+        try {
+            $Processes = @(Get-CimInstance Win32_Process -Filter "Name='codex.exe' OR Name='node.exe'" -ErrorAction Stop)
+        } catch {
+            return [pscustomobject]@{ Status='unknown'; Detail='Could not inspect running Codex processes.' }
+        }
+    }
+    $ambiguous = 0
+    foreach ($process in $Processes) {
+        $name = [string]$process.Name
+        $line = [string]$process.CommandLine
+        if ($name -notmatch '^(?:codex|node)\.exe$') { continue }
+        if ($name -ieq 'node.exe' -and $line -notmatch '(?i)(?:\\|/)@openai(?:\\|/)codex(?:\\|/)bin(?:\\|/)codex\.js') { continue }
+        if ($line -match '(?i)\b(?:app-server|remote-control)\b') { continue }
+        $match = [regex]::Match($line, '(?i)\bresume\s+([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\b')
+        if ($match.Success) {
+            if ($match.Groups[1].Value -ieq $SessionId) {
+                return [pscustomobject]@{ Status='matched'; Detail='A running Codex process explicitly references this conversation.' }
+            }
+        } else { $ambiguous++ }
+    }
+    if ($ambiguous -gt 0) { return [pscustomobject]@{ Status='possible'; Detail="$ambiguous Codex process(es) without a visible session ID. The conversation may be open in another window." } }
+    return [pscustomobject]@{ Status='not-detected'; Detail='No matching CLI process found. This cannot exclude all other clients.' }
+}
+
+function Get-SavedAccessPreference {
+    $settings = Join-Path $appDir 'settings.json'
+    if (-not (Test-Path -LiteralPath $settings -PathType Leaf)) { return 'workspace-write' }
+    try {
+        $saved = Get-Content -LiteralPath $settings -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($saved.lastAccess -in @('workspace-write','yolo','read-only')) { return [string]$saved.lastAccess }
+    } catch { }
+    return 'workspace-write'
+}
+function Save-AccessPreference {
+    param([string]$Access)
+    if ($Access -notin @('workspace-write','yolo','read-only')) { throw 'Invalid access preference.' }
+    [void](New-Item -ItemType Directory -Path $appDir -Force)
+    [pscustomobject]@{ lastAccess=$Access } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $appDir 'settings.json') -Encoding utf8
+}
+
+function Assert-ModelEffortSupported {
+    param([object[]]$Models, [string]$Model, [string]$Effort)
+    $entry = @($Models | Where-Object { $_.id -ceq $Model }) | Select-Object -First 1
+    if (-not $entry) { throw "Model '$Model' is not in the currently available Codex catalog. Refresh models." }
+    $allowed = @($entry.efforts | Where-Object { $_ -is [string] -and $_ -ne 'ultra' })
+    if ($allowed.Count -eq 0 -or $allowed -cnotcontains $Effort) {
+        throw "Model '$Model' does not advertise reasoning effort '$Effort'. Supported: $($allowed -join ', ')."
+    }
+}
+
+function Read-CodexModelCatalog {
+    $helper = Join-Path $PSScriptRoot 'CodexUsage.js'
+    $cli = Get-CodexCliJs
+    $lines = & node $helper --cli-js $cli --models-only
+    if ($LASTEXITCODE -ne 0 -or -not $lines) { throw 'Could not verify current Codex model capabilities.' }
+    $state = ($lines | Select-Object -Last 1) | ConvertFrom-Json
+    if (-not $state.ok -or -not $state.models -or $state.models.Count -eq 0) { throw 'Codex model catalog unavailable.' }
+    return @($state.models)
 }
 
 function Schedule-LimitRetry {
@@ -102,7 +168,10 @@ if ($RunJob) {
         Write-Host "Codex scheduled continuation | $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Cyan
         Write-Host "Session: $($job.sessionId) | Repository: $root | Branch: $branch"
         Write-Host "Model: $($job.model) | Reasoning: $($job.effort) | Access: $($job.access) | Message: $($job.message)"
+        $collision = Get-CodexSessionCollision ([string]$job.sessionId)
+        if ($collision.Status -ne 'not-detected') { throw "Cannot safely start: $($collision.Detail) Close the other Codex CLI window or resolve process visibility before rescheduling." }
         $model = [string]$job.model
+        Assert-ModelEffortSupported (Read-CodexModelCatalog) $model ([string]$job.effort)
         $auto = $job.autoResume -eq $true
         if ($auto -and [int]$job.retryAttempt -gt 0) {
             $state = Read-UsageState $model
@@ -339,8 +408,6 @@ $effortBox = New-Object System.Windows.Forms.ComboBox
 $effortBox.Location = [System.Drawing.Point]::new(597,154)
 $effortBox.Size = [System.Drawing.Size]::new(163,30)
 $effortBox.DropDownStyle = 'DropDownList'
-$effortBox.DropDownStyle = 'DropDown'
-$effortBox.Text = 'high'
 $form.Controls.Add($effortBox)
 
 [void](Add-Label 'Access' 18 202)
@@ -349,13 +416,14 @@ $accessBox.Location = [System.Drawing.Point]::new(155,199)
 $accessBox.Size = [System.Drawing.Size]::new(325,30)
 $accessBox.DropDownStyle = 'DropDownList'
 [void]$accessBox.Items.AddRange([object[]]@('Workspace write','Full access (YOLO)','Read-only test'))
-$accessBox.SelectedIndex = 0
+$script:lastAccessPreference = Get-SavedAccessPreference
+$accessBox.SelectedIndex = switch ($script:lastAccessPreference) { 'yolo' { 1 } 'read-only' { 2 } default { 0 } }
 $form.Controls.Add($accessBox)
 [void](Add-Label 'Model' 500 203 95)
 $modelBox = New-Object System.Windows.Forms.ComboBox
 $modelBox.Location = [System.Drawing.Point]::new(597,199)
 $modelBox.Size = [System.Drawing.Size]::new(301,30)
-$modelBox.DropDownStyle = 'DropDown'
+$modelBox.DropDownStyle = 'DropDownList'
 $modelBox.DisplayMember = 'Display'
 $form.Controls.Add($modelBox)
 $script:models = @()
@@ -368,6 +436,7 @@ $messageBox.Size = [System.Drawing.Size]::new(605,30)
 $messageBox.Text = 'Resume.'
 $form.Controls.Add($messageBox)
 $schedule = Add-Button 'Schedule once' 773 240 125
+$schedule.Enabled = $false
 $autoResumeCheck = New-Object System.Windows.Forms.CheckBox
 $autoResumeCheck.Text = 'Auto-resume after usage resets (up to 4 attempts)'
 $autoResumeCheck.Location = [System.Drawing.Point]::new(155,276)
@@ -377,19 +446,20 @@ $form.Controls.Add($autoResumeCheck)
 
 function Get-SelectedModel {
     if ($modelBox.SelectedItem -and $modelBox.SelectedItem.Id) { return [string]$modelBox.SelectedItem.Id }
-    return $modelBox.Text.Trim()
+    return ''
 }
 function Select-AvailableEfforts {
     $model = Get-SelectedModel
-    $entry = @($script:models | Where-Object { $_.id -eq $model }) | Select-Object -First 1
-    $prior = $effortBox.Text
+    $entry = @($script:models | Where-Object { $_.id -ceq $model }) | Select-Object -First 1
+    $prior = [string]$effortBox.SelectedItem
     $effortBox.Items.Clear()
     if ($entry) {
-        foreach ($effort in $entry.efforts) { [void]$effortBox.Items.Add([string]$effort) }
-        if ($entry.efforts -contains $prior) { $effortBox.Text = $prior }
-        elseif ($entry.defaultEffort) { $effortBox.Text = $entry.defaultEffort }
-        elseif ($entry.efforts.Count -gt 0) { $effortBox.Text = $entry.efforts[0] }
-    } else { $effortBox.Text = $prior }
+        foreach ($effort in @($entry.efforts | Where-Object { $_ -ne 'ultra' })) { [void]$effortBox.Items.Add([string]$effort) }
+        if ($effortBox.Items.Contains($prior)) { $effortBox.SelectedItem = $prior }
+        elseif ($effortBox.Items.Contains([string]$entry.defaultEffort)) { $effortBox.SelectedItem = [string]$entry.defaultEffort }
+        elseif ($effortBox.Items.Count -gt 0) { $effortBox.SelectedIndex = 0 }
+    }
+    $schedule.Enabled = ($null -ne $entry -and $effortBox.SelectedIndex -ge 0)
 }
 function Read-SessionModel {
     param($Session)
@@ -589,7 +659,8 @@ function Apply-UsageSnapshot {
     $script:usageSnapshot = $Snapshot
     $script:usageChecked = Get-Date
     $script:models = @($Snapshot.models | Where-Object { $_ })
-    $previous = Get-SelectedModel
+    $previous = if ($script:preferredSessionModel) { [string]$script:preferredSessionModel } else { Get-SelectedModel }
+    $script:preferredSessionModel = $null # Do not override a subsequent manual model choice.
     $script:updatingModels = $true
     if ($script:models.Count -gt 0) {
         $modelBox.BeginUpdate()
@@ -600,11 +671,12 @@ function Apply-UsageSnapshot {
         $modelBox.EndUpdate()
         $selected = @($script:models | Where-Object { $_.id -eq $previous }) | Select-Object -First 1
         if (-not $selected -and -not $previous) { $selected = @($script:models | Where-Object { $_.isDefault }) | Select-Object -First 1 }
+        if (-not $selected -and -not $previous) { $selected = @($script:models) | Select-Object -First 1 }
         if ($selected) {
             $found = $false
             foreach ($item in $modelBox.Items) { if ($item.Id -eq $selected.id) { $modelBox.SelectedItem = $item; $found = $true; break } }
-            if (-not $found) { $modelBox.Text = $previous }
-        } elseif ($previous) { $modelBox.Text = $previous }
+            if (-not $found) { $modelBox.SelectedIndex = -1 }
+        }
         Select-AvailableEfforts
     }
     $script:updatingModels = $false
@@ -669,7 +741,7 @@ $usagePoll.Add_Tick({
     } catch {
         $usageNotice.Text = "Usage refresh failed: $($_.Exception.Message)"
         $useReset.Enabled = $false
-        # Retain the last known values rather than replace them with invented zeros.
+        $schedule.Enabled = $false # Cannot verify current model/effort without the catalog.
     } finally {
         $process.Dispose()
         if ($script:usageRefreshQueued) {
@@ -703,7 +775,12 @@ $modelBox.Add_SelectedIndexChanged({
 })
 $sessionBox.Add_SelectedIndexChanged({
     $preferred = Read-SessionModel $sessionBox.SelectedItem
-    if ($preferred) { $modelBox.Text = $preferred; Select-AvailableEfforts }
+    $script:preferredSessionModel = $preferred
+    if ($preferred -and $script:models.Count -gt 0) {
+        $chosen = @($modelBox.Items | Where-Object { $_.Id -eq $preferred }) | Select-Object -First 1
+        if ($chosen) { $modelBox.SelectedItem = $chosen; Select-AvailableEfforts }
+        else { Update-Status "Saved conversation model '$preferred' is not in the available catalog. Select a supported model." }
+    }
     if (-not $sessionBox.SelectedItem) { $repoBox.Clear(); return }
     $found = Find-SessionRepository $sessionBox.SelectedItem
     if ($found -and $found.Root) {
@@ -768,10 +845,16 @@ $schedule.Add_Click({
         }
         $model = Get-SelectedModel
         if ($model -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$') { throw 'Select a valid Codex model.' }
-        $effort = $effortBox.Text.Trim()
+        $effort = [string]$effortBox.SelectedItem
         if ($effort -notmatch '^[a-zA-Z][a-zA-Z0-9_-]{0,40}$') { throw 'Select a valid reasoning effort.' }
-        $catalogEntry = @($script:models | Where-Object { $_.id -eq $model }) | Select-Object -First 1
-        if ($catalogEntry -and $catalogEntry.efforts.Count -gt 0 -and $catalogEntry.efforts -notcontains $effort) { throw "Model '$model' does not advertise reasoning effort '$effort'." }
+        Assert-ModelEffortSupported $script:models $model $effort
+        # A GUI catalog snapshot can age before the scheduled task starts;
+        # the runner independently revalidates the model and effort.
+        $collision = Get-CodexSessionCollision $sessionId
+        if ($collision.Status -ne 'not-detected') {
+            $response = [System.Windows.Forms.MessageBox]::Show("$($collision.Detail)`n`nThe scheduled runner will refuse to start while the conflict remains. Schedule anyway?",'Conversation may already be open','YesNo','Warning')
+            if ($response -ne 'Yes') { return }
+        }
         $overlaps = @(Get-UpcomingCodexTasks | Where-Object { $_.Repo -ne '-' -and $_.Repo.TrimEnd([char[]]@('/','\')) -ieq $root.TrimEnd([char[]]@('/','\')) })
         if ($overlaps.Count -gt 0) {
             $answer = [System.Windows.Forms.MessageBox]::Show("There are already $($overlaps.Count) upcoming task(s) targeting this repository. Creating another may cause concurrent work if times overlap. Continue?",'Existing scheduled work','YesNo','Warning')
@@ -807,6 +890,7 @@ $schedule.Add_Click({
         if ($saved.Actions.Count -ne 1 -or $saved.Actions[0].Arguments -notmatch '(?i)(?:^|\s)-ExecutionPolicy\s+Bypass(?:\s|$)') { $issues += 'PowerShell process execution-policy override missing' }
         if ($saved.Principal.LogonType -ne 'Interactive') { $issues += "Logon type: $($saved.Principal.LogonType)" }
         if ($issues.Count -gt 0) { throw ("Task '$name' WAS registered, but these checks need attention: " + ($issues -join '; ')) }
+        Save-AccessPreference $access
         Refresh-PendingList
         Request-UsageRefresh
         Update-Status "Scheduled once for $($when.ToString('MMM dd, h:mm tt')): $name"

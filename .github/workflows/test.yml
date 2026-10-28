@@ -18,6 +18,9 @@ jobs:
       - name: Scheduled retry behavior
         shell: pwsh
         run: ./tests/scheduler-retry.test.ps1
+      - name: Model, open-session, and access persistence checks
+        shell: pwsh
+        run: ./tests/model-and-session.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

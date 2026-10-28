@@ -22,7 +22,7 @@ function normalizeModels(pages) {
     seen.add(id); return true;
   }).map(m => ({ id: m.model || m.id, name: m.displayName || m.model || m.id,
     defaultEffort: m.defaultReasoningEffort || null, isDefault: m.isDefault === true,
-    efforts: Array.isArray(m.supportedReasoningEfforts) ? [...new Set(m.supportedReasoningEfforts.map(e => e?.reasoningEffort).filter(e => typeof e === 'string' && e))] : [] }));
+    efforts: Array.isArray(m.supportedReasoningEfforts) ? [...new Set(m.supportedReasoningEfforts.map(e => e?.reasoningEffort).filter(e => typeof e === 'string' && e && e !== 'ultra'))] : [] }));
 }
 function selectBucket(result, model) {
   const byId = result.rateLimitsByLimitId;
@@ -75,7 +75,7 @@ function isLimitErrorLine(line) {
   return /(?:usage limit|rate.limit|quota exceeded|too many requests)/i.test(s) &&
     !/(?:invalid model|unsupported effort)/i.test(s);
 }
-function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true } = {}) {
+function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true, modelsOnly = false } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cliJs, 'app-server', '--listen', 'stdio://'], { stdio:['pipe','pipe','pipe'], windowsHide:true });
     let settled = false, stderr = '', pages = [], catalogError = null, requestId = 1, stage = 'initialize';
@@ -109,6 +109,10 @@ function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true
           if(typeof cursor==='string'&&cursor&&pages.length<20)return requestModels(cursor);
           if(typeof cursor==='string'&&cursor) catalogError='Model catalog pagination exceeded 20 pages.';
         }
+        if(modelsOnly) {
+          if(catalogError) return finish(new Error(catalogError));
+          return finish(null,{ok:true,models:normalizeModels(pages)});
+        }
         requestRate();
       } else if(stage==='rate') {
         if(msg.error)return finish(new Error(msg.error.message||'Codex rate-limit request rejected'));
@@ -126,7 +130,7 @@ async function main() {
   const flag=process.argv.indexOf('--cli-js'); const cliJs=flag>=0?process.argv[flag+1]:null;
   if(!cliJs||!fs.existsSync(cliJs)||path.extname(cliJs).toLowerCase()!=='.js')throw new Error('Codex npm CLI entry not found.');
   const modelFlag=process.argv.indexOf('--model'); const model=modelFlag>=0?process.argv[modelFlag+1]:null;
-  const state=await readCodexState(path.resolve(cliJs),{model,catalog:!process.argv.includes('--rates-only')});
+  const state=await readCodexState(path.resolve(cliJs),{model,catalog:!process.argv.includes('--rates-only'),modelsOnly:process.argv.includes('--models-only')});
   process.stdout.write(JSON.stringify(state)+'\n');
 }
 if(require.main===module) main().catch(e=>{process.stdout.write(JSON.stringify({ok:false,error:e.message})+'\n');process.exitCode=1;});

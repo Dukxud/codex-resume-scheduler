@@ -60,3 +60,8 @@ test('unknown backend payload fails safely and never synthesizes a reset',()=>{
  const s=summarizeRateLimits({rateLimitsByLimitId:{a:{primary:{usedPercent:'100',resetsAt:'tomorrow'}}}},now,'a');
  assert.equal(s.recommendedResetAt,null);assert.equal(s.canAttempt,false);
 });
+
+test('workspace-credit and spend-control blockers are not treated as timed usage resets',()=>{
+ const v=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimits:{primary:win(100,600),rateLimitReachedType:'workspace_member_usage_limit_reached'}},now,'model');
+ assert.equal(v.recommendedResetAt,null);
+});

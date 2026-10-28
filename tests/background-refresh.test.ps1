@@ -8,6 +8,8 @@ $ast = [System.Management.Automation.Language.Parser]::ParseInput($gui, [ref]$to
 if ($parseErrors) { throw ($parseErrors | Out-String) }
 if ($gui -match 'Get-CodexSessionCollision|Get-CimInstance\s+Win32_Process') { throw 'Unreliable Codex process detection must be removed from UI and runner.' }
 if ($data -match 'Get-CimInstance\s+Win32_Process') { throw 'Process inspection remains in background code.' }
+if ($gui -notmatch 'Get-ReportedThreadDirectory' -or $gui -notmatch 'Find-SessionRepository \$SelectedSession \$reportedCwd') { throw 'The background selection job must prefer thread/read metadata.' }
+if ($data -notmatch 'thread/read' -or $data -notmatch 'Get-ReportedThreadDirectory') { throw 'Codex metadata lookup missing from the data helper.' }
 if ($gui -notmatch 'Start-ThreadJob' -or $gui -notmatch '\$dataPoll\.Add_Tick') { throw 'Background refresh and result polling missing.' }
 if ($data -notmatch "Get-ScheduledTask -TaskName 'CodexResume-\*'") { throw 'Pending refresh must use task name filtering.' }
 if ($gui -notmatch "'CodexUsage.js','CodexRetry.js','CodexData.ps1'") { throw 'Scheduled runner needs all helper files installed.' }

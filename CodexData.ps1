@@ -38,10 +38,32 @@ function Get-RecentCliSessions {
     return $sessions
 }
 
+# A read-only Codex App Server lookup supplies the same persisted cwd that Codex
+# offers when resuming a conversation. A missing/error response is not evidence
+# that the conversation lacks a repository; callers retain local fallbacks.
+function Get-ReportedThreadDirectory {
+    param([string]$SessionId, [string]$SourceFolder)
+    if ($SessionId -notmatch '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$') { return $null }
+    try {
+        $shim = (Get-Command codex.cmd -ErrorAction Stop).Source
+        $cli = Join-Path (Split-Path -Parent $shim) 'node_modules\@openai\codex\bin\codex.js'
+        $helper = Join-Path $SourceFolder 'CodexUsage.js'
+        if (-not (Test-Path -LiteralPath $cli -PathType Leaf) -or -not (Test-Path -LiteralPath $helper -PathType Leaf)) { return $null }
+        $lines = & node.exe $helper --cli-js $cli --thread-id $SessionId
+        if ($LASTEXITCODE -ne 0 -or -not $lines) { return $null }
+        $result = ($lines | Select-Object -Last 1) | ConvertFrom-Json -ErrorAction Stop
+        if ($result.ok -eq $true -and $result.threadId -eq $SessionId -and $result.cwd -is [string]) {
+            return ([string]$result.cwd).Trim()
+        }
+    } catch { }
+    return $null
+}
+
 function Find-SessionRepository {
-    param($Session)
+    param($Session, [string]$ReportedCwd = $null)
     if (-not $Session) { return $null }
     $candidates = [System.Collections.Generic.List[string]]::new()
+    $reportedRoot = Get-RepositoryRoot $ReportedCwd
     $direct = Get-RepositoryRoot ([string]$Session.Cwd)
     if ($direct) { $candidates.Add($direct) }
 
@@ -86,9 +108,16 @@ function Find-SessionRepository {
         }
     }
 
-    $roots = @($candidates.ToArray() | Sort-Object -Unique)
-    if ($roots.Count -eq 1) { return [pscustomobject]@{ Root = $roots[0]; Source = 'consistent session repository evidence'; Candidates = $roots } }
-    if ($roots.Count -gt 1) { return [pscustomobject]@{ Root = $null; Source = 'conflicting worktrees'; Candidates = $roots } }
+    $roots = @($candidates.ToArray() + @($reportedRoot | Where-Object { $_ }) | Sort-Object -Unique)
+    if ($reportedRoot) {
+        # The reported cwd is authoritative for Codex's resume prompt. Preserve
+        # competing roots for the user instead of ignoring them or clearing it.
+        $alternatives = @($roots | Where-Object { $_ -ine $reportedRoot })
+        return [pscustomobject]@{ Root = $reportedRoot; Source = 'Codex thread/read'; ReportedCwd = $ReportedCwd;
+            Candidates = $roots; AlternativeRoots = $alternatives }
+    }
+    if ($roots.Count -eq 1) { return [pscustomobject]@{ Root = $roots[0]; Source = 'saved conversation fallback'; Candidates = $roots; AlternativeRoots = @() } }
+    if ($roots.Count -gt 1) { return [pscustomobject]@{ Root = $null; Source = 'conflicting fallback worktrees'; Candidates = $roots; AlternativeRoots = $roots } }
     return $null
 }
 

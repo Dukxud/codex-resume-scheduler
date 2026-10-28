@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.6.0: responsive background data refresh; removed unreliable CLI process scanning.
+# v1.7.0: resolve repository from Codex thread metadata before historical fallbacks.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -450,6 +450,7 @@ $script:selectionGeneration = 0
 $script:selectionJobGeneration = 0
 $script:selectionOriginalModel = $null
 $script:loadingSessions = $false
+$repoHints = [System.Windows.Forms.ToolTip]::new()
 $script:models = @()
 
 function Start-DataRead {
@@ -468,9 +469,10 @@ function Start-DataRead {
                 'sessions'  { Get-RecentCliSessions }
                 'pending'   { Get-UpcomingCodexTasks }
                 'selection' {
+                    $reportedCwd = Get-ReportedThreadDirectory ([string]$SelectedSession.Id) $Folder
                     [pscustomobject]@{ Id = [string]$SelectedSession.Id;
                         Model = Read-SessionModel $SelectedSession;
-                        Found = Find-SessionRepository $SelectedSession }
+                        Found = Find-SessionRepository $SelectedSession $reportedCwd }
                 }
             }
         }
@@ -487,6 +489,7 @@ function Request-SelectionLookup {
     $script:selectionGeneration++
     $selected = $sessionBox.SelectedItem
     $repoBox.Clear()
+    $repoHints.SetToolTip($repoBox, '')
     if (-not $selected) { return }
     $script:selectionOriginalModel = Get-SelectedModel
     Update-Status 'Locating conversation repository in background...'
@@ -546,9 +549,21 @@ $dataPoll.Add_Tick({
                     }
                     if ($info.Found -and $info.Found.Root) {
                         $repoBox.Text = [string]$info.Found.Root
-                        Update-Status 'Conversation repository located; verify it before scheduling.'
+                        $otherRoots = @($info.Found.AlternativeRoots | Where-Object { $_ })
+                        if ($otherRoots.Count -gt 0) {
+                            $detail = "Codex reported: $($info.Found.Root)`nOther checkout(s): $($otherRoots -join '; ')`nChoose Browse to override."
+                            $repoHints.SetToolTip($repoBox, $detail)
+                            $repoHints.SetToolTip($status, $detail)
+                            Update-Status "Codex: $($info.Found.Root) | Other: $($otherRoots -join '; ') (hover for details)"
+                        } else {
+                            $repoHints.SetToolTip($repoBox, "From $($info.Found.Source): $($info.Found.Root)")
+                            Update-Status "Repository: $($info.Found.Root) ($($info.Found.Source))"
+                        }
                     } elseif ($info.Found -and @($info.Found.Candidates).Count -gt 1) {
-                        Update-Status 'Conflicting worktrees found. Use Browse to choose the active checkout.'
+                        $detail = "Conflicting fallback checkouts: $(@($info.Found.Candidates) -join '; ')`nChoose Browse to select the active checkout."
+                        $repoHints.SetToolTip($repoBox, $detail)
+                        $repoHints.SetToolTip($status, $detail)
+                        Update-Status "Conflicting roots: $(@($info.Found.Candidates) -join '; ') (hover for details)"
                     } else { Update-Status 'Repository could not be identified. Use Browse.' }
                 }
             }
@@ -845,4 +860,5 @@ $form.Add_FormClosed({
 $autoRefresh.Dispose()
 $usagePoll.Dispose()
 $dataPoll.Dispose()
+$repoHints.Dispose()
 $form.Dispose()

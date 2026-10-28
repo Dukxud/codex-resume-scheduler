@@ -57,14 +57,11 @@ Model choices are dynamically discovered with Codex's `model/list`. If discovery
 
 ## Repository auto-detection
 
-On selecting a conversation, the app compares these session-specific sources:
+When a conversation is selected, the GUI first asks the **Codex App Server** for its saved working directory using read-only `thread/read`. This is the directory Codex reports for the conversation, and the scheduler resolves its Git root. The lookup runs in the existing background selection job and does **not** resume or alter the conversation.
 
-1. The selected CLI session's starting working directory, if inside a Git repository.
-2. Repositories previously scheduled for **the same session ID**.
-3. Recent structured `cwd` values in the saved conversation.
-4. Recent structured tool `workdir` values in the same conversation.
+If that path is missing, unavailable or not in an existing Git repository, the scheduler falls back to session-specific evidence: the original CLI working directory, prior scheduler jobs for the same session ID, and recent structured `cwd`/tool `workdir` entries. Conflicting **fallback-only** checkouts require **Browse**.
 
-If multiple distinct Git roots are present, **the repository field is cleared** instead of silently preferring the conversation's original checkout. Use **Browse** to select the checkout containing unfinished work; its branch is validated when scheduling and running. The app does not scan the drive or guess from arbitrary command text. If session evidence is incomplete, manual verification remains necessary.
+If Codex's reported root differs from a fallback checkout, **the reported root is selected**, but the other checkout path is displayed in the status line and in a hover tooltip on the repository field; **Browse** can override it. This selection is not proof that unfinished work is in the reported directory. Branch and Git-root validation still apply at scheduling and execution. No entire-drive scanning or process heuristics are used.
 
 ## License
 
@@ -77,7 +74,7 @@ MIT License. See [LICENSE](LICENSE).
 - The GUI validates repository root, branch, model, and effort at scheduling time, and the runner revalidates them before execution. It cannot detect another open copy of the same Codex conversation. Close other copies before scheduling to prevent concurrent activity.
 - Tasks run once, not every day; Windows Task Scheduler can launch them after a missed time if `StartWhenAvailable` is enabled.
 - Scheduled tasks and job settings are kept locally. No code, repository content, or saved Codex conversations are uploaded by this app.
-- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.6 must still be tested end-to-end on BLACK-PUDDLE**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
+- Usage parsing has automated tests and the new GUI wiring was statically reviewed; **v1.7 must still be tested end-to-end on BLACK-PUDDLE**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
 
 ## Development
 

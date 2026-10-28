@@ -31,6 +31,14 @@ try {
     $found = Find-SessionRepository $session
     if ($null -ne $found.Root -or $found.Candidates.Count -ne 2) { throw 'Different worktrees must not silently select the startup root.' }
 
+    # Codex App Server metadata wins over an unrelated original root; both
+    # checkouts remain visible for the operator to select deliberately.
+    $found = Find-SessionRepository $session 'C:\actual'
+    if ($found.Root -ne 'C:/actual' -or $found.Source -ne 'Codex thread/read') { throw 'Codex reported directory must take precedence.' }
+    if (@($found.AlternativeRoots).Count -ne 1 -or $found.AlternativeRoots[0] -ne 'C:/original') { throw 'Competing checkout must be shown, not discarded.' }
+    $found = Find-SessionRepository $session 'C:\missing'
+    if ($null -ne $found.Root) { throw 'Invalid metadata cwd must fall back to conflict detection.' }
+
     $session.Cwd = 'C:\home'
     $found = Find-SessionRepository $session
     if ($found.Root -ne 'C:/actual') { throw 'A unique recent worktree should be detected.' }
@@ -39,6 +47,8 @@ try {
     Set-Content -LiteralPath (Join-Path $appDir 'CodexResume-prior.json') -Value $previous
     $found = Find-SessionRepository $session
     if ($null -ne $found.Root -or $found.Candidates.Count -ne 2) { throw 'Prior schedules must not hide conflicting current checkout evidence.' }
+    $found = Find-SessionRepository $session 'C:\actual'
+    if ($found.Root -ne 'C:/actual' -or $found.AlternativeRoots[0] -ne 'C:/original') { throw 'Previous schedule must not override Codex metadata.' }
     Write-Host 'Repository detection checks passed.'
 } finally {
     Remove-Item -LiteralPath $appDir -Recurse -Force

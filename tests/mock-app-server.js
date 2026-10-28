@@ -9,6 +9,7 @@ rl.on('line',line=>{
   if(m.method==='model/list'&&initialized)process.stdout.write(JSON.stringify({id:m.id,result:{data:[
     {model:'gpt-6-astra',displayName:'Astra',defaultReasoningEffort:'high',supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'medium'},{reasoningEffort:'high'},{reasoningEffort:'xhigh'}],isDefault:true},
     {model:'gpt-6.1-sol',displayName:'Sol',defaultReasoningEffort:'medium',supportedReasoningEfforts:[{reasoningEffort:'medium'}]}],nextCursor:null}})+'\n');
+  if(m.method==='thread/read'&&initialized)process.stdout.write(JSON.stringify({id:m.id,result:{thread:{id:m.params.threadId,cwd:process.env.MOCK_CODEX_CWD||'C:\\Projects\\CodexSample',status:{type:'notLoaded'},turns:[]}}})+'\n');
   if(m.method==='account/rateLimits/read'&&initialized)process.stdout.write(JSON.stringify({id:m.id,result:{ordinaryUsageAllowed:false,
     rateLimits:{limitId:'codex',primary:{usedPercent:100,windowDurationMins:300,resetsAt:Math.floor(Date.now()/1000)+200}}}})+'\n');
 });

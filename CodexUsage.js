@@ -75,7 +75,7 @@ function isLimitErrorLine(line) {
   return /(?:usage limit|rate.limit|quota exceeded|too many requests)/i.test(s) &&
     !/(?:invalid model|unsupported effort)/i.test(s);
 }
-function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true, modelsOnly = false } = {}) {
+function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true, modelsOnly = false, threadId = null } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cliJs, 'app-server', '--listen', 'stdio://'], { stdio:['pipe','pipe','pipe'], windowsHide:true });
     let settled = false, stderr = '', pages = [], catalogError = null, requestId = 1, stage = 'initialize';
@@ -94,6 +94,7 @@ function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true
       send({id:requestId,method:'model/list',params});
     }
     function requestRate() {stage='rate';requestId++;send({id:requestId,method:'account/rateLimits/read'});}
+    function requestThread() {stage='thread';requestId++;send({id:requestId,method:'thread/read',params:{threadId}});}
     child.on('error',e=>finish(e)); child.stdin.on('error',e=>finish(e));
     child.on('exit',code=>{ if(!settled) finish(new Error(`Codex App Server exited (${code}). ${stderr.slice(-150)}`)); });
     child.stderr.on('data',p=>{stderr=(stderr+p.toString()).slice(-500);});
@@ -102,7 +103,11 @@ function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true
       if(msg.id!==requestId)return;
       if(stage==='initialize') {
         if(msg.error)return finish(new Error(msg.error.message||'Initialization failed'));
-        send({method:'initialized',params:{}});if(catalog)requestModels();else requestRate();
+        send({method:'initialized',params:{}});if(threadId)requestThread();else if(catalog)requestModels();else requestRate();
+      } else if(stage==='thread') {
+        if(msg.error)return finish(new Error(msg.error.message||'Thread metadata unavailable'));
+        try {finish(null,normalizeThreadRead(msg.result,threadId));}
+        catch(e){finish(e);}
       } else if(stage==='models') {
         if(msg.error)catalogError=msg.error.message||'Model catalog unavailable';
         else {pages.push(msg.result||{});const cursor=msg.result?.nextCursor;
@@ -126,12 +131,28 @@ function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true
   });
 }
 function readRateLimits(cliJs, timeoutMs=18000) {return readCodexState(cliJs,{timeoutMs,catalog:false});}
+function normalizeThreadRead(result, expectedId) {
+  const thread = result?.thread;
+  if (!thread || thread.id !== expectedId) throw new Error('Codex returned unexpected thread metadata.');
+  // thread/read does not resume a conversation or subscribe to turns.
+  const cwd = typeof thread.cwd === 'string' && thread.cwd.trim() ? thread.cwd.trim() : null;
+  return {ok:true, threadId:expectedId, cwd};
+}
+function readThreadDirectory(cliJs, threadId, timeoutMs=10000) {
+  if (typeof threadId !== 'string' || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(threadId))
+    return Promise.reject(new Error('Invalid Codex conversation ID.'));
+  return readCodexState(cliJs,{threadId,timeoutMs,catalog:false});
+}
 async function main() {
   const flag=process.argv.indexOf('--cli-js'); const cliJs=flag>=0?process.argv[flag+1]:null;
   if(!cliJs||!fs.existsSync(cliJs)||path.extname(cliJs).toLowerCase()!=='.js')throw new Error('Codex npm CLI entry not found.');
   const modelFlag=process.argv.indexOf('--model'); const model=modelFlag>=0?process.argv[modelFlag+1]:null;
-  const state=await readCodexState(path.resolve(cliJs),{model,catalog:!process.argv.includes('--rates-only'),modelsOnly:process.argv.includes('--models-only')});
+  const threadFlag=process.argv.indexOf('--thread-id');
+  const threadId=threadFlag>=0?process.argv[threadFlag+1]:null;
+  const state=threadFlag>=0
+    ? await readThreadDirectory(path.resolve(cliJs),threadId)
+    : await readCodexState(path.resolve(cliJs),{model,catalog:!process.argv.includes('--rates-only'),modelsOnly:process.argv.includes('--models-only')});
   process.stdout.write(JSON.stringify(state)+'\n');
 }
 if(require.main===module) main().catch(e=>{process.stdout.write(JSON.stringify({ok:false,error:e.message})+'\n');process.exitCode=1;});
-module.exports={describeWindow,normalizeModels,selectBucket,summarizeRateLimits,isLimitErrorLine,readCodexState,readRateLimits};
+module.exports={describeWindow,normalizeModels,selectBucket,summarizeRateLimits,isLimitErrorLine,readCodexState,readRateLimits,normalizeThreadRead,readThreadDirectory};

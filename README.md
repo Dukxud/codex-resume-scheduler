@@ -10,6 +10,9 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 - Schedules a message (default `Resume.`) at a specific local date and time.
 - Configures the Codex model and *only* that model’s advertised ordinary reasoning efforts (excluding the separate Ultra/multi-agent mode), plus access mode (read-only, workspace-write, or unrestricted/YOLO). The list comes from Codex `model/list`, not a built-in list of model names.
 - Shows pending scheduled runs, supports cancellation, and saves a transcript in `%LOCALAPPDATA%\CodexResumeScheduler`.
+- **Compact mode** remembers the preferred view, displays the next upcoming run and its model-specific usage windows, and hides the run section entirely when no run is scheduled. Standard mode shows every upcoming run.
+- Both views show a blue countdown bar for scheduled runs, distinct from green quota-remaining bars. Time bars fill from **schedule creation** to the scheduled launch time; older tasks without a creation timestamp display the remaining time and an unfilled track rather than a made-up percentage. Reaching 100% is not confirmation that Codex started.
+- Countdown labels update locally every second without additional Codex requests. Task and quota snapshots still refresh every 60 seconds.
 - Autosaves and restores the complete scheduling draft: conversation, repository, model, reasoning effort, access, instruction, auto-resume, and requested local run time. Saving does not require creating a scheduled run.
 - Starts a visible PowerShell 7 window that **stays open** after Codex finishes.
 - When a scheduled Codex run reports an actual usage-limit failure, **Auto-resume** (enabled by default) reads the current model’s applicable quota and schedules another one-time run after the reported reset **+2 minutes**. A retry is only started when backend permission is explicitly restored; attempts are capped at four.
@@ -32,7 +35,7 @@ The GUI dispatches saved-conversation discovery, repository lookup, and pending 
 ## Run
 
 1. Download a release ZIP or clone this repository.
-2. Keep `CodexResumeScheduler.ps1`, `CodexData.ps1`, `CodexUsage.js`, `CodexRetry.js`, and `Start-Codex-Scheduler.cmd` in the **same folder**.
+2. Keep `CodexResumeScheduler.ps1`, `CodexData.ps1`, `CodexDashboard.ps1`, `CodexUsage.js`, `CodexRetry.js`, and `Start-Codex-Scheduler.cmd` in the **same folder**.
 3. Double-click `Start-Codex-Scheduler.cmd` as a normal (non-administrator) Windows user.
 4. Usage and pending jobs load automatically; optionally click **Refresh now**. If a reset time is available, click **Use reset +2 min**, or enter a time manually.
 5. Select the conversation, **model**, repository, model-supported effort, access mode, and instruction, then click **Schedule once**. Leave Auto-resume checked to retry on a confirmed usage-limit failure.

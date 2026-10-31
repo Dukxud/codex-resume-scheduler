@@ -4,7 +4,7 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%207-blue)
 
-**Latest packaged release: [CodexResumeScheduler-v1.10.2.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.2/CodexResumeScheduler-v1.10.2.zip)**
+**Latest packaged release: [CodexResumeScheduler-v1.10.3.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.3/CodexResumeScheduler-v1.10.3.zip)**
 
 Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The package contains only scripts; no third-party or unsigned executable.
 
@@ -15,7 +15,7 @@ Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. T
 - Configures the Codex model and *only* that model’s advertised ordinary reasoning efforts (excluding the separate Ultra/multi-agent mode), plus access mode (read-only, workspace-write, or unrestricted/YOLO). The list comes from Codex `model/list`, not a built-in list of model names.
 - Shows pending scheduled runs, supports cancellation, and saves a transcript in `%LOCALAPPDATA%\CodexResumeScheduler`.
 - **Compact mode** remembers the preferred view, displays the next upcoming run and its model-specific usage windows, and hides the run section entirely when no run is scheduled. Standard mode shows every upcoming run.
-- Both views show glossy, reflective blue countdown bars for scheduled runs, distinct from glossy green quota-remaining bars. Time bars fill from **schedule creation** to the scheduled launch time; older tasks without a creation timestamp display the remaining time and an unfilled track rather than a made-up percentage. Reaching 100% is not confirmation that Codex started.
+- The original Windows-native, animated usage-limit progress bars from v1.8/v1.9 have been restored in both views. Scheduled-run countdowns retain separate blue bars. Time bars fill from **schedule creation** to the scheduled launch time; older tasks without a creation timestamp display the remaining time and an unfilled track rather than a made-up percentage. Reaching 100% is not confirmation that Codex started.
 - Countdown labels update locally every second without additional Codex requests. Task and quota snapshots still refresh every 60 seconds.
 - Autosaves and restores the complete scheduling draft: conversation, repository, model, reasoning effort, access, instruction, auto-resume, and requested local run time. Saving does not require creating a scheduled run.
 - Starts through Windows' built-in Script Host (`wscript.exe`), without a visible terminal. New scheduled jobs also run with a hidden window and report their exit status; transcripts and event logs remain available.
@@ -38,7 +38,7 @@ The GUI dispatches saved-conversation discovery, repository lookup, and pending 
 
 ## Run
 
-1. Download **[CodexResumeScheduler-v1.10.2.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.2/CodexResumeScheduler-v1.10.2.zip)** from Releases.
+1. Download **[CodexResumeScheduler-v1.10.3.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.3/CodexResumeScheduler-v1.10.3.zip)** from Releases.
 2. Extract the versioned folder and keep the supplied `.vbs`, `.ps1`, and `.js` files together.
 3. Double-click **`Start-Codex-Scheduler.vbs`** to open the interface without a visible terminal. The `.cmd` fallback may briefly flash its own shell before exiting.
 4. Usage and pending jobs load automatically; optionally click **Refresh now**. If a reset time is available, click **Use reset +2 min**, or enter a time manually.
@@ -85,7 +85,7 @@ MIT License. See [LICENSE](LICENSE).
 - The GUI validates repository root, branch, model, and effort at scheduling time, and the runner revalidates them before execution. It cannot detect another open copy of the same Codex conversation. Close other copies before scheduling to prevent concurrent activity.
 - Tasks run once, not every day; Windows Task Scheduler can launch them after a missed time if `StartWhenAvailable` is enabled.
 - Scheduled tasks and job settings are kept locally. No code, repository content, or saved Codex conversations are uploaded by this app.
-- Usage parsing, hidden Windows Script Host process behavior, Windows Forms layout, glossy bar rendering, and runner wiring are covered by Windows CI; **real Codex end-to-end runs on BLACK-PUDDLE still require manual validation**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
+- Usage parsing, hidden Windows Script Host process behavior, Windows Forms layout, original native quota bars, blue countdown rendering, and runner wiring are covered by Windows CI; **real Codex end-to-end runs on BLACK-PUDDLE still require manual validation**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
 
 ## Development
 

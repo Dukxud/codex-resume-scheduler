@@ -65,8 +65,9 @@ internal static class CodexLauncher
 
     private static string Quote(string value)
     {
-        // Windows CommandLineToArgvW-compatible argument quoting.
-        return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        // Windows file names cannot contain quotes; preserve valid path backslashes.
+        if (value.IndexOf('"') >= 0) throw new ArgumentException("Invalid path.");
+        return "\"" + value + "\"";
     }
 
     private static void ReportFailure(bool runner, string message)

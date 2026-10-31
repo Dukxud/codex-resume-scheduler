@@ -14,14 +14,14 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 - Both views show a blue countdown bar for scheduled runs, distinct from green quota-remaining bars. Time bars fill from **schedule creation** to the scheduled launch time; older tasks without a creation timestamp display the remaining time and an unfilled track rather than a made-up percentage. Reaching 100% is not confirmation that Codex started.
 - Countdown labels update locally every second without additional Codex requests. Task and quota snapshots still refresh every 60 seconds.
 - Autosaves and restores the complete scheduling draft: conversation, repository, model, reasoning effort, access, instruction, auto-resume, and requested local run time. Saving does not require creating a scheduled run.
-- Starts a visible PowerShell 7 window that **stays open** after Codex finishes.
+- Starts the Windows GUI without an associated console, and runs scheduled Codex continuations in hidden PowerShell processes that exit when complete. Transcripts and event logs remain available in the local logs folder.
 - When a scheduled Codex run reports an actual usage-limit failure, **Auto-resume** (enabled by default) reads the current model’s applicable quota and schedules another one-time run after the reported reset **+2 minutes**. A retry is only started when backend permission is explicitly restored; attempts are capped at four.
 - Displays **percentage remaining**, progress bars, and local reset times from Codex's official `account/rateLimits/read` App Server method. **Use reset +2 min** sets the scheduling control to two minutes after the selected reset, rounded up to the next whole minute. It never schedules automatically.
 - Refreshes **usage and pending runs automatically on startup, every 60 seconds, and after scheduling or cancellation**. Usage reads run in a short-lived process; conversation, repository, and pending-task reads run in background jobs.
 
 ## Responsiveness and concurrent sessions
 
-The GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI. The v1.9 interface groups model and reasoning settings, displays recognizable project names rather than opaque task IDs, keeps full details in tooltips, and shows an empty state when no tasks are pending. Background pending refresh no longer replaces actionable status messages.
+The GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI. The interface groups model and reasoning settings, displays recognizable project names rather than opaque task IDs, and keeps full details in tooltips. When there are no scheduled runs, the upcoming-run section collapses. Background pending refresh no longer replaces actionable status messages.
 
 **Concurrent sessions:** the previous process-based open-session detector was removed because it could not reliably identify an independently opened interactive Codex conversation. Before scheduling a continuation, close any other Codex window that might be using that conversation.
 
@@ -35,12 +35,12 @@ The GUI dispatches saved-conversation discovery, repository lookup, and pending 
 ## Run
 
 1. Download a release ZIP or clone this repository.
-2. Keep `CodexResumeScheduler.ps1`, `CodexData.ps1`, `CodexDashboard.ps1`, `CodexUsage.js`, `CodexRetry.js`, and `Start-Codex-Scheduler.cmd` in the **same folder**.
-3. Double-click `Start-Codex-Scheduler.cmd` as a normal (non-administrator) Windows user.
+2. Keep `CodexResumeScheduler.ps1`, `CodexData.ps1`, `CodexDashboard.ps1`, `CodexUsage.js`, `CodexRetry.js`, `Start-Codex-Scheduler.cmd`, and `Start-Codex-Scheduler.vbs` in the **same folder**.
+3. Double-click **`Start-Codex-Scheduler.vbs`** to open the desktop GUI without a terminal. The `.cmd` launcher also exits after starting the GUI and is a fallback if Windows Script Host is unavailable. Neither keeps a console open while the GUI is running.
 4. Usage and pending jobs load automatically; optionally click **Refresh now**. If a reset time is available, click **Use reset +2 min**, or enter a time manually.
 5. Select the conversation, **model**, repository, model-supported effort, access mode, and instruction, then click **Schedule once**. Leave Auto-resume checked to retry on a confirmed usage-limit failure.
 
-Pending jobs are persisted by Windows Task Scheduler. Keep the computer **awake, online, and signed into Windows** at the scheduled time. A task missed while the computer was unavailable may execute at the next opportunity.
+Pending jobs are persisted by Windows Task Scheduler and run with hidden consoles. Output and failures are saved in `%LOCALAPPDATA%\CodexResumeScheduler`; use **Open logs folder** to inspect them. Keep the computer **awake, online, and signed into Windows** at the scheduled time. A task missed while the computer was unavailable may execute at the next opportunity.
 
 ## How the usage read works
 

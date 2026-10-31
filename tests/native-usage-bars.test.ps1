@@ -8,7 +8,7 @@ $source = Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexResumeScheduler.ps1
 $tokens = $null; $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$parseErrors)
 if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
-function Import-ProductionFunction([string]$name) {
+foreach ($name in @('New-UsageCard','Render-UsageCard')) {
     $definition = @($ast.FindAll({
         param($node)
         $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
@@ -17,8 +17,6 @@ function Import-ProductionFunction([string]$name) {
     Invoke-Expression $definition[0].Extent.Text
 }
 function Require($condition,[string]$message) { if (-not $condition) { throw $message } }
-Import-ProductionFunction 'New-UsageCard'
-Import-ProductionFunction 'Render-UsageCard'
 function Format-ResetTime { param($Seconds) return 'Reset display' }
 
 $form = [System.Windows.Forms.Form]::new()

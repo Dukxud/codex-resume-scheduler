@@ -10,13 +10,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Build Windows GUI launcher
-        shell: pwsh
-        run: |
-          $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-          if (-not (Test-Path $compiler)) { throw 'Windows .NET Framework C# compiler not found.' }
-          & $compiler /nologo /target:winexe /optimize+ /out:CodexScheduler.exe /reference:System.Windows.Forms.dll CodexLauncher.cs
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path CodexScheduler.exe)) { throw 'GUI launcher compilation failed.' }
       - name: Codex usage tests
         run: node --test tests/*.test.js
       - name: Repository ambiguity checks
@@ -43,9 +36,9 @@ jobs:
       - name: Dashboard window layout
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/dashboard-layout.test.ps1
-      - name: Native launcher background behavior
+      - name: Hidden script host launcher behavior
         shell: pwsh
-        run: ./tests/native-launcher.test.ps1
+        run: ./tests/script-host-launcher.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |
@@ -66,13 +59,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Build release GUI executable
-        shell: pwsh
-        run: |
-          $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-          if (-not (Test-Path $compiler)) { throw 'Windows .NET Framework C# compiler not found.' }
-          & $compiler /nologo /target:winexe /optimize+ /out:CodexScheduler.exe /reference:System.Windows.Forms.dll CodexLauncher.cs
-          if ($LASTEXITCODE -ne 0) { throw 'Release launcher compilation failed.' }
       - name: Assemble numbered Windows release
         shell: pwsh
         run: |
@@ -81,9 +67,9 @@ jobs:
           $bundleName = "CodexResumeScheduler-v$version"
           $folder = Join-Path $env:RUNNER_TEMP $bundleName
           [void](New-Item -ItemType Directory -Path $folder -Force)
-          $files = @('CodexScheduler.exe','CodexResumeScheduler.ps1','CodexDashboard.ps1',
+          $files = @('CodexResumeScheduler.ps1','CodexDashboard.ps1',
             'CodexData.ps1','CodexUsage.js','CodexRetry.js','Start-Codex-Scheduler.vbs',
-            'Start-Codex-Scheduler.cmd','README.md','LICENSE','VERSION')
+            'Start-Codex-Scheduler.cmd','CodexRunJob.vbs','README.md','LICENSE','VERSION')
           foreach ($name in $files) {
             if (-not (Test-Path -LiteralPath $name -PathType Leaf)) { throw "Release file missing: $name" }
             Copy-Item -LiteralPath $name -Destination $folder
@@ -100,5 +86,5 @@ jobs:
           $tag = "v$env:RELEASE_VERSION"
           gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) { Write-Host "Release $tag already exists; keeping it unchanged."; exit 0 }
-          gh release create $tag $env:RELEASE_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --latest --title "Codex Resume Scheduler $tag" --notes "Console-free native Windows launcher, glossy usage and countdown bars, compact dashboard, and numbered release packages. Download the attached ZIP (not Source code) and run CodexScheduler.exe."
+          gh release create $tag $env:RELEASE_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --latest --title "Codex Resume Scheduler $tag" --notes "Removes the Bitdefender-blocked unsigned executable. Uses Windows Script Host to run the scheduler without a visible terminal. Glossy bars and compact mode remain. Download the attached ZIP and double-click Start-Codex-Scheduler.vbs."
           if ($LASTEXITCODE -ne 0) { throw 'Versioned release publishing failed.' }

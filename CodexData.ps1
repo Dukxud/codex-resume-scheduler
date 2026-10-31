@@ -147,7 +147,8 @@ function Get-UpcomingCodexTasks {
                 $session = [string]$job.sessionId
                 $repo = [string]$job.repo
                 $model = [string]$job.model
-                if ([string]$job.createdAt -match '^\d{9,12} { $description = 'Scheduled task (job data unreadable)' }
+                if ([string]$job.createdAt -match '^\d{9,12}$') { $createdAt = [long]$job.createdAt }
+            } catch { $description = 'Scheduled task (job data unreadable)' }
         } elseif ($name -match '^BP\d+-Codex-') {
             # Surface existing BPxx tasks without modifying their definitions.
             $repo = [string]$task.Actions[0].WorkingDirectory
@@ -166,73 +167,6 @@ function Get-UpcomingCodexTasks {
         }
         $items += [pscustomobject]@{ Name = $name; When = $when; Repo = $repo; Session = $session;
             Description = $description; Model = $model; CreatedAt = $createdAt }
-    }
-    return ($items | Sort-Object When)
-}
-
-function Read-SessionModel {
-    param($Session)
-    if (-not $Session -or -not (Test-Path -LiteralPath $Session.File -PathType Leaf)) { return $null }
-    try {
-        foreach ($line in @(Get-Content -LiteralPath $Session.File -Tail 600) | Select-Object -Last 600) {
-            if ($line -notmatch '"model"') { continue }
-            $record = $line | ConvertFrom-Json -ErrorAction Stop
-            if ($record.type -eq 'turn_context' -and $record.payload.model -is [string]) { $found = [string]$record.payload.model }
-        }
-        return $found
-    } catch { return $null }
-}
-
-# UI draft settings are local to this Windows account, not part of a scheduled job.
-function Read-CodexUiSettings {
-    param([string]$Directory)
-    $file = Join-Path $Directory 'settings.json'
-    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return $null }
-    try { return (Get-Content -LiteralPath $file -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop) }
-    catch { return $null }
-}
-
-function Write-CodexUiSettings {
-    param([string]$Directory, $State)
-    [void](New-Item -ItemType Directory -Path $Directory -Force -ErrorAction Stop)
-    $destination = Join-Path $Directory 'settings.json'
-    $temporary = Join-Path $Directory ('.settings-' + [guid]::NewGuid().ToString('N') + '.tmp')
-    try {
-        $State | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $temporary -Encoding utf8 -ErrorAction Stop
-        [System.IO.File]::Move($temporary, $destination, $true)
-    } finally {
-        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
-    }
-}
-
-function Get-RestoredRunTime {
-    param([string]$Value, [datetime]$Now)
-    $parsed = [datetime]::MinValue
-    if ($Value -and [datetime]::TryParseExact($Value, 'yyyy-MM-ddTHH:mm:ss',
-        [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$parsed)) {
-        if ($parsed -gt $Now.AddSeconds(30)) { return $parsed }
-    }
-    return $null
-}
-) { $createdAt = [long]$job.createdAt }
-            } catch { $description = 'Scheduled task (job data unreadable)' }
-        } elseif ($name -match '^BP\d+-Codex-') {
-            # Surface existing BPxx tasks without modifying their definitions.
-            $repo = [string]$task.Actions[0].WorkingDirectory
-            $match = [regex]::Match([string]$task.Actions[0].Arguments, '-File\s+"([^"]+)"')
-            if ($match.Success -and (Test-Path -LiteralPath $match.Groups[1].Value -PathType Leaf)) {
-                try {
-                    $legacy = Get-Content -LiteralPath $match.Groups[1].Value -Raw
-                    $sidMatch = [regex]::Match($legacy, 'resume\s+"([0-9a-fA-F-]{36})"')
-                    if ($sidMatch.Success) { $session = $sidMatch.Groups[1].Value }
-                    $effortMatch = [regex]::Match($legacy, 'model_reasoning_effort=(medium|high|xhigh)')
-                    $effortName = if ($effortMatch.Success) { $effortMatch.Groups[1].Value } else { 'unspecified' }
-                    $accessName = if ($legacy.Contains('--dangerously-bypass-approvals-and-sandbox')) { 'YOLO' } elseif ($legacy.Contains('--sandbox read-only')) { 'read-only' } else { 'other' }
-                    $description = "$effortName | $accessName | existing BP task"
-                } catch { }
-            }
-        }
-        $items += [pscustomobject]@{ Name = $name; When = $when; Repo = $repo; Session = $session; Description = $description }
     }
     return ($items | Sort-Object When)
 }

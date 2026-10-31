@@ -36,7 +36,7 @@ try {
     Require ($qFill.G -gt $qFill.R) 'Usage bar must actually render green.'
     Require ($tFill.B -gt $tFill.R) 'Time bar must actually render blue.'
     Require ($qFill.R -lt $qTrack.R -or $qFill.G -gt $qTrack.G) 'Usage fill must look different from the unfilled track.'
-    Require ($tFill.B -gt $tTrack.B) 'Time fill must look different from the unfilled track.'
+    Require ([math]::Abs($tFill.R-$tTrack.R) -gt 25) 'Time fill must look different from the pale unfilled track.'
     for ($i=0;$i -lt 16;$i++){[System.Windows.Forms.Application]::DoEvents();Start-Sleep -Milliseconds 35}
     $q1 = Get-RenderedPixels $quota
     $t1 = Get-RenderedPixels $time

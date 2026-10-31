@@ -1,10 +1,9 @@
 @echo off
-where pwsh.exe >nul 2>nul
-if errorlevel 1 (
-  echo PowerShell 7 is required.
+setlocal
+if not exist "%~dp0CodexScheduler.exe" (
+  echo CodexScheduler.exe missing. Download the versioned release ZIP, not the source ZIP.
   pause
   exit /b 1
 )
-rem Compatibility launcher: its console exits immediately after starting the hidden GUI host.
-start "" pwsh.exe -NoLogo -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0CodexResumeScheduler.ps1"
+start "" "%~dp0CodexScheduler.exe"
 exit /b

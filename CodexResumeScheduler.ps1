@@ -1,5 +1,5 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
-# Single-file UI and scheduled-task runner. No external modules or services.
+# WinForms UI, Microsoft WPF progress effects, and Windows scheduled-task runner.
 # v1.11.0: WPF compositor-driven moving shine on all usage and countdown bars.
 [CmdletBinding()]
 param(

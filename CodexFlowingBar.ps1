@@ -81,15 +81,15 @@ function New-FlowingProgressBar {
         @('__BOTTOM__',$palette.BaseBottom)
     )) { $markup = $markup.Replace($pair[0],$pair[1]) }
     $progress = [System.Windows.Markup.XamlReader]::Parse($markup)
-    $host = [System.Windows.Forms.Integration.ElementHost]::new()
-    $host.Location = [System.Drawing.Point]::new($X,$Y)
-    $host.Size = [System.Drawing.Size]::new($Width,$Height)
-    $host.BackColor = $Parent.BackColor
-    $host.Child = $progress
-    $host.AccessibleName = if ($Kind -eq 'quota') { 'Usage remaining' } else { 'Time until scheduled run' }
-    $host.Tag = $null # null means no accepted percentage; draw an empty track.
-    $Parent.Controls.Add($host)
-    return $host
+    $elementHost = [System.Windows.Forms.Integration.ElementHost]::new()
+    $elementHost.Location = [System.Drawing.Point]::new($X,$Y)
+    $elementHost.Size = [System.Drawing.Size]::new($Width,$Height)
+    $elementHost.BackColor = $Parent.BackColor
+    $elementHost.Child = $progress
+    $elementHost.AccessibleName = if ($Kind -eq 'quota') { 'Usage remaining' } else { 'Time until scheduled run' }
+    $elementHost.Tag = $null # null means no accepted percentage; draw an empty track.
+    $Parent.Controls.Add($elementHost)
+    return $elementHost
 }
 
 function Set-FlowingProgress {

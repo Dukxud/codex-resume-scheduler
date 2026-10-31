@@ -8,6 +8,22 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# A hidden GUI host must still report startup errors visibly, rather than failing silently.
+trap {
+    if (-not $RunJob) {
+        $problem = "Codex Resume Scheduler could not start: $($_.Exception.Message)"
+        try {
+            $errorDir = Join-Path $env:LOCALAPPDATA 'CodexResumeScheduler'
+            [void](New-Item -ItemType Directory -Path $errorDir -Force)
+            Add-Content -LiteralPath (Join-Path $errorDir 'gui-startup.log') -Value "$(Get-Date -Format o) $problem"
+        } catch { }
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.MessageBox]::Show($problem,'Scheduler startup error') | Out-Null
+        } catch { }
+    }
+    exit 1
+}
 $appDir = Join-Path $env:LOCALAPPDATA 'CodexResumeScheduler'
 $sessionIdPattern = '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
 $script:appSourcePath = $PSCommandPath

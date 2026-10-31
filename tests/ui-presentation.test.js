@@ -61,11 +61,11 @@ test('dashboard shares the pending snapshot and renders distinct countdown and q
   assert.match(dash, /Set-SchedulerProgress \$script:compactRunTrack \$percent/);
   assert.match(dash, /\$script:compactRunHeading\.Visible = \$compact -and \$script:pendingSnapshot\.Count -gt 0/);
   assert.match(dash, /\$form\.ClientSize/);
-  assert.match(source, /New-SchedulerProgressBar \$card 12 46 400 12 'quota'/);
+  assert.match(source, /New-SchedulerProgressBar \$card 12 44 400 17 'quota'/);
   assert.match(dash, /Graphics\.FillPath/);
   assert.match(dash, /Draw-SchedulerProgress \$e\.Graphics \$track \$cell\.Tag 'time'/);
-  assert.match(dash, /FromArgb\(57,164,132\)/); // green quota gradient
-  assert.match(dash, /FromArgb\(75,126,193\)/); // blue time gradient
+  assert.match(dash, /FromArgb\(59,177,140\)/); // green quota gradient
+  assert.match(dash, /FromArgb\(86,144,219\)/); // blue time gradient
 });
 
 test('compact switch occupies dedicated header space in both layouts', () => {

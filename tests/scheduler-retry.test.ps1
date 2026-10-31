@@ -16,6 +16,7 @@ function Register-ScheduledTask { [CmdletBinding()]param($TaskName,$Action,$Trig
 $appDir = Join-Path ([IO.Path]::GetTempPath()) ('codex-retry-test-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $appDir -Force)
 $script:appSourcePath = $source
+Set-Content -LiteralPath (Join-Path $appDir 'CodexScheduler.exe') -Value 'test stub'
 try {
     $job = [pscustomobject]@{sessionId='00000000-0000-0000-0000-000000000001'; repo='C:\repo'; branch='feature'; model='some-future-model'; effort='deep'; access='workspace-write'; message='Resume.'; autoResume=$true; retryAttempt=0; accountId='account'}
     $reset = [long]([math]::Floor([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() / 60) * 60) + 3600
@@ -32,7 +33,22 @@ try {
     $saved = Get-Content -LiteralPath $jobFile[0].FullName -Raw | ConvertFrom-Json
     foreach($key in @('sessionId','repo','branch','model','effort','access','message','accountId')){ if($saved.$key -cne $job.$key){throw "Did not retain $key"} }
     if ($saved.retryAttempt -ne 1) { throw 'Retry count was not incremented.' }
-    if ($scheduled.Action.Argument -notmatch '-ExecutionPolicy Bypass') { throw 'Process-scoped execution policy omitted.' }
+    if ($scheduled.Action.Execute -notmatch 'CodexScheduler\.exe
+    $job.retryAttempt = 4
+    Schedule-LimitRetry $job $reset $run 'meter-1'
+    if($script:registered.Count -ne 1){throw 'Retry cap was not honored.'}
+    Write-Host 'Retry scheduling checks passed.'
+} finally { Remove-Item -LiteralPath $appDir -Recurse -Force }
+
+) { throw 'Retry must use console-free GUI executable.' }
+    if ($scheduled.Action.Argument -notmatch '^--run-job\s+"[^"]+\.json"
+    $job.retryAttempt = 4
+    Schedule-LimitRetry $job $reset $run 'meter-1'
+    if($script:registered.Count -ne 1){throw 'Retry cap was not honored.'}
+    Write-Host 'Retry scheduling checks passed.'
+} finally { Remove-Item -LiteralPath $appDir -Recurse -Force }
+
+) { throw 'Retry must pass its saved job file to the launcher.' }
     $job.retryAttempt = 4
     Schedule-LimitRetry $job $reset $run 'meter-1'
     if($script:registered.Count -ne 1){throw 'Retry cap was not honored.'}

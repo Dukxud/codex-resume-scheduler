@@ -30,6 +30,9 @@ jobs:
       - name: Dashboard countdown calculations
         shell: pwsh
         run: ./tests/dashboard-countdown.test.ps1
+      - name: Dashboard bar rendering
+        shell: pwsh
+        run: ./tests/dashboard-visuals.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

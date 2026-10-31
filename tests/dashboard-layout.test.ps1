@@ -44,6 +44,8 @@ try {
     $script:usageReadFailed = $false
     $script:usageRequestedModel = ''
     $script:usageSnapshotRequestedModel = ''
+    # Child Visible is false until its parent Form is shown; show it for this smoke test.
+    $form.Show()
     Initialize-Dashboard
     Update-DashboardLayout
 

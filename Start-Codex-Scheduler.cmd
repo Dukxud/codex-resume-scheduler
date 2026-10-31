@@ -5,9 +5,6 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-if exist "%~dp0Start-Codex-Scheduler.vbs" (
-  wscript.exe "%~dp0Start-Codex-Scheduler.vbs"
-  exit /b
-)
+rem Compatibility launcher: its console exits immediately after starting the hidden GUI host.
 start "" pwsh.exe -NoLogo -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0CodexResumeScheduler.ps1"
 exit /b

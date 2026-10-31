@@ -27,6 +27,9 @@ jobs:
       - name: UI draft persistence
         shell: pwsh
         run: ./tests/settings-persistence.test.ps1
+      - name: Dashboard countdown calculations
+        shell: pwsh
+        run: ./tests/dashboard-countdown.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

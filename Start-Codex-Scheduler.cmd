@@ -5,5 +5,9 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-pwsh.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0CodexResumeScheduler.ps1"
-if errorlevel 1 pause
+if exist "%~dp0Start-Codex-Scheduler.vbs" (
+  wscript.exe "%~dp0Start-Codex-Scheduler.vbs"
+  exit /b
+)
+start "" pwsh.exe -NoLogo -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0CodexResumeScheduler.ps1"
+exit /b

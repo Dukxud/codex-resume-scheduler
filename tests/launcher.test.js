@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 test('both GUI launchers use hidden process-scoped PowerShell', () => {
   const cmd = fs.readFileSync(path.join(root, 'Start-Codex-Scheduler.cmd'), 'utf8');
   const vbs = fs.readFileSync(path.join(root, 'Start-Codex-Scheduler.vbs'), 'utf8');
-  assert.match(cmd, /wscript\.exe/);
+  assert.doesNotMatch(cmd, /wscript\.exe/); // fallback works without Windows Script Host
   assert.match(cmd, /start "" pwsh\.exe[^\r\n]*-WindowStyle Hidden[^\r\n]*-ExecutionPolicy Bypass\s+-File/);
   assert.match(vbs, /pwsh\.exe[^\r\n]*-WindowStyle Hidden[^\r\n]*-ExecutionPolicy Bypass\s+-File/);
   assert.match(vbs, /shell\.Run command, 0, False/);

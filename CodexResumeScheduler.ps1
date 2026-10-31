@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
-# Single-file UI and scheduled-task runner. No external modules or services.
-# v1.10.3: restore the original Windows-themed animated quota ProgressBar.
+# WinForms UI, Microsoft WPF progress effects, and Windows scheduled-task runner.
+# v1.11.0: WPF compositor-driven moving shine on all usage and countdown bars.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -228,7 +228,7 @@ public static extern bool ShowWindow(System.IntPtr handle, int command);
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.10.3'
+$form.Text = 'Codex Resume Scheduler v1.11.0'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
@@ -404,6 +404,7 @@ $refreshUsage = Add-Button 'Refresh now' 605 320 139
 $useReset = Add-Button 'Use reset +2 min' 755 320 143
 $useReset.Enabled = $false
 
+. (Join-Path $PSScriptRoot 'CodexFlowingBar.ps1')
 . (Join-Path $PSScriptRoot 'CodexDashboard.ps1')
 
 function New-UsageCard {
@@ -427,15 +428,7 @@ function New-UsageCard {
     $remaining.Text = '—'
     $remaining.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
     $card.Controls.Add($remaining)
-    # Restore the actual WinForms ProgressBar from v1.8/v1.9. Custom-painted panels
-    # cannot reproduce the Windows visual-style shine or its native animation.
-    $bar = [System.Windows.Forms.ProgressBar]::new()
-    $bar.Location = [System.Drawing.Point]::new(12,45)
-    $bar.Size = [System.Drawing.Size]::new(400,13)
-    $bar.Minimum = 0
-    $bar.Maximum = 100
-    $bar.Value = 0
-    $card.Controls.Add($bar)
+    $bar = New-FlowingProgressBar $card 12 44 400 17 'quota'
     $reset = New-Object System.Windows.Forms.Label
     $reset.Location = [System.Drawing.Point]::new(12,72)
     $reset.Size = [System.Drawing.Size]::new(400,24)
@@ -691,18 +684,18 @@ function Render-UsageCard {
     if (-not $Window) {
         $Card.Title.Text = $FallbackTitle
         $Card.Remaining.Text = 'Not reported'
-        $Card.Bar.Value = 0
+        Set-FlowingProgress $Card.Bar $null
         $Card.Reset.Text = 'No window supplied by Codex'
         return
     }
     $Card.Title.Text = [string]$Window.label
     if ($null -eq $Window.remainingPercent) {
         $Card.Remaining.Text = 'Unavailable'
-        $Card.Bar.Value = 0
+        Set-FlowingProgress $Card.Bar $null
     } else {
         $remaining = [double]$Window.remainingPercent
         $Card.Remaining.Text = ('{0:0.#}% remaining' -f $remaining)
-        $Card.Bar.Value = [int][math]::Round([math]::Clamp($remaining,0,100))
+        Set-FlowingProgress $Card.Bar $remaining
     }
     $Card.Reset.Text = Format-ResetTime $Window.resetsAt
 }
@@ -962,7 +955,7 @@ $schedule.Add_Click({
         [void](New-Item -Path $appDir -ItemType Directory -Force)
         $installedScript = Join-Path $appDir 'CodexResumeScheduler.ps1'
         if ($script:appSourcePath -ine $installedScript) { Copy-Item -LiteralPath $script:appSourcePath -Destination $installedScript -Force }
-        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1','CodexRunJob.vbs')) {
+        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1','CodexFlowingBar.ps1','CodexRunJob.vbs')) {
             $source = Join-Path $PSScriptRoot $helperFile
             if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "$helperFile missing from installation." }
             $destination = Join-Path $appDir $helperFile

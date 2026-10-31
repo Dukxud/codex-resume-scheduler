@@ -2,6 +2,7 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexFlowingBar.ps1')
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexDashboard.ps1')
 function Require($Condition, $Message) { if (-not $Condition) { throw $Message } }
 function New-TestControl {
@@ -34,6 +35,11 @@ try {
     $separator2 = New-TestControl panel 18 512 880 2
     $pending = New-TestControl label 18 527 400 30
     $grid = New-TestControl grid 18 566 880 195
+    $grid.AllowUserToAddRows = $false
+    $grid.RowTemplate.Height = 54
+    [void]$grid.Columns.Add('When','When')
+    [void]$grid.Columns.Add('Countdown','Time to run')
+    [void]$grid.Columns.Add('Project','Project')
     $refreshRuns = New-TestControl panel 18 774 154 31
     $cancelRun = New-TestControl panel 185 774 154 31
     $openFolder = New-TestControl panel 352 774 154 31
@@ -72,7 +78,22 @@ try {
     $script:compactToggle.Checked = $false
     Require ($script:compactToggle.Visible) 'The switch must remain visible when returning to full mode.'
     Require ($grid.Visible) 'The full run list should be restored.'
-    Write-Host 'Visible mode toggle, header clearance, empty queue, and switching passed.'
+    [void]$grid.Rows.Add('Time','5m','Demo 1')
+    [void]$grid.Rows.Add('Time','7m','Demo 2')
+    [void]$grid.Rows.Add('Time','9m','Demo 3')
+    $grid.Rows[0].Cells[1].Tag = 25
+    $grid.Rows[1].Cells[1].Tag = 75
+    $grid.Rows[2].Cells[1].Tag = $null
+    Sync-DashboardRunBars
+    Require ($script:runBarHosts.Count -eq 3) 'Every queued run must have an independent WPF progress bar.'
+    Require ($script:runBarHosts[0].Child.Value -eq 25) 'First run shows its own percentage.'
+    Require ($script:runBarHosts[1].Child.Value -eq 75) 'Second run shows its own percentage.'
+    Require ($script:runBarHosts[2].Child.Value -eq 0) 'Legacy run keeps an empty track.'
+    Require ($script:runBarHosts[0].Child -is [System.Windows.Controls.ProgressBar]) 'Runs must use real WPF controls.'
+    $grid.Rows.Clear()
+    Sync-DashboardRunBars
+    Require ($script:runBarHosts.Count -eq 0) 'Empty queue must release all run bars and their WPF hosts.'
+    Write-Host 'Visible switch, empty state, and per-run WPF bar lifecycle passed.'
 } finally {
     if ($script:countdownTimer) { $script:countdownTimer.Dispose() }
     $form.Dispose()

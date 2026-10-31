@@ -1,120 +1,4 @@
-# Presentation-only dashboard for Codex Resume Scheduler.
-# The scheduler and its retry policy remain in CodexResumeScheduler.ps1.
-
-# Rounded, anti-aliased bars shared by quota cards and countdowns.
-function New-SchedulerRoundPath {
-    param([System.Drawing.RectangleF]$Rect, [single]$Radius)
-    $path = [System.Drawing.Drawing2D.GraphicsPath]::new()
-    $diameter = [single]($Radius * 2)
-    if ($diameter -le 1) {
-        $path.AddRectangle($Rect)
-    } else {
-        $path.AddArc($Rect.Left, $Rect.Top, $diameter, $diameter, 180, 90)
-        $path.AddArc($Rect.Right - $diameter, $Rect.Top, $diameter, $diameter, 270, 90)
-        $path.AddArc($Rect.Right - $diameter, $Rect.Bottom - $diameter, $diameter, $diameter, 0, 90)
-        $path.AddArc($Rect.Left, $Rect.Bottom - $diameter, $diameter, $diameter, 90, 90)
-        $path.CloseFigure()
-    }
-    return $path
-}
-
-function Draw-SchedulerProgress {
-    param([System.Drawing.Graphics]$Graphics, [System.Drawing.RectangleF]$Rect,
-          $Percent, [ValidateSet('quota','time')][string]$Kind)
-    if ($Rect.Width -le 1 -or $Rect.Height -le 1) { return }
-    $Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $isQuota = $Kind -eq 'quota'
-    $trackColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(219,235,226) } else { [System.Drawing.Color]::FromArgb(223,233,247) }
-    $startColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(59,177,140) } else { [System.Drawing.Color]::FromArgb(86,144,219) }
-    $endColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(24,119,88) } else { [System.Drawing.Color]::FromArgb(35,86,169) }
-    $round = [single]($Rect.Height / 2)
-    $trackPath = New-SchedulerRoundPath $Rect $round
-    $trackBrush = [System.Drawing.SolidBrush]::new($trackColor)
-    $trackOutline = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(90,105,131),0.8)
-    try {
-        $Graphics.FillPath($trackBrush,$trackPath)
-        $Graphics.DrawPath($trackOutline,$trackPath)
-        if ($Kind -eq 'time') {
-            $saved = $Graphics.Save()
-            $tickPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(95,154,183,220),1)
-            try {
-                $Graphics.SetClip($trackPath)
-                for ($x = $Rect.Left + 24; $x -lt $Rect.Right; $x += 24) {
-                    $Graphics.DrawLine($tickPen,[single]$x,$Rect.Top,[single]$x,$Rect.Bottom)
-                }
-            } finally { $Graphics.Restore($saved); $tickPen.Dispose() }
-        }
-        if ($null -eq $Percent) { return }
-
-        $amount = [math]::Clamp([double]$Percent,0.0,100.0)
-        $filled = [single]($Rect.Width * $amount / 100)
-        if ($filled -le 0.5) { return }
-
-        $fillRect = [System.Drawing.RectangleF]::new($Rect.Left,$Rect.Top,$filled,$Rect.Height)
-        $fillPath = New-SchedulerRoundPath $fillRect ([single]([math]::Min($round,$filled / 2)))
-        $fillBrush = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
-            $fillRect,$startColor,$endColor,[System.Drawing.Drawing2D.LinearGradientMode]::Horizontal)
-        $savedFill = $Graphics.Save()
-        try {
-            $Graphics.SetClip($fillPath)
-            $Graphics.FillPath($fillBrush,$fillPath)
-
-            # Glassy top highlight: a bright white reflection that fades at mid-height.
-            # Unlike the previous horizontal color gradient, this is visibly reflective.
-            $reflection = [System.Drawing.RectangleF]::new(
-                $fillRect.Left,$fillRect.Top,[single]([math]::Max($fillRect.Width,1)),[single]($fillRect.Height * 0.60))
-            $sheen = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
-                $reflection,[System.Drawing.Color]::FromArgb(220,255,255,255),
-                [System.Drawing.Color]::FromArgb(15,255,255,255),
-                [System.Drawing.Drawing2D.LinearGradientMode]::Vertical)
-            try { $Graphics.FillRectangle($sheen,$reflection) } finally { $sheen.Dispose() }
-
-            # A thin specular glint and dark underside complete the raised glass profile.
-            $glint = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(145,255,255,255),0.9)
-            $underside = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(58,13,35,53),0.9)
-            try {
-                $Graphics.DrawLine($glint,[single]($fillRect.Left + 2),[single]($fillRect.Top + 1.3),
-                    [single]($fillRect.Right - 2),[single]($fillRect.Top + 1.3))
-                $Graphics.DrawLine($underside,[single]($fillRect.Left + 2),[single]($fillRect.Bottom - 1.2),
-                    [single]($fillRect.Right - 2),[single]($fillRect.Bottom - 1.2))
-            } finally { $glint.Dispose(); $underside.Dispose() }
-        } finally {
-            $Graphics.Restore($savedFill)
-            $fillBrush.Dispose()
-            $fillPath.Dispose()
-        }
-    } finally {
-        $trackBrush.Dispose()
-        $trackOutline.Dispose()
-        $trackPath.Dispose()
-    }
-}
-function New-SchedulerProgressBar {
-    param($Parent, [int]$X, [int]$Y, [int]$Width, [int]$Height,
-          [ValidateSet('quota','time')][string]$Kind)
-    $bar = [System.Windows.Forms.Panel]::new()
-    $bar.Location = [System.Drawing.Point]::new($X,$Y)
-    $bar.Size = [System.Drawing.Size]::new($Width,$Height)
-    $bar.BackColor = $Parent.BackColor
-    $bar.Tag = [pscustomobject]@{ Kind = $Kind; Percent = $null }
-    $bar.AccessibleRole = [System.Windows.Forms.AccessibleRole]::ProgressBar
-    $bar.Add_Paint({
-        param($sender,$e)
-        $rect = [System.Drawing.RectangleF]::new(0,0,[single]($sender.ClientSize.Width-1),[single]($sender.ClientSize.Height-1))
-        Draw-SchedulerProgress $e.Graphics $rect $sender.Tag.Percent $sender.Tag.Kind
-    })
-    $Parent.Controls.Add($bar)
-    return $bar
-}
-
-function Set-SchedulerProgress {
-    param($Bar, $Percent)
-    $value = if ($null -eq $Percent) { $null } else { [double][math]::Clamp([double]$Percent,0,100) }
-    if ($Bar.Tag.Percent -ne $value) {
-        $Bar.Tag.Percent = $value
-        $Bar.Invalidate()
-    }
-}
+# Dashboard views. Animated bars are supplied by the WPF FlowingBar module.
 
 function Get-RunCountdownText {
     param([datetime]$When, [datetime]$Now)
@@ -168,7 +52,6 @@ function Initialize-Dashboard {
     $script:fullTitleFont = $heading.Font
     $script:compactTitleFont = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
     $script:countdownBlue = [System.Drawing.Color]::FromArgb(49,95,167)
-    $script:countdownTrack = [System.Drawing.Color]::FromArgb(222,232,246)
 
     # A high-contrast, button-style toggle in a reserved header location.
     # The former small checkbox overlapped the subtitle and compact title.
@@ -205,7 +88,7 @@ function Initialize-Dashboard {
     $script:compactRunDate = New-DashboardLabel $script:compactRunPanel '' 14 70 395 23
     $script:compactRunDate.ForeColor = [System.Drawing.Color]::DimGray
 
-    $script:compactRunTrack = New-SchedulerProgressBar $script:compactRunPanel 14 101 396 17 'time'
+    $script:compactRunTrack = New-FlowingProgressBar $script:compactRunPanel 14 101 396 17 'time'
 
     $script:compactUsageModel = New-DashboardLabel $form '' 232 240 210 26
     $script:compactUsageModel.ForeColor = [System.Drawing.Color]::DimGray
@@ -218,27 +101,67 @@ function Initialize-Dashboard {
     $script:countdownTimer.Interval = 1000
     $script:countdownTimer.Add_Tick({ Update-DashboardCountdowns })
 
-    # Paint an explicit blue time bar instead of using the quota progress style.
+    # Standard view displays the time label in the native grid, with a real
+    # WPF progress control below it. The WPF compositor animates without timers.
+    $script:runBarHosts = [System.Collections.Generic.List[System.Windows.Forms.Integration.ElementHost]]::new()
     $grid.Add_CellPainting({
         param($sender,$e)
         if ($e.RowIndex -lt 0 -or $e.ColumnIndex -ne 1) { return }
         $e.PaintBackground($e.CellBounds,$true)
         $cell = $sender.Rows[$e.RowIndex].Cells[1]
-        $labelBounds = [System.Drawing.Rectangle]::new($e.CellBounds.X+8,$e.CellBounds.Y+2,$e.CellBounds.Width-16,23)
-        $color = if (($e.State -band [System.Windows.Forms.DataGridViewElementStates]::Selected) -ne 0) { $e.CellStyle.SelectionForeColor } else { $e.CellStyle.ForeColor }
-        [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics,[string]$cell.Value,$sender.Font,$labelBounds,$color,[System.Windows.Forms.TextFormatFlags]::VerticalCenter)
-        $track = [System.Drawing.RectangleF]::new([single]($e.CellBounds.X+8),[single]($e.CellBounds.Bottom-21),
-            [single]([math]::Max(0,$e.CellBounds.Width-16)),[single]15)
-        Draw-SchedulerProgress $e.Graphics $track $cell.Tag 'time'
+        $bounds = [System.Drawing.Rectangle]::new(
+            $e.CellBounds.X+8,$e.CellBounds.Y+2,$e.CellBounds.Width-16,23)
+        $color = if (($e.State -band [System.Windows.Forms.DataGridViewElementStates]::Selected) -ne 0) {
+            $e.CellStyle.SelectionForeColor
+        } else { $e.CellStyle.ForeColor }
+        [System.Windows.Forms.TextRenderer]::DrawText(
+            $e.Graphics,[string]$cell.Value,$sender.Font,$bounds,$color,
+            [System.Windows.Forms.TextFormatFlags]::VerticalCenter)
         $e.Paint($e.CellBounds,[System.Windows.Forms.DataGridViewPaintParts]::Border)
         $e.Handled = $true
     })
+    $grid.Add_Scroll({ Sync-DashboardRunBars })
+    $grid.Add_ColumnWidthChanged({ Sync-DashboardRunBars })
+    $grid.Add_SizeChanged({ Sync-DashboardRunBars })
+    $grid.Add_VisibleChanged({ Sync-DashboardRunBars })
 
     $script:compactToggle.Add_CheckedChanged({
         Update-DashboardLayout
         Queue-FormStateSave
         if ((Get-DashboardUsageModel) -ne [string]$script:usageRequestedModel) { Request-UsageRefresh }
     })
+}
+
+function Sync-DashboardRunBars {
+    # The DataGridView remains responsible for text, scrolling, selection and
+    # task identity. One WPF ElementHost is positioned in each visible time cell.
+    if ($null -eq $script:runBarHosts -or $grid.Columns.Count -lt 2) { return }
+    $count = $grid.Rows.Count
+    while ($script:runBarHosts.Count -gt $count) {
+        $last = $script:runBarHosts.Count - 1
+        $obsolete = $script:runBarHosts[$last]
+        $grid.Controls.Remove($obsolete)
+        $obsolete.Dispose()
+        $script:runBarHosts.RemoveAt($last)
+    }
+    while ($script:runBarHosts.Count -lt $count) {
+        $new = New-FlowingProgressBar $grid 0 0 100 15 'time'
+        $script:runBarHosts.Add($new)
+    }
+    for ($i=0; $i -lt $count; $i++) {
+        $bar = $script:runBarHosts[$i]
+        $cell = $grid.GetCellDisplayRectangle(1,$i,$true)
+        $inside = $grid.Visible -and $grid.Rows[$i].Visible -and
+            $cell.Width -gt 32 -and $cell.Height -ge 22
+        if (-not $inside) {
+            $bar.Visible = $false
+            continue
+        }
+        $bar.Location = [System.Drawing.Point]::new($cell.X + 8,$cell.Bottom - 19)
+        $bar.Size = [System.Drawing.Size]::new($cell.Width - 16,15)
+        $bar.Visible = $true
+        Set-FlowingProgress $bar $grid.Rows[$i].Cells[1].Tag
+    }
 }
 
 function Update-DashboardCountdowns {
@@ -255,6 +178,7 @@ function Update-DashboardCountdowns {
             $grid.InvalidateCell($cell)
         }
     }
+    Sync-DashboardRunBars
     if (-not $script:compactToggle.Checked -or $script:pendingSnapshot.Count -eq 0) { return }
     $next = $script:pendingSnapshot[0]
     $root = ([string]$next.Repo).TrimEnd([char[]]@('/','\'))
@@ -263,7 +187,7 @@ function Update-DashboardCountdowns {
     $script:compactRunDetails.Text = [string]$next.Description
     $script:compactRunDate.Text = 'Scheduled ' + $next.When.ToString('ddd MMM d, h:mm tt')
     $percent = Get-RunCountdownPercent $next.When $next.CreatedAt $now
-    Set-SchedulerProgress $script:compactRunTrack $percent
+    Set-FlowingProgress $script:compactRunTrack $percent
     $script:compactRunTrack.AccessibleName = $script:compactRunEta.Text + $(if ($null -ne $percent) { ", $percent% elapsed since scheduled" } else { ', schedule creation time unavailable' })
 }
 
@@ -299,6 +223,7 @@ function Update-DashboardLayout {
         $status.Location = [System.Drawing.Point]::new(18,$(if ($hasRuns) { 823 } else { 575 }))
         $form.MinimumSize = [System.Drawing.Size]::new(940,$(if ($hasRuns) { 875 } else { 625 }))
         $form.ClientSize = [System.Drawing.Size]::new(920,$(if ($hasRuns) { 865 } else { 615 }))
+        Sync-DashboardRunBars
         return
     }
 
@@ -347,4 +272,5 @@ function Update-DashboardLayout {
     $form.MinimumSize = [System.Drawing.Size]::new(480,150)
     $form.ClientSize = [System.Drawing.Size]::new(464,[math]::Max(126,$height))
     Update-DashboardCountdowns
+    Sync-DashboardRunBars
 }

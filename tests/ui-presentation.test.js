@@ -58,16 +58,15 @@ test('dashboard shares the pending snapshot and renders distinct countdown and q
   assert.match(source, /compactMode = \[bool\]\$script:compactToggle\.Checked/);
   assert.match(dash, /Get-RunCountdownPercent/);
   assert.match(dash, /\$grid\.Add_CellPainting/);
-  assert.match(dash, /Set-SchedulerProgress \$script:compactRunTrack \$percent/);
+  assert.match(dash, /Set-FlowingProgress \$script:compactRunTrack \$percent/);
+  assert.match(dash, /New-FlowingProgressBar \$script:compactRunPanel/);
+  assert.match(dash, /Sync-DashboardRunBars/);
   assert.match(dash, /\$script:compactRunHeading\.Visible = \$compact -and \$script:pendingSnapshot\.Count -gt 0/);
   assert.match(dash, /\$form\.ClientSize/);
-  assert.match(source, /\$bar = \[System\.Windows\.Forms\.ProgressBar\]::new\(\)/);
-  assert.match(source, /\$bar\.Size = \[System\.Drawing\.Size\]::new\(400,13\)/);
-  assert.match(source, /\$Card\.Bar\.Value = \[int\]\[math\]::Round/);
-  assert.doesNotMatch(source, /New-SchedulerProgressBar \$card/);
-  assert.match(dash, /Graphics\.FillPath/);
-  assert.match(dash, /Draw-SchedulerProgress \$e\.Graphics \$track \$cell\.Tag 'time'/);
-  assert.match(dash, /FromArgb\(86,144,219\)/); // blue time gradient
+  assert.match(source, /New-FlowingProgressBar \$card 12 44 400 17 'quota'/);
+  assert.match(source, /Set-FlowingProgress \$Card.Bar \$remaining/);
+  assert.match(dash, /New-FlowingProgressBar \$grid 0 0 100 15 'time'/);
+  assert.doesNotMatch(dash, /Draw-SchedulerProgress/);
 });
 
 test('compact switch occupies dedicated header space in both layouts', () => {

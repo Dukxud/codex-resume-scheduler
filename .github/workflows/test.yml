@@ -30,12 +30,12 @@ jobs:
       - name: Dashboard countdown calculations
         shell: pwsh
         run: ./tests/dashboard-countdown.test.ps1
-      - name: WPF animated bar prototype
+      - name: WPF moving shine animation
         shell: pwsh
-        run: pwsh -NoProfile -STA -File ./tests/wpf-flow-prototype.test.ps1
-      - name: Native Windows usage bars
+        run: pwsh -NoProfile -STA -File ./tests/wpf-flow-animation.test.ps1
+      - name: Production WPF usage values
         shell: pwsh
-        run: pwsh -NoProfile -STA -File ./tests/native-usage-bars.test.ps1
+        run: pwsh -NoProfile -STA -File ./tests/usage-progress-values.test.ps1
       - name: Dashboard bar rendering
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/dashboard-visuals.test.ps1

@@ -28,9 +28,10 @@ test('pending list shows recognizable project and preserves full task identity',
   const fn = namedFunction('Apply-PendingList');
   assert.match(fn, /\$project = if \(\$path/);
   assert.match(fn, /\$row\.Tag = \$item\.Name/);
-  assert.match(fn, /\$row\.Cells\[3\]\.ToolTipText/);
+  assert.match(fn, /\$row\.Cells\[4\]\.ToolTipText/);
   assert.match(fn, /\$pending\.Text = "Upcoming runs/);
-  assert.match(fn, /\$emptyRuns\.Visible = \(\$Items\.Count -eq 0\)/);
+  assert.match(fn, /\$emptyRuns\.Visible = \$false/);
+  assert.match(fn, /Update-DashboardLayout/);
   assert.doesNotMatch(fn, /Update-Status/);
   assert.match(source, /\$cancelRun\.Enabled = \$false/);
 });
@@ -47,4 +48,19 @@ test('usage reports remaining and keeps reset as an explicit action', () => {
   assert.match(source, /% remaining' -f \$remaining/);
   assert.match(source, /\$useReset\.Add_Click\(/);
   assert.match(source, /Next reset is informational/);
+});
+
+test('dashboard shares the pending snapshot and renders distinct countdown and quota bars', () => {
+  const dash = fs.readFileSync(path.resolve(__dirname, '..', 'CodexDashboard.ps1'), 'utf8');
+  assert.match(source, /Columns\.Add\('Countdown','Time to run'\)/);
+  assert.match(source, /\$grid\.RowTemplate\.Height = 44/);
+  assert.match(source, /\$script:usageRequestedModel = \$chosen/);
+  assert.match(source, /compactMode = \[bool\]\$script:compactToggle\.Checked/);
+  assert.match(dash, /Get-RunCountdownPercent/);
+  assert.match(dash, /\$grid\.Add_CellPainting/);
+  assert.match(dash, /\$script:compactRunFill\.Width/);
+  assert.match(dash, /\$script:compactRunHeading\.Visible = \$compact -and \$script:pendingSnapshot\.Count -gt 0/);
+  assert.match(dash, /\$form\.ClientSize/);
+  assert.match(source, /FromArgb\(48,129,108\)/); // quota green
+  assert.match(dash, /FromArgb\(49,95,167\)/); // countdown blue
 });

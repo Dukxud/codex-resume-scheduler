@@ -138,12 +138,16 @@ function Get-UpcomingCodexTasks {
         $description = 'Existing scheduled task'
         $session = '-'
         $repo = '-'
+        $model = ''
+        $createdAt = $null
         if (Test-Path -LiteralPath $json) {
             try {
                 $job = Get-Content -LiteralPath $json -Raw | ConvertFrom-Json
                 $description = "$($job.model) / $($job.effort) | $($job.access) | $($job.message)"
                 $session = [string]$job.sessionId
                 $repo = [string]$job.repo
+                $model = [string]$job.model
+                if ([string]$job.createdAt -match '^\d{9,12}$') { $createdAt = [long]$job.createdAt }
             } catch { $description = 'Scheduled task (job data unreadable)' }
         } elseif ($name -match '^BP\d+-Codex-') {
             # Surface existing BPxx tasks without modifying their definitions.
@@ -161,7 +165,8 @@ function Get-UpcomingCodexTasks {
                 } catch { }
             }
         }
-        $items += [pscustomobject]@{ Name = $name; When = $when; Repo = $repo; Session = $session; Description = $description }
+        $items += [pscustomobject]@{ Name = $name; When = $when; Repo = $repo; Session = $session;
+            Description = $description; Model = $model; CreatedAt = $createdAt }
     }
     return ($items | Sort-Object When)
 }

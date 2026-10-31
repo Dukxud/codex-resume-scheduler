@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.10.0: console-free GUI/run host, glossy progress bars, versioned distribution.
+# v1.10.1: use Windows Script Host instead of the antivirus-blocked custom executable.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -112,11 +112,11 @@ function Schedule-LimitRetry {
         createdAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); accountId=$Job.accountId; retryAttempt=$attempt; previousResetAt=$ResetAt;
         log=(Join-Path $appDir ($name + '.log')) }
     $next | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFile -Encoding utf8
-    # Use the console-free Windows GUI subsystem runner installed alongside this script.
-    $launcher = Join-Path $appDir 'CodexScheduler.exe'
-    if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw 'CodexScheduler.exe missing; reinstall the versioned release.' }
-    $arguments = '--run-job "' + $jobFile + '"'
-    $action = New-ScheduledTaskAction -Execute $launcher -Argument $arguments -WorkingDirectory $Job.repo
+    # Run the saved job through the signed Windows Script Host, not a custom executable.
+    $runnerScript = Join-Path $appDir 'CodexRunJob.vbs'
+    if (-not (Test-Path -LiteralPath $runnerScript -PathType Leaf)) { throw 'CodexRunJob.vbs missing; install the complete release.' }
+    $arguments = '//B //Nologo "' + $runnerScript + '" "' + $jobFile + '"'
+    $action = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR 'System32\wscript.exe') -Argument $arguments -WorkingDirectory $Job.repo
     $trigger = New-ScheduledTaskTrigger -Once -At $when
     $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
     try {
@@ -221,7 +221,7 @@ Add-Type -AssemblyName System.Drawing
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.10.0'
+$form.Text = 'Codex Resume Scheduler v1.10.1'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
@@ -947,7 +947,7 @@ $schedule.Add_Click({
         [void](New-Item -Path $appDir -ItemType Directory -Force)
         $installedScript = Join-Path $appDir 'CodexResumeScheduler.ps1'
         if ($script:appSourcePath -ine $installedScript) { Copy-Item -LiteralPath $script:appSourcePath -Destination $installedScript -Force }
-        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1','CodexScheduler.exe')) {
+        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1','CodexRunJob.vbs')) {
             $source = Join-Path $PSScriptRoot $helperFile
             if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "$helperFile missing from installation." }
             $destination = Join-Path $appDir $helperFile
@@ -958,9 +958,9 @@ $schedule.Add_Click({
         $log = Join-Path $appDir ($name + '.log')
         [pscustomobject]@{ sessionId = $sessionId; repo = $root; branch = $branch; model = $model; effort = $effort; access = $access; message = $message; autoResume = $autoResumeCheck.Checked; retryAttempt = 0; createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); accountId = $script:usageSnapshot.accountId; log = $log } |
             ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $jobFilePath -Encoding utf8
-        $runnerArgs = '--run-job "' + $jobFilePath + '"'
-        $installedLauncher = Join-Path $appDir 'CodexScheduler.exe'
-        $action = New-ScheduledTaskAction -Execute $installedLauncher -Argument $runnerArgs -WorkingDirectory $root
+        $installedRunner = Join-Path $appDir 'CodexRunJob.vbs'
+        $runnerArgs = '//B //Nologo "' + $installedRunner + '" "' + $jobFilePath + '"'
+        $action = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR 'System32\wscript.exe') -Argument $runnerArgs -WorkingDirectory $root
         $trigger = New-ScheduledTaskTrigger -Once -At $when
         $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
         Register-ScheduledTask -TaskName $name -Description "Codex session $sessionId ($branch)" -Action $action -Trigger $trigger -Principal $principal -Settings (New-ScheduledTaskSettingsSet -StartWhenAvailable) -ErrorAction Stop | Out-Null
@@ -971,8 +971,8 @@ $schedule.Add_Click({
         $issues = @()
         if ($saved.State -notin @('Ready','Running')) { $issues += "Task state: $($saved.State)" }
         if ($actualTime -ne $expectedTime) { $issues += "Scheduled time: $actualTime (expected $expectedTime)" }
-        if ($saved.Actions.Count -ne 1 -or [string]$saved.Actions[0].Execute -ine $installedLauncher) { $issues += 'GUI-subsystem runner is not registered' }
-        if ($saved.Actions.Count -ne 1 -or [string]$saved.Actions[0].Arguments -notmatch '(?i)^--run-job\s+"[^"]+\.json"$') { $issues += 'Launcher job argument missing' }
+        if ($saved.Actions.Count -ne 1 -or [string]$saved.Actions[0].Execute -ine (Join-Path $env:WINDIR 'System32\wscript.exe')) { $issues += 'Windows Script Host runner is not registered' }
+        if ($saved.Actions.Count -ne 1 -or [string]$saved.Actions[0].Arguments -notmatch '(?i)^//B\s+//Nologo\s+"[^"]+CodexRunJob\.vbs"\s+"[^"]+\.json"$') { $issues += 'Runner job argument missing' }
         if ($saved.Principal.LogonType -ne 'Interactive') { $issues += "Logon type: $($saved.Principal.LogonType)" }
         if ($issues.Count -gt 0) { throw ("Task '$name' WAS registered, but these checks need attention: " + ($issues -join '; ')) }
         $script:settingsTimer.Stop()

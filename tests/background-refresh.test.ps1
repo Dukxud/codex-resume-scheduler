@@ -12,7 +12,7 @@ if ($gui -notmatch 'Get-ReportedThreadDirectory' -or $gui -notmatch 'Find-Sessio
 if ($data -notmatch 'thread/read' -or $data -notmatch 'Get-ReportedThreadDirectory') { throw 'Codex metadata lookup missing from the data helper.' }
 if ($gui -notmatch 'Start-ThreadJob' -or $gui -notmatch '\$dataPoll\.Add_Tick') { throw 'Background refresh and result polling missing.' }
 if ($data -notmatch "Get-ScheduledTask -TaskName 'CodexResume-\*'") { throw 'Pending refresh must use task name filtering.' }
-if ($gui -notmatch "'CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1','CodexScheduler.exe'") { throw 'Scheduled runner needs all helper files installed.' }
+if ($gui -notmatch "'CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1','CodexRunJob.vbs'") { throw 'Scheduled runner needs all helper files installed.' }
 $definitions = @($ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in @('Refresh-SessionList','Refresh-PendingList','Request-SelectionLookup','Start-DataRead')}, $true))
 if ($definitions.Count -ne 4) { throw 'Expected four async data-refresh entrypoints.' }
 foreach ($definition in $definitions | Where-Object Name -in @('Refresh-SessionList','Refresh-PendingList','Request-SelectionLookup')) {

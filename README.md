@@ -4,9 +4,9 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%207-blue)
 
-**Latest packaged release: [CodexResumeScheduler-v1.10.0.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.0/CodexResumeScheduler-v1.10.0.zip)**
+**Latest packaged release: [CodexResumeScheduler-v1.10.1.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.1/CodexResumeScheduler-v1.10.1.zip)**
 
-Download the versioned ZIP from **Releases**, not GitHub's **Code > Download ZIP**. The latter is always a generic `codex-resume-scheduler-main.zip` source archive and does not contain the compiled Windows GUI launcher.
+Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The package contains only scripts; no third-party or unsigned executable.
 
 ## What it does
 
@@ -18,7 +18,7 @@ Download the versioned ZIP from **Releases**, not GitHub's **Code > Download ZIP
 - Both views show glossy, reflective blue countdown bars for scheduled runs, distinct from glossy green quota-remaining bars. Time bars fill from **schedule creation** to the scheduled launch time; older tasks without a creation timestamp display the remaining time and an unfilled track rather than a made-up percentage. Reaching 100% is not confirmation that Codex started.
 - Countdown labels update locally every second without additional Codex requests. Task and quota snapshots still refresh every 60 seconds.
 - Autosaves and restores the complete scheduling draft: conversation, repository, model, reasoning effort, access, instruction, auto-resume, and requested local run time. Saving does not require creating a scheduled run.
-- Starts via a native Windows GUI-subsystem executable (no console is created), and uses the same host for new scheduled jobs. Jobs run until completion without a console while preserving transcripts and event logs.
+- Starts through Windows' built-in Script Host (`wscript.exe`), without a visible terminal. New scheduled jobs also run with a hidden window and report their exit status; transcripts and event logs remain available.
 - When a scheduled Codex run reports an actual usage-limit failure, **Auto-resume** (enabled by default) reads the current model’s applicable quota and schedules another one-time run after the reported reset **+2 minutes**. A retry is only started when backend permission is explicitly restored; attempts are capped at four.
 - Displays **percentage remaining**, progress bars, and local reset times from Codex's official `account/rateLimits/read` App Server method. **Use reset +2 min** sets the scheduling control to two minutes after the selected reset, rounded up to the next whole minute. It never schedules automatically.
 - Refreshes **usage and pending runs automatically on startup, every 60 seconds, and after scheduling or cancellation**. Usage reads run in a short-lived process; conversation, repository, and pending-task reads run in background jobs.
@@ -38,13 +38,13 @@ The GUI dispatches saved-conversation discovery, repository lookup, and pending 
 
 ## Run
 
-1. Download **[CodexResumeScheduler-v1.10.0.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.0/CodexResumeScheduler-v1.10.0.zip)** from Releases. The source ZIP does **not** include the compiled GUI executable.
-2. Extract the versioned folder and keep `CodexScheduler.exe`, the PowerShell scripts, helper files, and launchers together.
-3. Double-click **`CodexScheduler.exe`** to open the desktop GUI without any terminal. The `.vbs` and `.cmd` launchers also invoke this executable, but the `.cmd` file may briefly flash its own shell as it exits.
+1. Download **[CodexResumeScheduler-v1.10.1.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.1/CodexResumeScheduler-v1.10.1.zip)** from Releases.
+2. Extract the versioned folder and keep the supplied `.vbs`, `.ps1`, and `.js` files together.
+3. Double-click **`Start-Codex-Scheduler.vbs`** to open the interface without a visible terminal. The `.cmd` fallback may briefly flash its own shell before exiting.
 4. Usage and pending jobs load automatically; optionally click **Refresh now**. If a reset time is available, click **Use reset +2 min**, or enter a time manually.
 5. Select the conversation, **model**, repository, model-supported effort, access mode, and instruction, then click **Schedule once**. Leave Auto-resume checked to retry on a confirmed usage-limit failure.
 
-Newly scheduled jobs use the same native GUI-subsystem launcher and do not allocate a console. Output and failures are saved in `%LOCALAPPDATA%\CodexResumeScheduler`; use **Open logs folder** to inspect them. **Older pending jobs retain their originally registered command**; cancel and reschedule them if you want them to run without a console. Keep the computer **awake, online, and signed into Windows** at the scheduled time. A task missed while the computer was unavailable may execute at the next opportunity.
+Newly scheduled jobs use Windows Script Host (`wscript.exe`) to run in the background without a visible terminal. Output and failures are saved in `%LOCALAPPDATA%\CodexResumeScheduler`; use **Open logs folder** to inspect them. **Older pending jobs retain their originally registered command**; cancel and reschedule them if you want them to run without a console. Keep the computer **awake, online, and signed into Windows** at the scheduled time. A task missed while the computer was unavailable may execute at the next opportunity.
 
 ## How the usage read works
 
@@ -81,11 +81,11 @@ MIT License. See [LICENSE](LICENSE).
 ## Security and limitations
 
 - **YOLO** (`--dangerously-bypass-approvals-and-sandbox`) disables approvals and sandboxing, including **outside the repository**. Use only for trusted sessions. The first-run default is **workspace-write**; later launches restore the last edited access mode and other form fields from `%LOCALAPPDATA%\CodexResumeScheduler\settings.json`. This local JSON includes your entered instruction in plain text; do not paste secrets into the instruction. YOLO remains explicitly confirmed for each newly scheduled run.
-- The native executable starts **`pwsh -ExecutionPolicy Bypass` for its own PowerShell child process only**, because the local `.ps1` is not digitally signed. This does not change `CurrentUser` or `LocalMachine` policy; organization Group Policy can still block execution. Use only with source you trust. Existing scheduled jobs created before v1.3.1 retain their original command until repaired or recreated.
+- The bundled Windows Script Host wrapper starts **`pwsh -ExecutionPolicy Bypass` for its own PowerShell child process only**, because the local `.ps1` is not digitally signed. This does not change `CurrentUser` or `LocalMachine` policy; organization Group Policy can still block execution. Use only with source you trust. Existing scheduled jobs created before v1.3.1 retain their original command until repaired or recreated.
 - The GUI validates repository root, branch, model, and effort at scheduling time, and the runner revalidates them before execution. It cannot detect another open copy of the same Codex conversation. Close other copies before scheduling to prevent concurrent activity.
 - Tasks run once, not every day; Windows Task Scheduler can launch them after a missed time if `StartWhenAvailable` is enabled.
 - Scheduled tasks and job settings are kept locally. No code, repository content, or saved Codex conversations are uploaded by this app.
-- Usage parsing, GUI-subsystem process behavior, Windows Forms layout, glossy bar rendering, and runner wiring are covered by Windows CI; **real Codex end-to-end runs on BLACK-PUDDLE still require manual validation**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
+- Usage parsing, hidden Windows Script Host process behavior, Windows Forms layout, glossy bar rendering, and runner wiring are covered by Windows CI; **real Codex end-to-end runs on BLACK-PUDDLE still require manual validation**. A successful Task Scheduler registration is not proof that Codex itself will complete a turn.
 
 ## Development
 

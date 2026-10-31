@@ -1,12 +1,20 @@
-' Console-free Windows GUI entrypoint. Prefer the compiled GUI-subsystem launcher.
+' Launch the normal Windows Forms PowerShell app without a terminal on the desktop.
+' WScript is provided by Windows; this package contains no compiled launcher.
 Option Explicit
-Dim shell, files, folder, exe
+Dim shell, files, folder, script, command, status
 Set shell = CreateObject("WScript.Shell")
 Set files = CreateObject("Scripting.FileSystemObject")
 folder = files.GetParentFolderName(WScript.ScriptFullName)
-exe = files.BuildPath(folder, "CodexScheduler.exe")
-If Not files.FileExists(exe) Then
-    MsgBox "CodexScheduler.exe is missing. Download the versioned release ZIP, not the source archive.", vbCritical, "Codex Resume Scheduler"
+script = files.BuildPath(folder, "CodexResumeScheduler.ps1")
+If Not files.FileExists(script) Then
+    MsgBox "CodexResumeScheduler.ps1 is missing. Extract the complete release ZIP.", vbCritical, "Codex Resume Scheduler"
     WScript.Quit 1
 End If
-shell.Run Chr(34) & exe & Chr(34), 1, False
+command = "pwsh.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File " & Chr(34) & script & Chr(34)
+On Error Resume Next
+status = shell.Run(command, 0, False)
+If Err.Number <> 0 Then
+    MsgBox "Unable to start PowerShell 7: " & Err.Description, vbCritical, "Codex Resume Scheduler"
+    WScript.Quit 1
+End If
+On Error GoTo 0

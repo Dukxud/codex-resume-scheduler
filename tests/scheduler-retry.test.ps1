@@ -38,28 +38,8 @@ try {
         if ($saved.$key -cne $job.$key) { throw "Did not retain $key" }
     }
     if ($saved.retryAttempt -ne 1) { throw 'Retry count was not incremented.' }
-    if ($scheduled.Action.Execute -notmatch 'wscript\.exe
-    if ($scheduled.Action.Argument -notmatch '^//B\s+//Nologo\s+"[^"]+CodexRunJob\.vbs"\s+"[^"]+\.json"
-    $job.retryAttempt = 4
-    Schedule-LimitRetry $job $reset $run 'meter-1'
-    if ($script:registered.Count -ne 1) { throw 'Retry cap was not honored.' }
-    Write-Host 'Retry scheduling checks passed.'
-} finally { Remove-Item -LiteralPath $appDir -Recurse -Force }
-) { throw 'Retry must use Windows Script Host.' }
-    if ($scheduled.Action.Argument -notmatch '^--run-job\s+"[^"]+\.json"$') { throw 'Retry must preserve its job file.' }
-    $job.retryAttempt = 4
-    Schedule-LimitRetry $job $reset $run 'meter-1'
-    if ($script:registered.Count -ne 1) { throw 'Retry cap was not honored.' }
-    Write-Host 'Retry scheduling checks passed.'
-} finally { Remove-Item -LiteralPath $appDir -Recurse -Force }
-) { throw 'Retry must preserve its job file.' }
-    $job.retryAttempt = 4
-    Schedule-LimitRetry $job $reset $run 'meter-1'
-    if ($script:registered.Count -ne 1) { throw 'Retry cap was not honored.' }
-    Write-Host 'Retry scheduling checks passed.'
-} finally { Remove-Item -LiteralPath $appDir -Recurse -Force }
-) { throw 'Retry must use Windows Script Host.' }
-    if ($scheduled.Action.Argument -notmatch '^--run-job\s+"[^"]+\.json"$') { throw 'Retry must preserve its job file.' }
+    if ($scheduled.Action.Execute -notmatch 'wscript\.exe$') { throw 'Retry must use Windows Script Host.' }
+    if ($scheduled.Action.Argument -notmatch '^//B\s+//Nologo\s+"[^"]+CodexRunJob\.vbs"\s+"[^"]+\.json"$') { throw 'Retry must preserve its job file.' }
     $job.retryAttempt = 4
     Schedule-LimitRetry $job $reset $run 'meter-1'
     if ($script:registered.Count -ne 1) { throw 'Retry cap was not honored.' }

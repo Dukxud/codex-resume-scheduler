@@ -10,6 +10,6 @@ test('scheduled jobs retain explicit model, reasoning and repo on limit retries'
  assert.match(ps,/--events\s+\$events\s+--cli-js/);
 });
 test('installing a job brings the usage and decision helpers',()=>{
- assert.match(ps, /@\('CodexUsage\.js','CodexRetry\.js','CodexData\.ps1','CodexDashboard\.ps1','CodexRunJob\.vbs'\)/);
+ assert.match(ps, /@\('CodexUsage\.js','CodexRetry\.js','CodexData\.ps1','CodexDashboard\.ps1','CodexFlowingBar\.ps1','CodexRunJob\.vbs'\)/);
  assert.match(ps, /CodexRunJob\.vbs/);
 });

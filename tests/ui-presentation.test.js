@@ -16,7 +16,7 @@ function namedFunction(name) {
 }
 
 test('model and effort are grouped and schedule action is distinct', () => {
-  assert.match(source, /\$form\.Text = 'Codex Resume Scheduler v1\.[0-9]+'/);
+  assert.match(source, /\$form\.Text = 'Codex Resume Scheduler v1\.[0-9]+\.[0-9]+'/);
   assert.match(source, /\$modelBox\.Location = \[System\.Drawing\.Point\]::new\(155,199\)/);
   assert.match(source, /\$effortBox\.Location = \[System\.Drawing\.Point\]::new\(597,199\)/);
   assert.match(source, /\$accessBox\.Location = \[System\.Drawing\.Point\]::new\(597,154\)/);

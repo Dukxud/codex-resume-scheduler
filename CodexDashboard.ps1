@@ -197,13 +197,13 @@ function Update-DashboardLayout {
     $top = if ($script:pendingSnapshot.Count -gt 0) { 246 } else { 65 }
     $visibleWindows = @()
     $targetModel = Get-DashboardUsageModel
-    if ($script:usageSnapshot -and -not $script:usageReadFailed -and
-        (-not $targetModel -or $script:usageSnapshotRequestedModel -ceq $targetModel)) {
+    $currentSnapshot = $script:usageSnapshot -and (-not $targetModel -or $script:usageSnapshotRequestedModel -ceq $targetModel)
+    if ($currentSnapshot -and -not $script:usageReadFailed) {
         $visibleWindows = @($script:usageSnapshot.windows | Where-Object { $null -ne $_ })
     }
     if ($visibleWindows.Count -eq 0) {
         $usageHeading.Visible = $false
-        $script:compactUsageStatus.Text = if ($script:usageReadFailed) { 'Usage limits unavailable' } else { 'Reading usage limits...' }
+        $script:compactUsageStatus.Text = if ($script:usageReadFailed -or $currentSnapshot) { 'Usage limits unavailable' } else { 'Reading usage limits...' }
         $script:compactUsageStatus.Location = [System.Drawing.Point]::new(18,$top)
         $script:compactUsageStatus.Visible = $true
         foreach ($card in $usageCards) { $card.Panel.Visible = $false }

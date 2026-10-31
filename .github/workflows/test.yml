@@ -33,6 +33,9 @@ jobs:
       - name: Dashboard bar rendering
         shell: pwsh
         run: ./tests/dashboard-visuals.test.ps1
+      - name: Dashboard window layout
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/dashboard-layout.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

@@ -93,7 +93,7 @@ function Schedule-LimitRetry {
     $jobFile = Join-Path $appDir ($name + '.json')
     $next = [pscustomobject]@{ sessionId=$Job.sessionId; repo=$Job.repo; branch=$Job.branch; model=$Job.model;
         effort=$Job.effort; access=$Job.access; message=$Job.message; autoResume=$true;
-        accountId=$Job.accountId; retryAttempt=$attempt; previousResetAt=$ResetAt;
+        createdAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); accountId=$Job.accountId; retryAttempt=$attempt; previousResetAt=$ResetAt;
         log=(Join-Path $appDir ($name + '.log')) }
     $next | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFile -Encoding utf8
     # Use the same application copy that is executing the current job.
@@ -334,7 +334,7 @@ function Start-UsageRead {
     [void]$start.ArgumentList.Add($helper)
     [void]$start.ArgumentList.Add('--cli-js')
     [void]$start.ArgumentList.Add($cliJs)
-    $chosen = Get-SelectedModel
+    $chosen = Get-DashboardUsageModel
     if ($chosen) { [void]$start.ArgumentList.Add('--model'); [void]$start.ArgumentList.Add($chosen) }
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
@@ -344,6 +344,7 @@ function Start-UsageRead {
     $process.StartInfo = $start
     try {
         if (-not $process.Start()) { throw 'Could not start Codex usage reader.' }
+        $script:usageRequestedModel = $chosen
         return $process
     } catch {
         $process.Dispose()
@@ -391,20 +392,22 @@ function New-UsageCard {
     $remaining.Text = '—'
     $remaining.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
     $card.Controls.Add($remaining)
-    $bar = New-Object System.Windows.Forms.ProgressBar
+    $bar = New-Object System.Windows.Forms.Panel
     $bar.Location = [System.Drawing.Point]::new(12,45)
-    $bar.Size = [System.Drawing.Size]::new(400,13)
-    $bar.Minimum = 0
-    $bar.Maximum = 100
-    $bar.Value = 0
+    $bar.Size = [System.Drawing.Size]::new(400,11)
+    $bar.BackColor = [System.Drawing.Color]::FromArgb(222,237,228)
     $card.Controls.Add($bar)
+    $fill = New-Object System.Windows.Forms.Panel
+    $fill.Size = [System.Drawing.Size]::new(0,11)
+    $fill.BackColor = [System.Drawing.Color]::FromArgb(48,129,108)
+    $bar.Controls.Add($fill)
     $reset = New-Object System.Windows.Forms.Label
     $reset.Location = [System.Drawing.Point]::new(12,72)
     $reset.Size = [System.Drawing.Size]::new(400,24)
     $reset.Text = 'Waiting for Codex usage...'
     $reset.ForeColor = [System.Drawing.Color]::DimGray
     $card.Controls.Add($reset)
-    return [pscustomobject]@{ Title = $name; Remaining = $remaining; Bar = $bar; Reset = $reset }
+    return [pscustomobject]@{ Panel = $card; Title = $name; Remaining = $remaining; Bar = $bar; BarFill = $fill; Reset = $reset }
 }
 $usageCards = @((New-UsageCard 18 'Primary window'), (New-UsageCard 470 'Secondary window'))
 $usageNotice = Add-Label 'Loading account usage...' 18 477 880
@@ -433,13 +436,16 @@ $grid.RowHeadersVisible = $false
 $grid.AutoSizeColumnsMode = 'Fill'
 $grid.BackgroundColor = [System.Drawing.Color]::White
 [void]$grid.Columns.Add('When','Scheduled (local)')
+[void]$grid.Columns.Add('Countdown','Time to run')
 [void]$grid.Columns.Add('Project','Project')
 [void]$grid.Columns.Add('Details','Model / access / instruction')
 [void]$grid.Columns.Add('Session','Session')
-$grid.Columns[0].FillWeight = 160
-$grid.Columns[1].FillWeight = 175
-$grid.Columns[2].FillWeight = 390
-$grid.Columns[3].FillWeight = 105
+$grid.Columns[0].FillWeight = 149
+$grid.Columns[1].FillWeight = 150
+$grid.Columns[2].FillWeight = 145
+$grid.Columns[3].FillWeight = 325
+$grid.Columns[4].FillWeight = 85
+$grid.RowTemplate.Height = 44
 $grid.ShowCellToolTips = $true
 $form.Controls.Add($grid)
 $emptyRuns = New-Object System.Windows.Forms.Label
@@ -563,17 +569,20 @@ function Apply-PendingList {
         $path = ([string]$item.Repo).TrimEnd([char[]]@('/','\'))
         $project = if ($path -and $path -ne '-') { [System.IO.Path]::GetFileName($path) } else { 'Unknown project' }
         $session = if ([string]$item.Session -match '^[0-9a-fA-F]{8}-') { ([string]$item.Session).Substring(0,8) } else { '-' }
-        $index = $grid.Rows.Add($item.When.ToString('MMM dd, h:mm tt'),$project,$item.Description,$session)
+        $index = $grid.Rows.Add($item.When.ToString('MMM dd, h:mm tt'),'', $project,$item.Description,$session)
         $row = $grid.Rows[$index]
         $row.Tag = $item.Name
-        $row.Cells[1].ToolTipText = [string]$item.Repo
-        $row.Cells[2].ToolTipText = [string]$item.Description
-        $row.Cells[3].ToolTipText = "Session: $($item.Session)`nTask: $($item.Name)"
+        $row.Cells[2].ToolTipText = [string]$item.Repo
+        $row.Cells[3].ToolTipText = [string]$item.Description
+        $row.Cells[4].ToolTipText = "Session: $($item.Session)`nTask: $($item.Name)"
     }
     $grid.ClearSelection()
     $cancelRun.Enabled = $false
     $pending.Text = "Upcoming runs ($($Items.Count))"
-    $emptyRuns.Visible = ($Items.Count -eq 0)
+    $emptyRuns.Visible = $false
+    Update-DashboardLayout
+    Update-DashboardCountdowns
+    if ($script:compactToggle.Checked -and (Get-DashboardUsageModel) -ne [string]$script:usageRequestedModel) { Request-UsageRefresh }
 }
 
 $dataPoll = New-Object System.Windows.Forms.Timer
@@ -632,6 +641,8 @@ $dataPoll.Add_Tick({
 })
 
 $script:usageSnapshot = $null
+$script:usageRequestedModel = ''
+$script:usageReadFailed = $false
 $script:usageProcess = $null
 $script:usageStarted = [datetime]::MinValue
 $script:usageRefreshQueued = $false
@@ -644,18 +655,18 @@ function Render-UsageCard {
     if (-not $Window) {
         $Card.Title.Text = $FallbackTitle
         $Card.Remaining.Text = 'Not reported'
-        $Card.Bar.Value = 0
+        $Card.BarFill.Width = 0
         $Card.Reset.Text = 'No window supplied by Codex'
         return
     }
     $Card.Title.Text = [string]$Window.label
     if ($null -eq $Window.remainingPercent) {
         $Card.Remaining.Text = 'Unavailable'
-        $Card.Bar.Value = 0
+        $Card.BarFill.Width = 0
     } else {
         $remaining = [double]$Window.remainingPercent
         $Card.Remaining.Text = ('{0:0.#}% remaining' -f $remaining)
-        $Card.Bar.Value = [int][math]::Round($remaining)
+        $Card.BarFill.Width = [int][math]::Round($Card.Bar.Width * [math]::Clamp($remaining,0,100) / 100)
     }
     $Card.Reset.Text = Format-ResetTime $Window.resetsAt
 }
@@ -663,6 +674,7 @@ function Render-UsageCard {
 function Apply-UsageSnapshot {
     param($Snapshot)
     $script:usageSnapshot = $Snapshot
+    $script:usageReadFailed = $false
     $script:usageChecked = Get-Date
     $script:models = @($Snapshot.models | Where-Object { $_ })
     $previous = if ($script:preferredModelId) { [string]$script:preferredModelId } elseif ($script:preferredSessionModel) { [string]$script:preferredSessionModel } else { Get-SelectedModel }
@@ -715,6 +727,7 @@ function Apply-UsageSnapshot {
         $reset = [DateTimeOffset]::FromUnixTimeSeconds([long]$Snapshot.recommendedResetAt).LocalDateTime
         $useReset.Enabled = ($reset.AddMinutes(2) -gt (Get-Date))
     }
+    Update-DashboardLayout
 }
 
 function Request-UsageRefresh {
@@ -731,8 +744,10 @@ function Request-UsageRefresh {
     } catch {
         $usageNotice.Text = 'Usage refresh failed; try again.'
         $usageHints.SetToolTip($usageNotice, $_.Exception.Message)
+        $script:usageReadFailed = $true
         $refreshUsage.Enabled = $true
         $useReset.Enabled = $false
+        Update-DashboardLayout
     }
 }
 
@@ -758,6 +773,8 @@ $usagePoll.Add_Tick({
     } catch {
         $usageNotice.Text = 'Usage refresh failed; last displayed values may be stale.'
         $usageHints.SetToolTip($usageNotice, $_.Exception.Message)
+        $script:usageReadFailed = $true
+        Update-DashboardLayout
         $useReset.Enabled = $false
         $schedule.Enabled = $false # Cannot verify current model/effort without the catalog.
     } finally {
@@ -806,7 +823,7 @@ function Save-CurrentFormState {
         autoResume = [bool]$autoResumeCheck.Checked
         runAt = $whenBox.Value.ToString('yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)
     }
-    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; draft = $draft })
+    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; compactMode = [bool]$script:compactToggle.Checked; draft = $draft })
     $script:savedDraft = $draft
     $script:preferredSessionId = $sessionId
 }
@@ -908,7 +925,7 @@ $schedule.Add_Click({
         [void](New-Item -Path $appDir -ItemType Directory -Force)
         $installedScript = Join-Path $appDir 'CodexResumeScheduler.ps1'
         if ($script:appSourcePath -ine $installedScript) { Copy-Item -LiteralPath $script:appSourcePath -Destination $installedScript -Force }
-        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js','CodexData.ps1')) {
+        foreach ($helperFile in @('CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1')) {
             $source = Join-Path $PSScriptRoot $helperFile
             if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "$helperFile missing from installation." }
             $destination = Join-Path $appDir $helperFile
@@ -917,7 +934,7 @@ $schedule.Add_Click({
         $name = 'CodexResume-' + $when.ToString('yyyyMMdd-HHmm') + '-' + ([guid]::NewGuid().ToString('N').Substring(0,8))
         $jobFilePath = Join-Path $appDir ($name + '.json')
         $log = Join-Path $appDir ($name + '.log')
-        [pscustomobject]@{ sessionId = $sessionId; repo = $root; branch = $branch; model = $model; effort = $effort; access = $access; message = $message; autoResume = $autoResumeCheck.Checked; retryAttempt = 0; accountId = $script:usageSnapshot.accountId; log = $log } |
+        [pscustomobject]@{ sessionId = $sessionId; repo = $root; branch = $branch; model = $model; effort = $effort; access = $access; message = $message; autoResume = $autoResumeCheck.Checked; retryAttempt = 0; createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); accountId = $script:usageSnapshot.accountId; log = $log } |
             ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $jobFilePath -Encoding utf8
         $runnerArgs = '-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "' + $installedScript + '" -RunJob -JobFile "' + $jobFilePath + '"'
         $action = New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'pwsh.exe') -Argument $runnerArgs -WorkingDirectory $root
@@ -950,6 +967,9 @@ $schedule.Add_Click({
     }
 })
 
+. (Join-Path $PSScriptRoot 'CodexDashboard.ps1')
+Initialize-Dashboard
+
 $autoRefresh = New-Object System.Windows.Forms.Timer
 $autoRefresh.Interval = 60000
 $autoRefresh.Add_Tick({
@@ -958,6 +978,8 @@ $autoRefresh.Add_Tick({
 })
 $form.Add_Shown({
     $script:settingsReady = $true
+    Update-DashboardLayout
+    $script:countdownTimer.Start()
     try { Refresh-SessionList; Refresh-PendingList } catch { Update-Status "Startup warning: $($_.Exception.Message)" }
     Request-UsageRefresh
     $autoRefresh.Start()
@@ -970,6 +992,7 @@ $form.Add_FormClosing({
     }
 })
 $form.Add_FormClosed({
+    $script:countdownTimer.Stop()
     $autoRefresh.Stop()
     $usagePoll.Stop()
     $dataPoll.Stop()
@@ -984,6 +1007,7 @@ $form.Add_FormClosed({
 })
 [void]$form.ShowDialog()
 $autoRefresh.Dispose()
+$script:countdownTimer.Dispose()
 $script:settingsTimer.Dispose()
 $usagePoll.Dispose()
 $dataPoll.Dispose()

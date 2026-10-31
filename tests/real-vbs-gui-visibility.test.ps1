@@ -7,7 +7,8 @@ $before = @(Get-Process pwsh -ErrorAction SilentlyContinue | Select-Object -Expa
 $started = @()
 try {
     $hostExe = Join-Path $env:WINDIR 'System32\wscript.exe'
-    $hostProcess = Start-Process -FilePath $hostExe -ArgumentList ('//B //Nologo "' + $launcher + '"') -PassThru -Wait
+    $hostProcess = Start-Process -FilePath $hostExe -ArgumentList ('//B //Nologo "' + $launcher + '"') -PassThru
+    if (-not $hostProcess.WaitForExit(5000)) { throw 'VBS entrypoint did not return promptly.' }
     if ($hostProcess.ExitCode -ne 0) { throw "VBS entrypoint failed: $($hostProcess.ExitCode)" }
     $found = $null
     for ($i = 0; $i -lt 80; $i++) {

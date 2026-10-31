@@ -5,5 +5,6 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-pwsh.exe -NoLogo -NoProfile -STA -ExecutionPolicy Bypass -File "%~dp0CodexResumeScheduler.ps1"
-if errorlevel 1 pause
+rem Compatibility launcher: its console exits immediately after starting the hidden GUI host.
+start "" pwsh.exe -NoLogo -NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0CodexResumeScheduler.ps1"
+exit /b

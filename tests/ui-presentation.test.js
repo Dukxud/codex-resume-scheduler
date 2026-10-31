@@ -53,14 +53,27 @@ test('usage reports remaining and keeps reset as an explicit action', () => {
 test('dashboard shares the pending snapshot and renders distinct countdown and quota bars', () => {
   const dash = fs.readFileSync(path.resolve(__dirname, '..', 'CodexDashboard.ps1'), 'utf8');
   assert.match(source, /Columns\.Add\('Countdown','Time to run'\)/);
-  assert.match(source, /\$grid\.RowTemplate\.Height = 44/);
+  assert.match(source, /\$grid\.RowTemplate\.Height = 54/);
   assert.match(source, /\$script:usageRequestedModel = \$chosen/);
   assert.match(source, /compactMode = \[bool\]\$script:compactToggle\.Checked/);
   assert.match(dash, /Get-RunCountdownPercent/);
   assert.match(dash, /\$grid\.Add_CellPainting/);
-  assert.match(dash, /\$script:compactRunFill\.Width/);
+  assert.match(dash, /Set-SchedulerProgress \$script:compactRunTrack \$percent/);
   assert.match(dash, /\$script:compactRunHeading\.Visible = \$compact -and \$script:pendingSnapshot\.Count -gt 0/);
   assert.match(dash, /\$form\.ClientSize/);
-  assert.match(source, /FromArgb\(48,129,108\)/); // quota green
-  assert.match(dash, /FromArgb\(49,95,167\)/); // countdown blue
+  assert.match(source, /New-SchedulerProgressBar \$card 12 46 400 12 'quota'/);
+  assert.match(dash, /Graphics\.FillPath/);
+  assert.match(dash, /Draw-SchedulerProgress \$e\.Graphics \$track \$cell\.Tag 'time'/);
+  assert.match(dash, /FromArgb\(57,164,132\)/); // green quota gradient
+  assert.match(dash, /FromArgb\(75,126,193\)/); // blue time gradient
+});
+
+test('compact switch occupies dedicated header space in both layouts', () => {
+  const dash = fs.readFileSync(path.resolve(__dirname, '..', 'CodexDashboard.ps1'), 'utf8');
+  assert.match(dash, /\$script:compactToggle\.Appearance = \[System\.Windows\.Forms\.Appearance\]::Button/);
+  assert.match(dash, /\$script:compactToggle\.Text = 'Compact mode: OFF'/);
+  assert.match(dash, /\$script:compactToggle\.Text = 'Compact mode: ON'/);
+  assert.match(dash, /\$script:compactToggle\.Location = \[System\.Drawing\.Point\]::new\(298,13\)/);
+  assert.match(dash, /\$subtitle\.Visible = \$false/);
+  assert.match(dash, /\$heading\.Width = 270/);
 });

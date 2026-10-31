@@ -1,6 +1,88 @@
 # Presentation-only dashboard for Codex Resume Scheduler.
 # The scheduler and its retry policy remain in CodexResumeScheduler.ps1.
 
+# Rounded, anti-aliased bars shared by quota cards and countdowns.
+function New-SchedulerRoundPath {
+    param([System.Drawing.RectangleF]$Rect, [single]$Radius)
+    $path = [System.Drawing.Drawing2D.GraphicsPath]::new()
+    $diameter = [single]($Radius * 2)
+    if ($diameter -le 1) {
+        $path.AddRectangle($Rect)
+    } else {
+        $path.AddArc($Rect.Left, $Rect.Top, $diameter, $diameter, 180, 90)
+        $path.AddArc($Rect.Right - $diameter, $Rect.Top, $diameter, $diameter, 270, 90)
+        $path.AddArc($Rect.Right - $diameter, $Rect.Bottom - $diameter, $diameter, $diameter, 0, 90)
+        $path.AddArc($Rect.Left, $Rect.Bottom - $diameter, $diameter, $diameter, 90, 90)
+        $path.CloseFigure()
+    }
+    return $path
+}
+
+function Draw-SchedulerProgress {
+    param([System.Drawing.Graphics]$Graphics, [System.Drawing.RectangleF]$Rect,
+          $Percent, [ValidateSet('quota','time')][string]$Kind)
+    if ($Rect.Width -le 1 -or $Rect.Height -le 1) { return }
+    $Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $isQuota = $Kind -eq 'quota'
+    $trackColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(220,235,227) } else { [System.Drawing.Color]::FromArgb(224,234,248) }
+    $startColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(57,164,132) } else { [System.Drawing.Color]::FromArgb(75,126,193) }
+    $endColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(39,118,97) } else { [System.Drawing.Color]::FromArgb(38,82,153) }
+    $round = [single]($Rect.Height / 2)
+    $trackPath = New-SchedulerRoundPath $Rect $round
+    $trackBrush = [System.Drawing.SolidBrush]::new($trackColor)
+    try {
+        $Graphics.FillPath($trackBrush,$trackPath)
+        if ($Kind -eq 'time') {
+            $tickPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(170,201,225),1)
+            try {
+                $Graphics.SetClip($trackPath)
+                for ($x = $Rect.Left + 24; $x -lt $Rect.Right; $x += 24) {
+                    $Graphics.DrawLine($tickPen,[single]$x,$Rect.Top,[single]$x,$Rect.Bottom)
+                }
+                $Graphics.ResetClip()
+            } finally { $tickPen.Dispose() }
+        }
+        if ($null -ne $Percent) {
+            $amount = [math]::Clamp([double]$Percent,0.0,100.0)
+            $filled = [single]($Rect.Width * $amount / 100)
+            if ($filled -gt 0.5) {
+                $fillRect = [System.Drawing.RectangleF]::new($Rect.Left,$Rect.Top,$filled,$Rect.Height)
+                $fillPath = New-SchedulerRoundPath $fillRect ([single]([math]::Min($round,$filled / 2)))
+                $fillBrush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($fillRect,$startColor,$endColor,0.0)
+                try { $Graphics.FillPath($fillBrush,$fillPath) }
+                finally { $fillBrush.Dispose(); $fillPath.Dispose() }
+            }
+        }
+    } finally { $trackBrush.Dispose(); $trackPath.Dispose(); $Graphics.ResetClip() }
+}
+
+function New-SchedulerProgressBar {
+    param($Parent, [int]$X, [int]$Y, [int]$Width, [int]$Height,
+          [ValidateSet('quota','time')][string]$Kind)
+    $bar = [System.Windows.Forms.Panel]::new()
+    $bar.Location = [System.Drawing.Point]::new($X,$Y)
+    $bar.Size = [System.Drawing.Size]::new($Width,$Height)
+    $bar.BackColor = $Parent.BackColor
+    $bar.Tag = [pscustomobject]@{ Kind = $Kind; Percent = $null }
+    $bar.AccessibleRole = [System.Windows.Forms.AccessibleRole]::ProgressBar
+    $bar.Add_Paint({
+        param($sender,$e)
+        $rect = [System.Drawing.RectangleF]::new(0,0,[single]($sender.ClientSize.Width-1),[single]($sender.ClientSize.Height-1))
+        Draw-SchedulerProgress $e.Graphics $rect $sender.Tag.Percent $sender.Tag.Kind
+    })
+    $Parent.Controls.Add($bar)
+    return $bar
+}
+
+function Set-SchedulerProgress {
+    param($Bar, $Percent)
+    $value = if ($null -eq $Percent) { $null } else { [double][math]::Clamp([double]$Percent,0,100) }
+    if ($Bar.Tag.Percent -ne $value) {
+        $Bar.Tag.Percent = $value
+        $Bar.Invalidate()
+    }
+}
+
 function Get-RunCountdownText {
     param([datetime]$When, [datetime]$Now)
     $seconds = [long][math]::Ceiling(($When - $Now).TotalSeconds)
@@ -55,12 +137,20 @@ function Initialize-Dashboard {
     $script:countdownBlue = [System.Drawing.Color]::FromArgb(49,95,167)
     $script:countdownTrack = [System.Drawing.Color]::FromArgb(222,232,246)
 
+    # A high-contrast, button-style toggle in a reserved header location.
+    # The former small checkbox overlapped the subtitle and compact title.
     $script:compactToggle = [System.Windows.Forms.CheckBox]::new()
-    $script:compactToggle.Text = 'Compact mode'
-    $script:compactToggle.Location = [System.Drawing.Point]::new(777,20)
-    $script:compactToggle.Size = [System.Drawing.Size]::new(120,27)
+    $script:compactToggle.Appearance = [System.Windows.Forms.Appearance]::Button
+    $script:compactToggle.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $script:compactToggle.FlatAppearance.BorderSize = 1
+    $script:compactToggle.Font = [System.Drawing.Font]::new('Segoe UI',10,[System.Drawing.FontStyle]::Bold)
+    $script:compactToggle.TextAlign = 'MiddleCenter'
+    $script:compactToggle.Location = [System.Drawing.Point]::new(728,13)
+    $script:compactToggle.Size = [System.Drawing.Size]::new(170,38)
+    $script:compactToggle.AccessibleName = 'Toggle compact mode'
     $script:compactToggle.Checked = ($script:uiSettings -and $script:uiSettings.compactMode -eq $true)
     $form.Controls.Add($script:compactToggle)
+    $script:compactToggle.BringToFront()
 
     $script:compactRunHeading = New-DashboardLabel $form 'Next run' 18 61 425 26
     $script:compactRunHeading.Font = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
@@ -82,15 +172,7 @@ function Initialize-Dashboard {
     $script:compactRunDate = New-DashboardLabel $script:compactRunPanel '' 14 70 395 23
     $script:compactRunDate.ForeColor = [System.Drawing.Color]::DimGray
 
-    $script:compactRunTrack = [System.Windows.Forms.Panel]::new()
-    $script:compactRunTrack.Location = [System.Drawing.Point]::new(14,104)
-    $script:compactRunTrack.Size = [System.Drawing.Size]::new(396,9)
-    $script:compactRunTrack.BackColor = $script:countdownTrack
-    $script:compactRunPanel.Controls.Add($script:compactRunTrack)
-    $script:compactRunFill = [System.Windows.Forms.Panel]::new()
-    $script:compactRunFill.Size = [System.Drawing.Size]::new(0,9)
-    $script:compactRunFill.BackColor = $script:countdownBlue
-    $script:compactRunTrack.Controls.Add($script:compactRunFill)
+    $script:compactRunTrack = New-SchedulerProgressBar $script:compactRunPanel 14 103 396 12 'time'
 
     $script:compactUsageModel = New-DashboardLabel $form '' 232 240 210 26
     $script:compactUsageModel.ForeColor = [System.Drawing.Color]::DimGray
@@ -112,19 +194,9 @@ function Initialize-Dashboard {
         $labelBounds = [System.Drawing.Rectangle]::new($e.CellBounds.X+8,$e.CellBounds.Y+2,$e.CellBounds.Width-16,23)
         $color = if (($e.State -band [System.Windows.Forms.DataGridViewElementStates]::Selected) -ne 0) { $e.CellStyle.SelectionForeColor } else { $e.CellStyle.ForeColor }
         [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics,[string]$cell.Value,$sender.Font,$labelBounds,$color,[System.Windows.Forms.TextFormatFlags]::VerticalCenter)
-        $track = [System.Drawing.Rectangle]::new($e.CellBounds.X+8,$e.CellBounds.Bottom-11,[math]::Max(0,$e.CellBounds.Width-16),6)
-        $trackBrush = [System.Drawing.SolidBrush]::new($script:countdownTrack)
-        $fillBrush = [System.Drawing.SolidBrush]::new($script:countdownBlue)
-        try {
-            $e.Graphics.FillRectangle($trackBrush,$track)
-            if ($null -ne $cell.Tag) {
-                $width = [int][math]::Round($track.Width * [int]$cell.Tag / 100)
-                if ($width -gt 0) { $e.Graphics.FillRectangle($fillBrush,$track.X,$track.Y,$width,$track.Height) }
-            }
-        } finally {
-            $fillBrush.Dispose()
-            $trackBrush.Dispose()
-        }
+        $track = [System.Drawing.RectangleF]::new([single]($e.CellBounds.X+8),[single]($e.CellBounds.Bottom-18),
+            [single]([math]::Max(0,$e.CellBounds.Width-16)),[single]11)
+        Draw-SchedulerProgress $e.Graphics $track $cell.Tag 'time'
         $e.Paint($e.CellBounds,[System.Windows.Forms.DataGridViewPaintParts]::Border)
         $e.Handled = $true
     })
@@ -158,7 +230,7 @@ function Update-DashboardCountdowns {
     $script:compactRunDetails.Text = [string]$next.Description
     $script:compactRunDate.Text = 'Scheduled ' + $next.When.ToString('ddd MMM d, h:mm tt')
     $percent = Get-RunCountdownPercent $next.When $next.CreatedAt $now
-    $script:compactRunFill.Width = if ($null -eq $percent) { 0 } else { [int][math]::Round($script:compactRunTrack.Width * $percent / 100) }
+    Set-SchedulerProgress $script:compactRunTrack $percent
     $script:compactRunTrack.AccessibleName = $script:compactRunEta.Text + $(if ($null -ne $percent) { ", $percent% elapsed since scheduled" } else { ', schedule creation time unavailable' })
 }
 
@@ -172,7 +244,14 @@ function Update-DashboardLayout {
     if (-not $compact) {
         $heading.Text = 'Schedule a continuation'
         $heading.Font = $script:fullTitleFont
-        $script:compactToggle.Location = [System.Drawing.Point]::new(777,20)
+        $heading.Width = 500
+        $script:compactToggle.Location = [System.Drawing.Point]::new(728,13)
+        $script:compactToggle.Size = [System.Drawing.Size]::new(170,38)
+        $script:compactToggle.Text = 'Compact mode: OFF'
+        $script:compactToggle.BackColor = [System.Drawing.Color]::FromArgb(236,242,250)
+        $script:compactToggle.ForeColor = [System.Drawing.Color]::FromArgb(40,76,128)
+        $script:compactToggle.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(163,189,219)
+        $subtitle.Visible = $false
         $usageHeading.Text = 'Usage remaining'
         $usageHeading.Location = [System.Drawing.Point]::new(18,322)
         $usageNotice.Visible = $true
@@ -190,9 +269,15 @@ function Update-DashboardLayout {
         return
     }
 
-    $heading.Text = 'Codex Resume Scheduler'
+    $heading.Text = 'Codex Scheduler'
     $heading.Font = $script:compactTitleFont
-    $script:compactToggle.Location = [System.Drawing.Point]::new(325,18)
+    $heading.Width = 270
+    $script:compactToggle.Location = [System.Drawing.Point]::new(298,13)
+    $script:compactToggle.Size = [System.Drawing.Size]::new(148,38)
+    $script:compactToggle.Text = 'Compact mode: ON'
+    $script:compactToggle.BackColor = [System.Drawing.Color]::FromArgb(49,95,167)
+    $script:compactToggle.ForeColor = [System.Drawing.Color]::White
+    $script:compactToggle.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(36,73,130)
     $usageNotice.Visible = $false
     $top = if ($script:pendingSnapshot.Count -gt 0) { 246 } else { 65 }
     $visibleWindows = @()

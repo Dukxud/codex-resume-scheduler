@@ -196,7 +196,9 @@ function Update-DashboardLayout {
     $usageNotice.Visible = $false
     $top = if ($script:pendingSnapshot.Count -gt 0) { 246 } else { 65 }
     $visibleWindows = @()
-    if ($script:usageSnapshot -and -not $script:usageReadFailed) {
+    $targetModel = Get-DashboardUsageModel
+    if ($script:usageSnapshot -and -not $script:usageReadFailed -and
+        (-not $targetModel -or $script:usageSnapshotRequestedModel -ceq $targetModel)) {
         $visibleWindows = @($script:usageSnapshot.windows | Where-Object { $null -ne $_ })
     }
     if ($visibleWindows.Count -eq 0) {

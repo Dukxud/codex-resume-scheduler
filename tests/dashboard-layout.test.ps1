@@ -35,6 +35,7 @@ try {
     $separator2 = New-TestControl panel 18 512 880 2
     $pending = New-TestControl label 18 527 400 30
     $grid = New-TestControl grid 18 566 880 195
+    $grid.AllowUserToAddRows = $false
     $grid.RowTemplate.Height = 54
     [void]$grid.Columns.Add('When','When')
     [void]$grid.Columns.Add('Countdown','Time to run')

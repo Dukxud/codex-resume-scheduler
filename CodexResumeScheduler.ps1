@@ -97,7 +97,7 @@ function Schedule-LimitRetry {
         log=(Join-Path $appDir ($name + '.log')) }
     $next | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFile -Encoding utf8
     # Use the same application copy that is executing the current job.
-    $arguments = '-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "' + $script:appSourcePath + '" -RunJob -JobFile "' + $jobFile + '"'
+    $arguments = '-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $script:appSourcePath + '" -RunJob -JobFile "' + $jobFile + '"'
     $action = New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'pwsh.exe') -Argument $arguments -WorkingDirectory $Job.repo
     $trigger = New-ScheduledTaskTrigger -Once -At $when
     $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
@@ -173,10 +173,18 @@ if ($RunJob) {
             }
         }
     } catch {
-        Write-Host "Scheduled run failed: $($_.Exception.Message)" -ForegroundColor Red
+        $failure = "Scheduled run failed: $($_.Exception.Message)"
+        Write-Host $failure -ForegroundColor Red
+        if (-not $transcribing) {
+            $target = if ($job -and $job.log) { [string]$job.log } else { Join-Path $appDir 'scheduler-errors.log' }
+            try {
+                [void](New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force)
+                Add-Content -LiteralPath $target -Value "$(Get-Date -Format o) $failure" -ErrorAction Stop
+            } catch { }
+        }
     } finally {
         if ($transcribing) { Stop-Transcript | Out-Null }
-        Write-Host 'Run finished. This terminal stays open until you close it.' -ForegroundColor Cyan
+        Write-Host 'Run finished. Check the logs folder for the transcript.' -ForegroundColor Cyan
     }
     return
 }
@@ -371,6 +379,8 @@ $refreshUsage = Add-Button 'Refresh now' 605 320 139
 $useReset = Add-Button 'Use reset +2 min' 755 320 143
 $useReset.Enabled = $false
 
+. (Join-Path $PSScriptRoot 'CodexDashboard.ps1')
+
 function New-UsageCard {
     param([int]$X, [string]$InitialTitle)
     $card = New-Object System.Windows.Forms.Panel
@@ -392,22 +402,14 @@ function New-UsageCard {
     $remaining.Text = '—'
     $remaining.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
     $card.Controls.Add($remaining)
-    $bar = New-Object System.Windows.Forms.Panel
-    $bar.Location = [System.Drawing.Point]::new(12,45)
-    $bar.Size = [System.Drawing.Size]::new(400,11)
-    $bar.BackColor = [System.Drawing.Color]::FromArgb(222,237,228)
-    $card.Controls.Add($bar)
-    $fill = New-Object System.Windows.Forms.Panel
-    $fill.Size = [System.Drawing.Size]::new(0,11)
-    $fill.BackColor = [System.Drawing.Color]::FromArgb(48,129,108)
-    $bar.Controls.Add($fill)
+    $bar = New-SchedulerProgressBar $card 12 46 400 12 'quota'
     $reset = New-Object System.Windows.Forms.Label
     $reset.Location = [System.Drawing.Point]::new(12,72)
     $reset.Size = [System.Drawing.Size]::new(400,24)
     $reset.Text = 'Waiting for Codex usage...'
     $reset.ForeColor = [System.Drawing.Color]::DimGray
     $card.Controls.Add($reset)
-    return [pscustomobject]@{ Panel = $card; Title = $name; Remaining = $remaining; Bar = $bar; BarFill = $fill; Reset = $reset }
+    return [pscustomobject]@{ Panel = $card; Title = $name; Remaining = $remaining; Bar = $bar; Reset = $reset }
 }
 $usageCards = @((New-UsageCard 18 'Primary window'), (New-UsageCard 470 'Secondary window'))
 $usageNotice = Add-Label 'Loading account usage...' 18 477 880
@@ -445,7 +447,7 @@ $grid.Columns[1].FillWeight = 150
 $grid.Columns[2].FillWeight = 145
 $grid.Columns[3].FillWeight = 325
 $grid.Columns[4].FillWeight = 85
-$grid.RowTemplate.Height = 44
+$grid.RowTemplate.Height = 54
 $grid.ShowCellToolTips = $true
 $form.Controls.Add($grid)
 $emptyRuns = New-Object System.Windows.Forms.Label
@@ -656,18 +658,18 @@ function Render-UsageCard {
     if (-not $Window) {
         $Card.Title.Text = $FallbackTitle
         $Card.Remaining.Text = 'Not reported'
-        $Card.BarFill.Width = 0
+        Set-SchedulerProgress $Card.Bar $null
         $Card.Reset.Text = 'No window supplied by Codex'
         return
     }
     $Card.Title.Text = [string]$Window.label
     if ($null -eq $Window.remainingPercent) {
         $Card.Remaining.Text = 'Unavailable'
-        $Card.BarFill.Width = 0
+        Set-SchedulerProgress $Card.Bar $null
     } else {
         $remaining = [double]$Window.remainingPercent
         $Card.Remaining.Text = ('{0:0.#}% remaining' -f $remaining)
-        $Card.BarFill.Width = [int][math]::Round($Card.Bar.Width * [math]::Clamp($remaining,0,100) / 100)
+        Set-SchedulerProgress $Card.Bar $remaining
     }
     $Card.Reset.Text = Format-ResetTime $Window.resetsAt
 }
@@ -938,7 +940,7 @@ $schedule.Add_Click({
         $log = Join-Path $appDir ($name + '.log')
         [pscustomobject]@{ sessionId = $sessionId; repo = $root; branch = $branch; model = $model; effort = $effort; access = $access; message = $message; autoResume = $autoResumeCheck.Checked; retryAttempt = 0; createdAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); accountId = $script:usageSnapshot.accountId; log = $log } |
             ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $jobFilePath -Encoding utf8
-        $runnerArgs = '-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "' + $installedScript + '" -RunJob -JobFile "' + $jobFilePath + '"'
+        $runnerArgs = '-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $installedScript + '" -RunJob -JobFile "' + $jobFilePath + '"'
         $action = New-ScheduledTaskAction -Execute (Join-Path $PSHOME 'pwsh.exe') -Argument $runnerArgs -WorkingDirectory $root
         $trigger = New-ScheduledTaskTrigger -Once -At $when
         $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
@@ -950,7 +952,7 @@ $schedule.Add_Click({
         $issues = @()
         if ($saved.State -notin @('Ready','Running')) { $issues += "Task state: $($saved.State)" }
         if ($actualTime -ne $expectedTime) { $issues += "Scheduled time: $actualTime (expected $expectedTime)" }
-        if ($saved.Actions.Count -ne 1 -or $saved.Actions[0].Arguments -notmatch '(?i)(?:^|\s)-NoExit(?:\s|$)') { $issues += 'PowerShell -NoExit missing' }
+        if ($saved.Actions.Count -ne 1 -or $saved.Actions[0].Arguments -notmatch '(?i)(?:^|\s)-WindowStyle\s+Hidden(?:\s|$)') { $issues += 'Hidden PowerShell runner missing' }
         if ($saved.Actions.Count -ne 1 -or $saved.Actions[0].Arguments -notmatch '(?i)(?:^|\s)-ExecutionPolicy\s+Bypass(?:\s|$)') { $issues += 'PowerShell process execution-policy override missing' }
         if ($saved.Principal.LogonType -ne 'Interactive') { $issues += "Logon type: $($saved.Principal.LogonType)" }
         if ($issues.Count -gt 0) { throw ("Task '$name' WAS registered, but these checks need attention: " + ($issues -join '; ')) }
@@ -969,7 +971,6 @@ $schedule.Add_Click({
     }
 })
 
-. (Join-Path $PSScriptRoot 'CodexDashboard.ps1')
 Initialize-Dashboard
 
 $autoRefresh = New-Object System.Windows.Forms.Timer

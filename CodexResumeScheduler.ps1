@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.10.1: use Windows Script Host instead of the antivirus-blocked custom executable.
+# v1.10.2: restore visible GUI window with hidden Windows Script Host launcher.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -211,6 +211,13 @@ if (-not $IsWindows) { throw 'This application requires Windows and PowerShell 7
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
+# WScript launches PowerShell with its console hidden. The first window show
+# request inherits that startup setting, so explicitly show the Forms window.
+Add-Type -Namespace CodexScheduler -Name NativeWindow -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool ShowWindow(System.IntPtr handle, int command);
+'@
+
 
 
 
@@ -221,7 +228,7 @@ Add-Type -AssemblyName System.Drawing
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.10.1'
+$form.Text = 'Codex Resume Scheduler v1.10.2'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
@@ -999,6 +1006,8 @@ $autoRefresh.Add_Tick({
     Request-UsageRefresh
 })
 $form.Add_Shown({
+    [void][CodexScheduler.NativeWindow]::ShowWindow($form.Handle, 5) # SW_SHOW
+    $form.Activate()
     $script:settingsReady = $true
     Update-DashboardLayout
     $script:countdownTimer.Start()

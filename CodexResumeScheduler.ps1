@@ -113,7 +113,7 @@ function Schedule-LimitRetry {
         log=(Join-Path $appDir ($name + '.log')) }
     $next | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFile -Encoding utf8
     # Use the console-free Windows GUI subsystem runner installed alongside this script.
-    $launcher = Join-Path $PSScriptRoot 'CodexScheduler.exe'
+    $launcher = Join-Path $appDir 'CodexScheduler.exe'
     if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw 'CodexScheduler.exe missing; reinstall the versioned release.' }
     $arguments = '--run-job "' + $jobFile + '"'
     $action = New-ScheduledTaskAction -Execute $launcher -Argument $arguments -WorkingDirectory $Job.repo

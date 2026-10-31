@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # Single-file UI and scheduled-task runner. No external modules or services.
-# v1.10.2: restore visible GUI window with hidden Windows Script Host launcher.
+# v1.10.3: restore the original Windows-themed animated quota ProgressBar.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -228,7 +228,7 @@ public static extern bool ShowWindow(System.IntPtr handle, int command);
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.10.2'
+$form.Text = 'Codex Resume Scheduler v1.10.3'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
@@ -427,7 +427,15 @@ function New-UsageCard {
     $remaining.Text = '—'
     $remaining.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
     $card.Controls.Add($remaining)
-    $bar = New-SchedulerProgressBar $card 12 44 400 17 'quota'
+    # Restore the actual WinForms ProgressBar from v1.8/v1.9. Custom-painted panels
+    # cannot reproduce the Windows visual-style shine or its native animation.
+    $bar = [System.Windows.Forms.ProgressBar]::new()
+    $bar.Location = [System.Drawing.Point]::new(12,45)
+    $bar.Size = [System.Drawing.Size]::new(400,13)
+    $bar.Minimum = 0
+    $bar.Maximum = 100
+    $bar.Value = 0
+    $card.Controls.Add($bar)
     $reset = New-Object System.Windows.Forms.Label
     $reset.Location = [System.Drawing.Point]::new(12,72)
     $reset.Size = [System.Drawing.Size]::new(400,24)
@@ -683,18 +691,18 @@ function Render-UsageCard {
     if (-not $Window) {
         $Card.Title.Text = $FallbackTitle
         $Card.Remaining.Text = 'Not reported'
-        Set-SchedulerProgress $Card.Bar $null
+        $Card.Bar.Value = 0
         $Card.Reset.Text = 'No window supplied by Codex'
         return
     }
     $Card.Title.Text = [string]$Window.label
     if ($null -eq $Window.remainingPercent) {
         $Card.Remaining.Text = 'Unavailable'
-        Set-SchedulerProgress $Card.Bar $null
+        $Card.Bar.Value = 0
     } else {
         $remaining = [double]$Window.remainingPercent
         $Card.Remaining.Text = ('{0:0.#}% remaining' -f $remaining)
-        Set-SchedulerProgress $Card.Bar $remaining
+        $Card.Bar.Value = [int][math]::Round([math]::Clamp($remaining,0,100))
     }
     $Card.Reset.Text = Format-ResetTime $Window.resetsAt
 }

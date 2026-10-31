@@ -24,38 +24,71 @@ function Draw-SchedulerProgress {
     if ($Rect.Width -le 1 -or $Rect.Height -le 1) { return }
     $Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $isQuota = $Kind -eq 'quota'
-    $trackColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(220,235,227) } else { [System.Drawing.Color]::FromArgb(224,234,248) }
-    $startColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(57,164,132) } else { [System.Drawing.Color]::FromArgb(75,126,193) }
-    $endColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(39,118,97) } else { [System.Drawing.Color]::FromArgb(38,82,153) }
+    $trackColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(219,235,226) } else { [System.Drawing.Color]::FromArgb(223,233,247) }
+    $startColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(59,177,140) } else { [System.Drawing.Color]::FromArgb(86,144,219) }
+    $endColor = if ($isQuota) { [System.Drawing.Color]::FromArgb(24,119,88) } else { [System.Drawing.Color]::FromArgb(35,86,169) }
     $round = [single]($Rect.Height / 2)
     $trackPath = New-SchedulerRoundPath $Rect $round
     $trackBrush = [System.Drawing.SolidBrush]::new($trackColor)
+    $trackOutline = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(90,105,131),0.8)
     try {
         $Graphics.FillPath($trackBrush,$trackPath)
+        $Graphics.DrawPath($trackOutline,$trackPath)
         if ($Kind -eq 'time') {
-            $tickPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(170,201,225),1)
+            $saved = $Graphics.Save()
+            $tickPen = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(95,154,183,220),1)
             try {
                 $Graphics.SetClip($trackPath)
                 for ($x = $Rect.Left + 24; $x -lt $Rect.Right; $x += 24) {
                     $Graphics.DrawLine($tickPen,[single]$x,$Rect.Top,[single]$x,$Rect.Bottom)
                 }
-                $Graphics.ResetClip()
-            } finally { $tickPen.Dispose() }
+            } finally { $Graphics.Restore($saved); $tickPen.Dispose() }
         }
-        if ($null -ne $Percent) {
-            $amount = [math]::Clamp([double]$Percent,0.0,100.0)
-            $filled = [single]($Rect.Width * $amount / 100)
-            if ($filled -gt 0.5) {
-                $fillRect = [System.Drawing.RectangleF]::new($Rect.Left,$Rect.Top,$filled,$Rect.Height)
-                $fillPath = New-SchedulerRoundPath $fillRect ([single]([math]::Min($round,$filled / 2)))
-                $fillBrush = [System.Drawing.Drawing2D.LinearGradientBrush]::new($fillRect,$startColor,$endColor,0.0)
-                try { $Graphics.FillPath($fillBrush,$fillPath) }
-                finally { $fillBrush.Dispose(); $fillPath.Dispose() }
-            }
-        }
-    } finally { $trackBrush.Dispose(); $trackPath.Dispose(); $Graphics.ResetClip() }
-}
+        if ($null -eq $Percent) { return }
 
+        $amount = [math]::Clamp([double]$Percent,0.0,100.0)
+        $filled = [single]($Rect.Width * $amount / 100)
+        if ($filled -le 0.5) { return }
+
+        $fillRect = [System.Drawing.RectangleF]::new($Rect.Left,$Rect.Top,$filled,$Rect.Height)
+        $fillPath = New-SchedulerRoundPath $fillRect ([single]([math]::Min($round,$filled / 2)))
+        $fillBrush = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
+            $fillRect,$startColor,$endColor,[System.Drawing.Drawing2D.LinearGradientMode]::Horizontal)
+        $savedFill = $Graphics.Save()
+        try {
+            $Graphics.SetClip($fillPath)
+            $Graphics.FillPath($fillBrush,$fillPath)
+
+            # Glassy top highlight: a bright white reflection that fades at mid-height.
+            # Unlike the previous horizontal color gradient, this is visibly reflective.
+            $reflection = [System.Drawing.RectangleF]::new(
+                $fillRect.Left,$fillRect.Top,[single]([math]::Max($fillRect.Width,1)),[single]($fillRect.Height * 0.60))
+            $sheen = [System.Drawing.Drawing2D.LinearGradientBrush]::new(
+                $reflection,[System.Drawing.Color]::FromArgb(220,255,255,255),
+                [System.Drawing.Color]::FromArgb(15,255,255,255),
+                [System.Drawing.Drawing2D.LinearGradientMode]::Vertical)
+            try { $Graphics.FillRectangle($sheen,$reflection) } finally { $sheen.Dispose() }
+
+            # A thin specular glint and dark underside complete the raised glass profile.
+            $glint = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(145,255,255,255),0.9)
+            $underside = [System.Drawing.Pen]::new([System.Drawing.Color]::FromArgb(58,13,35,53),0.9)
+            try {
+                $Graphics.DrawLine($glint,[single]($fillRect.Left + 2),[single]($fillRect.Top + 1.3),
+                    [single]($fillRect.Right - 2),[single]($fillRect.Top + 1.3))
+                $Graphics.DrawLine($underside,[single]($fillRect.Left + 2),[single]($fillRect.Bottom - 1.2),
+                    [single]($fillRect.Right - 2),[single]($fillRect.Bottom - 1.2))
+            } finally { $glint.Dispose(); $underside.Dispose() }
+        } finally {
+            $Graphics.Restore($savedFill)
+            $fillBrush.Dispose()
+            $fillPath.Dispose()
+        }
+    } finally {
+        $trackBrush.Dispose()
+        $trackOutline.Dispose()
+        $trackPath.Dispose()
+    }
+}
 function New-SchedulerProgressBar {
     param($Parent, [int]$X, [int]$Y, [int]$Width, [int]$Height,
           [ValidateSet('quota','time')][string]$Kind)
@@ -172,7 +205,7 @@ function Initialize-Dashboard {
     $script:compactRunDate = New-DashboardLabel $script:compactRunPanel '' 14 70 395 23
     $script:compactRunDate.ForeColor = [System.Drawing.Color]::DimGray
 
-    $script:compactRunTrack = New-SchedulerProgressBar $script:compactRunPanel 14 103 396 12 'time'
+    $script:compactRunTrack = New-SchedulerProgressBar $script:compactRunPanel 14 101 396 17 'time'
 
     $script:compactUsageModel = New-DashboardLabel $form '' 232 240 210 26
     $script:compactUsageModel.ForeColor = [System.Drawing.Color]::DimGray
@@ -194,8 +227,8 @@ function Initialize-Dashboard {
         $labelBounds = [System.Drawing.Rectangle]::new($e.CellBounds.X+8,$e.CellBounds.Y+2,$e.CellBounds.Width-16,23)
         $color = if (($e.State -band [System.Windows.Forms.DataGridViewElementStates]::Selected) -ne 0) { $e.CellStyle.SelectionForeColor } else { $e.CellStyle.ForeColor }
         [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics,[string]$cell.Value,$sender.Font,$labelBounds,$color,[System.Windows.Forms.TextFormatFlags]::VerticalCenter)
-        $track = [System.Drawing.RectangleF]::new([single]($e.CellBounds.X+8),[single]($e.CellBounds.Bottom-18),
-            [single]([math]::Max(0,$e.CellBounds.Width-16)),[single]11)
+        $track = [System.Drawing.RectangleF]::new([single]($e.CellBounds.X+8),[single]($e.CellBounds.Bottom-21),
+            [single]([math]::Max(0,$e.CellBounds.Width-16)),[single]15)
         Draw-SchedulerProgress $e.Graphics $track $cell.Tag 'time'
         $e.Paint($e.CellBounds,[System.Windows.Forms.DataGridViewPaintParts]::Border)
         $e.Handled = $true

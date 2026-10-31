@@ -32,5 +32,5 @@ test('release version is displayed in the interface', () => {
   const source = fs.readFileSync(path.join(root, 'CodexResumeScheduler.ps1'), 'utf8');
   const version = fs.readFileSync(path.join(root, 'VERSION'), 'utf8').trim();
   assert.ok(source.includes("Codex Resume Scheduler v" + version));
-  assert.equal(version, '1.10.1');
+  assert.match(version, /^\d+\.\d+\.\d+$/);
 });

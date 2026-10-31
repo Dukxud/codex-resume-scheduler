@@ -39,6 +39,12 @@ jobs:
       - name: Hidden script host launcher behavior
         shell: pwsh
         run: ./tests/script-host-launcher.test.ps1
+      - name: Complete GUI startup smoke test
+        shell: pwsh
+        run: ./tests/full-gui-startup.test.ps1
+      - name: Shipped launcher GUI visibility
+        shell: pwsh
+        run: ./tests/real-vbs-gui-visibility.test.ps1
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

@@ -30,7 +30,7 @@ try {
     }
     Write-Host "Visible application window from the real VBS launcher: $($found.MainWindowTitle)"
 } finally {
-    foreach ($id in $started) {
-        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+    foreach ($processId in $started) {
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
     }
 }

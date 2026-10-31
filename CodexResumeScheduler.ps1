@@ -642,6 +642,7 @@ $dataPoll.Add_Tick({
 
 $script:usageSnapshot = $null
 $script:usageRequestedModel = ''
+$script:usageSnapshotRequestedModel = ''
 $script:usageReadFailed = $false
 $script:usageProcess = $null
 $script:usageStarted = [datetime]::MinValue
@@ -674,6 +675,7 @@ function Render-UsageCard {
 function Apply-UsageSnapshot {
     param($Snapshot)
     $script:usageSnapshot = $Snapshot
+    $script:usageSnapshotRequestedModel = $script:usageRequestedModel
     $script:usageReadFailed = $false
     $script:usageChecked = Get-Date
     $script:models = @($Snapshot.models | Where-Object { $_ })

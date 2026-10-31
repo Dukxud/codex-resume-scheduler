@@ -135,7 +135,7 @@ function Initialize-Dashboard {
 function Sync-DashboardRunBars {
     # The DataGridView remains responsible for text, scrolling, selection and
     # task identity. One WPF ElementHost is positioned in each visible time cell.
-    if (-not $script:runBarHosts -or $grid.Columns.Count -lt 2) { return }
+    if ($null -eq $script:runBarHosts -or $grid.Columns.Count -lt 2) { return }
     $count = $grid.Rows.Count
     while ($script:runBarHosts.Count -gt $count) {
         $last = $script:runBarHosts.Count - 1

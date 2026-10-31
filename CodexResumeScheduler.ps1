@@ -112,7 +112,7 @@ function Schedule-LimitRetry {
         createdAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); accountId=$Job.accountId; retryAttempt=$attempt; previousResetAt=$ResetAt;
         log=(Join-Path $appDir ($name + '.log')) }
     $next | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFile -Encoding utf8
-    # Run the saved job via Windows' own script host; no custom executable.
+    # Run the saved job through the signed Windows Script Host, not a custom executable.
     $runnerScript = Join-Path $appDir 'CodexRunJob.vbs'
     if (-not (Test-Path -LiteralPath $runnerScript -PathType Leaf)) { throw 'CodexRunJob.vbs missing; install the complete release.' }
     $arguments = '//B //Nologo "' + $runnerScript + '" "' + $jobFile + '"'
@@ -972,72 +972,7 @@ $schedule.Add_Click({
         if ($saved.State -notin @('Ready','Running')) { $issues += "Task state: $($saved.State)" }
         if ($actualTime -ne $expectedTime) { $issues += "Scheduled time: $actualTime (expected $expectedTime)" }
         if ($saved.Actions.Count -ne 1 -or [string]$saved.Actions[0].Execute -ine (Join-Path $env:WINDIR 'System32\wscript.exe')) { $issues += 'Windows Script Host runner is not registered' }
-        if ($saved.Actions.Count -ne 1 -or [string]$saved.Actions[0].Arguments -notmatch '(?i)^//B\s+//Nologo\s+"[^"]+CodexRunJob\.vbs"\s+"[^"]+\.json"
-        if ($saved.Principal.LogonType -ne 'Interactive') { $issues += "Logon type: $($saved.Principal.LogonType)" }
-        if ($issues.Count -gt 0) { throw ("Task '$name' WAS registered, but these checks need attention: " + ($issues -join '; ')) }
-        $script:settingsTimer.Stop()
-        Save-CurrentFormState
-        Refresh-PendingList
-        Request-UsageRefresh
-        Update-Status "Scheduled once for $($when.ToString('MMM dd, h:mm tt')): $name"
-        [System.Windows.Forms.MessageBox]::Show("Scheduled $($when.ToString('MMM dd, yyyy h:mm tt')).`nSession: $sessionId`nBranch: $branch`nInstruction: $message",'Codex task scheduled') | Out-Null
-    } catch {
-        # A task may have been registered before a later check failed. Surface it,
-        # rather than leaving an empty list that encourages duplicate schedules.
-        $failureMessage = $_.Exception.Message
-        try { Refresh-PendingList } catch { $failureMessage += "`nPending-list refresh: $($_.Exception.Message)" }
-        [System.Windows.Forms.MessageBox]::Show($failureMessage,'Scheduling check failed') | Out-Null
-    }
-})
-
-Initialize-Dashboard
-
-$autoRefresh = New-Object System.Windows.Forms.Timer
-$autoRefresh.Interval = 60000
-$autoRefresh.Add_Tick({
-    try { Refresh-PendingList } catch { Update-Status "Pending refresh failed: $($_.Exception.Message)" }
-    Request-UsageRefresh
-})
-$form.Add_Shown({
-    $script:settingsReady = $true
-    Update-DashboardLayout
-    $script:countdownTimer.Start()
-    try { Refresh-SessionList; Refresh-PendingList } catch { Update-Status "Startup warning: $($_.Exception.Message)" }
-    Request-UsageRefresh
-    $autoRefresh.Start()
-    $dataPoll.Start()
-})
-$form.Add_FormClosing({
-    $script:settingsTimer.Stop()
-    try { Save-CurrentFormState } catch {
-        [System.Windows.Forms.MessageBox]::Show("Could not save preferences: $($_.Exception.Message)", 'Settings save error') | Out-Null
-    }
-})
-$form.Add_FormClosed({
-    $script:countdownTimer.Stop()
-    $autoRefresh.Stop()
-    $usagePoll.Stop()
-    $dataPoll.Stop()
-    foreach ($job in @($script:dataJobs.Values)) {
-        try { Stop-Job -Job $job -ErrorAction SilentlyContinue; Remove-Job -Job $job -Force -ErrorAction SilentlyContinue } catch { }
-    }
-    if ($script:usageProcess) {
-        try { if (-not $script:usageProcess.HasExited) { $script:usageProcess.Kill($true) } } catch { }
-        $script:usageProcess.Dispose()
-        $script:usageProcess = $null
-    }
-})
-[void]$form.ShowDialog()
-$autoRefresh.Dispose()
-$script:countdownTimer.Dispose()
-$script:settingsTimer.Dispose()
-$usagePoll.Dispose()
-$dataPoll.Dispose()
-$repoHints.Dispose()
-$usageHints.Dispose()
-$actionHints.Dispose()
-$form.Dispose()
-) { $issues += 'Runner job argument missing' }
+        if ($saved.Actions.Count -ne 1 -or [string]$saved.Actions[0].Arguments -notmatch '(?i)^//B\s+//Nologo\s+"[^"]+CodexRunJob\.vbs"\s+"[^"]+\.json"$') { $issues += 'Runner job argument missing' }
         if ($saved.Principal.LogonType -ne 'Interactive') { $issues += "Logon type: $($saved.Principal.LogonType)" }
         if ($issues.Count -gt 0) { throw ("Task '$name' WAS registered, but these checks need attention: " + ($issues -join '; ')) }
         $script:settingsTimer.Stop()

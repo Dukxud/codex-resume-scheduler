@@ -4,7 +4,7 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%207-blue)
 
-**Latest packaged release: [CodexResumeScheduler-v1.10.1.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.1/CodexResumeScheduler-v1.10.1.zip)**
+**Latest packaged release: [CodexResumeScheduler-v1.10.2.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.2/CodexResumeScheduler-v1.10.2.zip)**
 
 Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The package contains only scripts; no third-party or unsigned executable.
 
@@ -38,7 +38,7 @@ The GUI dispatches saved-conversation discovery, repository lookup, and pending 
 
 ## Run
 
-1. Download **[CodexResumeScheduler-v1.10.1.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.1/CodexResumeScheduler-v1.10.1.zip)** from Releases.
+1. Download **[CodexResumeScheduler-v1.10.2.zip](https://github.com/Dukxud/codex-resume-scheduler/releases/download/v1.10.2/CodexResumeScheduler-v1.10.2.zip)** from Releases.
 2. Extract the versioned folder and keep the supplied `.vbs`, `.ps1`, and `.js` files together.
 3. Double-click **`Start-Codex-Scheduler.vbs`** to open the interface without a visible terminal. The `.cmd` fallback may briefly flash its own shell before exiting.
 4. Usage and pending jobs load automatically; optionally click **Refresh now**. If a reset time is available, click **Use reset +2 min**, or enter a time manually.

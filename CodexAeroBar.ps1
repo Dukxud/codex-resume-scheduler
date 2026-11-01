@@ -102,6 +102,7 @@ function Ensure-AeroFallback {
     if (-not $parent -or $parent.IsDisposed) { return }
     try {
         $replacementBar = New-FlowingProgressBar $parent $Bar.Left $Bar.Top $Bar.Width $Bar.Height ([string]$Bar.Tag.Kind)
+        $replacementBar.Visible = $Bar.Visible
         $Bar.Tag.Fallback = $replacementBar
         $Bar.Visible = $false
         $replacementBar.BringToFront()

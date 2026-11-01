@@ -20,19 +20,19 @@ public static extern bool ShowWindow(System.IntPtr handle, int command);
 
 
 # Legacy settings.json files contain only lastAccess. A draft is optional.
-$script:uiSettings = Read-CodexUiSettings $appDir
-$script:savedDraft = if ($script:uiSettings -and $script:uiSettings.draft) { $script:uiSettings.draft } else { $null }
-$script:preferredSessionId = if ($script:savedDraft) { [string]$script:savedDraft.sessionId } else { '' }
-$script:preferredModelId = if ($script:savedDraft) { [string]$script:savedDraft.model } else { '' }
-$script:preferredEffort = if ($script:savedDraft) { [string]$script:savedDraft.effort } else { '' }
-$script:startupSavedSessionId = $script:preferredSessionId
-$script:startupSavedModelId = $script:preferredModelId
-$script:repoSelectionSessionId = ''
-$script:settingsReady = $false
+$script:ui.Preferences.uiSettings = Read-CodexUiSettings $appDir
+$script:ui.Preferences.savedDraft = if ($script:ui.Preferences.uiSettings -and $script:ui.Preferences.uiSettings.draft) { $script:ui.Preferences.uiSettings.draft } else { $null }
+$script:ui.Selection.preferredSessionId = if ($script:ui.Preferences.savedDraft) { [string]$script:ui.Preferences.savedDraft.sessionId } else { '' }
+$script:ui.Selection.preferredModelId = if ($script:ui.Preferences.savedDraft) { [string]$script:ui.Preferences.savedDraft.model } else { '' }
+$script:ui.Selection.preferredEffort = if ($script:ui.Preferences.savedDraft) { [string]$script:ui.Preferences.savedDraft.effort } else { '' }
+$script:ui.Selection.startupSavedSessionId = $script:ui.Selection.preferredSessionId
+$script:ui.Selection.startupSavedModelId = $script:ui.Selection.preferredModelId
+$script:ui.Selection.repoSelectionSessionId = ''
+$script:ui.Preferences.settingsReady = $false
 
 function Get-SavedAccessPreference {
-    if ($script:savedDraft -and $script:savedDraft.access -in @('workspace-write','yolo','read-only')) { return [string]$script:savedDraft.access }
-    if ($script:uiSettings -and $script:uiSettings.lastAccess -in @('workspace-write','yolo','read-only')) { return [string]$script:uiSettings.lastAccess }
+    if ($script:ui.Preferences.savedDraft -and $script:ui.Preferences.savedDraft.access -in @('workspace-write','yolo','read-only')) { return [string]$script:ui.Preferences.savedDraft.access }
+    if ($script:ui.Preferences.uiSettings -and $script:ui.Preferences.uiSettings.lastAccess -in @('workspace-write','yolo','read-only')) { return [string]$script:ui.Preferences.uiSettings.lastAccess }
     return 'workspace-write'
 }
 
@@ -77,8 +77,8 @@ $whenBox.Format = 'Custom'
 $whenBox.CustomFormat = 'ddd MMM dd, yyyy  hh:mm tt'
 $suggested = (Get-Date).AddMinutes(11)
 $whenBox.Value = [datetime]::new($suggested.Year,$suggested.Month,$suggested.Day,$suggested.Hour,$suggested.Minute,0)
-if ($script:savedDraft) {
-    $restoredTime = Get-RestoredRunTime ([string]$script:savedDraft.runAt) (Get-Date)
+if ($script:ui.Preferences.savedDraft) {
+    $restoredTime = Get-RestoredRunTime ([string]$script:ui.Preferences.savedDraft.runAt) (Get-Date)
     if ($restoredTime) { $whenBox.Value = $restoredTime }
 }
 $form.Controls.Add($whenBox)
@@ -96,8 +96,8 @@ $accessBox.Location = [System.Drawing.Point]::new(597,154)
 $accessBox.Size = [System.Drawing.Size]::new(301,30)
 $accessBox.DropDownStyle = 'DropDownList'
 [void]$accessBox.Items.AddRange([object[]]@('Workspace write','Full access (YOLO)','Read-only test'))
-$script:lastAccessPreference = Get-SavedAccessPreference
-$accessBox.SelectedIndex = switch ($script:lastAccessPreference) { 'yolo' { 1 } 'read-only' { 2 } default { 0 } }
+$script:ui.Preferences.lastAccessPreference = Get-SavedAccessPreference
+$accessBox.SelectedIndex = switch ($script:ui.Preferences.lastAccessPreference) { 'yolo' { 1 } 'read-only' { 2 } default { 0 } }
 $form.Controls.Add($accessBox)
 [void](Add-Label 'Reasoning' 500 203 95)
 $modelBox = New-Object System.Windows.Forms.ComboBox
@@ -106,14 +106,14 @@ $modelBox.Size = [System.Drawing.Size]::new(325,30)
 $modelBox.DropDownStyle = 'DropDownList'
 $modelBox.DisplayMember = 'Display'
 $form.Controls.Add($modelBox)
-$script:models = @()
-$script:modelCatalogLoaded = $false
+$script:ui.Selection.models = @()
+$script:ui.Selection.modelCatalogLoaded = $false
 
 [void](Add-Label 'Instruction' 18 247)
 $messageBox = New-Object System.Windows.Forms.TextBox
 $messageBox.Location = [System.Drawing.Point]::new(155,243)
 $messageBox.Size = [System.Drawing.Size]::new(743,30)
-$messageBox.Text = if ($script:savedDraft -and $null -ne $script:savedDraft.message) { [string]$script:savedDraft.message } else { 'Resume.' }
+$messageBox.Text = if ($script:ui.Preferences.savedDraft -and $null -ne $script:ui.Preferences.savedDraft.message) { [string]$script:ui.Preferences.savedDraft.message } else { 'Resume.' }
 $form.Controls.Add($messageBox)
 $schedule = Add-Button 'Schedule once' 720 274 178
 $schedule.Height = 31
@@ -123,7 +123,7 @@ $autoResumeCheck = New-Object System.Windows.Forms.CheckBox
 $autoResumeCheck.Text = 'Retry if Codex hits a usage limit (max 4)'
 $autoResumeCheck.Location = [System.Drawing.Point]::new(155,276)
 $autoResumeCheck.Size = [System.Drawing.Size]::new(520,21)
-$autoResumeCheck.Checked = if ($script:savedDraft -and $script:savedDraft.autoResume -is [bool]) { [bool]$script:savedDraft.autoResume } else { $true }
+$autoResumeCheck.Checked = if ($script:ui.Preferences.savedDraft -and $script:ui.Preferences.savedDraft.autoResume -is [bool]) { [bool]$script:ui.Preferences.savedDraft.autoResume } else { $true }
 $form.Controls.Add($autoResumeCheck)
 
 function Get-SelectedModel {
@@ -132,12 +132,12 @@ function Get-SelectedModel {
 }
 function Select-AvailableEfforts {
     $model = Get-SelectedModel
-    $entry = @($script:models | Where-Object { $_.id -ceq $model }) | Select-Object -First 1
+    $entry = @($script:ui.Selection.models | Where-Object { $_.id -ceq $model }) | Select-Object -First 1
     $prior = [string]$effortBox.SelectedItem
     $effortBox.Items.Clear()
     if ($entry) {
         foreach ($effort in @($entry.efforts | Where-Object { $_ -ne 'ultra' })) { [void]$effortBox.Items.Add([string]$effort) }
-        if ($model -eq $script:preferredModelId -and $effortBox.Items.Contains($script:preferredEffort)) { $effortBox.SelectedItem = $script:preferredEffort }
+        if ($model -eq $script:ui.Selection.preferredModelId -and $effortBox.Items.Contains($script:ui.Selection.preferredEffort)) { $effortBox.SelectedItem = $script:ui.Selection.preferredEffort }
         elseif ($effortBox.Items.Contains($prior)) { $effortBox.SelectedItem = $prior }
         elseif ($effortBox.Items.Contains([string]$entry.defaultEffort)) { $effortBox.SelectedItem = [string]$entry.defaultEffort }
         elseif ($effortBox.Items.Count -gt 0) { $effortBox.SelectedIndex = 0 }
@@ -169,7 +169,7 @@ function Start-UsageRead {
     $process.StartInfo = $start
     try {
         if (-not $process.Start()) { throw 'Could not start Codex usage reader.' }
-        $script:usageRequestedModel = $chosen
+        $script:ui.Usage.usageRequestedModel = $chosen
         return $process
     } catch {
         $process.Dispose()
@@ -199,7 +199,7 @@ $useReset.Enabled = $false
 . (Join-Path $PSScriptRoot 'CodexFlowingBar.ps1')
 . (Join-Path $PSScriptRoot 'CodexAeroBar.ps1')
 . (Join-Path $PSScriptRoot 'CodexBarAppearance.ps1')
-Initialize-AeroAppearance $script:uiSettings
+Initialize-AeroAppearance $script:ui.Preferences.uiSettings
 . (Join-Path $PSScriptRoot 'CodexDashboard.ps1')
 
 function New-UsageCard {
@@ -294,18 +294,18 @@ function Update-Status {
 
 # Keep filesystem, Git, and Task Scheduler reads off the Windows Forms thread.
 # Each operation has at most one active job and one coalesced follow-up request.
-$script:dataJobs = @{}
-$script:dataQueued = @{}
-$script:pendingSnapshot = @()
-$script:selectionGeneration = 0
-$script:selectionJobGeneration = 0
-$script:selectionOriginalModel = $null
-$script:loadingSessions = $false
+$script:ui.Selection.dataJobs = @{}
+$script:ui.Selection.dataQueued = @{}
+$script:ui.Dashboard.pendingSnapshot = @()
+$script:ui.Selection.selectionGeneration = 0
+$script:ui.Selection.selectionJobGeneration = 0
+$script:ui.Selection.selectionOriginalModel = $null
+$script:ui.Selection.loadingSessions = $false
 $repoHints = [System.Windows.Forms.ToolTip]::new()
 $usageHints = [System.Windows.Forms.ToolTip]::new()
 $actionHints = [System.Windows.Forms.ToolTip]::new()
 $actionHints.SetToolTip($schedule, 'Creates one Windows Task Scheduler run. Your settings are rechecked when the task starts.')
 $actionHints.SetToolTip($autoResumeCheck, 'Only retries after a confirmed Codex usage-limit failure; does not monitor other Codex terminals.')
 $actionHints.SetToolTip($useReset, 'Uses the applicable exhausted quota reset time plus two minutes, when Codex reports one.')
-$script:models = @()
+$script:ui.Selection.models = @()
 

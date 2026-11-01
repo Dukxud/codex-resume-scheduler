@@ -105,7 +105,7 @@ function Ensure-AeroFallback {
         return New-FlowingProgressBar $parent $bounds.X $bounds.Y $bounds.Width $bounds.Height $kind
     }.GetNewClosure()
     try {
-        $replacement=Ensure-ProgressHostFallback -Primary $Bar -FallbackFactory $factory
+        $replacement=Repair-ProgressHost -Primary $Bar -FallbackFactory $factory
         if($replacement){Set-FlowingProgress $replacement $Bar.Tag.Percent}
     } catch {
         $script:aeroError = "Aero recovery failed: $($_.Exception.Message)"

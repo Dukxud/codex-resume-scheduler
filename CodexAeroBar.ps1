@@ -100,9 +100,10 @@ function Ensure-AeroFallback {
     param([System.Windows.Forms.Control]$Bar)
     if (-not $Bar -or $Bar.IsDisposed -or -not $Bar.Tag.Failure -or $Bar.Tag.Fallback) { return }
     $kind=[string]$Bar.Tag.Kind
+    $color=if($Bar.Tag.Color){[string]$Bar.Tag.Color}else{[string]$script:aeroAppearance[$kind]}
     $factory={
         param($parent,$bounds)
-        return New-FlowingProgressBar $parent $bounds.X $bounds.Y $bounds.Width $bounds.Height $kind
+        return New-FlowingProgressBar $parent $bounds.X $bounds.Y $bounds.Width $bounds.Height $kind -Color $color
     }.GetNewClosure()
     try {
         $replacement=Repair-ProgressHost -Primary $Bar -FallbackFactory $factory
@@ -147,12 +148,12 @@ function New-AeroProgressBar {
         [ValidateSet('quota','time')][string]$Kind,
         [string]$Color=''
     )
-    if (-not (Test-AeroRenderer)) {
-        return New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind
-    }
     $chosen = if ($Color -and (Test-AeroProgressColor $Color)) {
         $Color
     } else { [string]$script:aeroAppearance[$Kind] }
+    if (-not (Test-AeroRenderer)) {
+        return New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind -Color $chosen
+    }
     try {
         $view = New-AeroProgressView -Parent $Parent -X $X -Y $Y -Width $Width -Height $Height `
             -Color $chosen -AccessibleName $(if ($Kind -eq 'quota') { 'Usage remaining' } else { 'Time until scheduled run' }) `
@@ -165,7 +166,7 @@ function New-AeroProgressBar {
         return $view
     } catch {
         $script:aeroError = "Aero view failed: $($_.Exception.Message)"
-        return New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind
+        return New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind -Color $chosen
     }
 }
 

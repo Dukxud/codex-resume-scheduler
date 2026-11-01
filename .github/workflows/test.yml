@@ -73,7 +73,7 @@ jobs:
           $files = @('CodexResumeScheduler.ps1','CodexDashboard.ps1','CodexFlowingBar.ps1',
             'CodexBarGallery.ps1','CodexData.ps1','CodexUsage.js','CodexRetry.js',
             'Start-Codex-Scheduler.vbs','Start-Codex-Scheduler.cmd',
-            'CodexRunJob.vbs','README.md','LICENSE','VERSION')
+            'CodexRunJob.vbs','README.md','LIVE-PREVIEW-NOTES.txt','LICENSE','VERSION')
           foreach ($path in $files) { Copy-Item -LiteralPath $path -Destination $dir -ErrorAction Stop }
           $zip = Join-Path $env:RUNNER_TEMP "$name.zip"
           Compress-Archive -Path $dir -DestinationPath $zip -Force
@@ -89,7 +89,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CodexScheduler-real-WPF-bar-captures
-          path: preview-captures/*.png
+          path: preview-captures/**
           retention-days: 30
 
   release:

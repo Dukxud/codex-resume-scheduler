@@ -36,6 +36,8 @@ if ($RunJob) {
     exit (Invoke-CodexScheduledJob -JobFile $JobFile -AppDirectory $appDir -RuntimeDirectory $PSScriptRoot)
 }
 . (Join-Path $PSScriptRoot 'CodexData.ps1')
+. (Join-Path $PSScriptRoot 'CodexUiState.ps1')
+$script:ui = New-CodexUiState
 . (Join-Path $PSScriptRoot 'CodexUiForms.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiRefresh.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiActions.ps1')

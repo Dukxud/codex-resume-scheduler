@@ -28,8 +28,12 @@ function Initialize-AeroAppearance {
         }
     }
     foreach ($kind in @('quota','time')) {
-        if ($defaults[$kind] -notin @('green','blue','cyan','violet','amber','red')) {
+        if ($defaults[$kind] -notin @('green','blue','cyan','violet','amber','red') -and
+            [string]$defaults[$kind] -notmatch '^#[0-9a-fA-F]{6}$') {
             $defaults[$kind] = $(if ($kind -eq 'quota') { 'green' } else { 'blue' })
+        }
+        if ([string]$defaults[$kind] -match '^#[0-9a-fA-F]{6}$') {
+            $defaults[$kind] = ([string]$defaults[$kind]).ToUpperInvariant()
         }
     }
     foreach ($key in @('finish','lighting')) {
@@ -113,13 +117,15 @@ function New-AeroProgressBar {
         [System.Windows.Forms.Control]$Parent,
         [int]$X, [int]$Y, [int]$Width, [int]$Height,
         [ValidateSet('quota','time')][string]$Kind,
-        [ValidateSet('green','blue','cyan','violet','amber','red')][string]$Color = ''
+        [string]$Color = ''
     )
     if (-not (Test-AeroRenderer)) {
         return New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind
     }
 
-    $selected = if ($Color) { $Color } else { [string]$script:aeroAppearance[$Kind] }
+    $selected = if ($Color -in @('green','blue','cyan','violet','amber','red') -or $Color -match '^#[0-9a-fA-F]{6}$') {
+        $Color
+    } else { [string]$script:aeroAppearance[$Kind] }
     $bar = [Microsoft.Web.WebView2.WinForms.WebView2]::new()
     $bar.Location = [System.Drawing.Point]::new($X,$Y)
     $bar.Size = [System.Drawing.Size]::new($Width,$Height)

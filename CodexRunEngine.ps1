@@ -147,9 +147,11 @@ function Invoke-CodexScheduledJob {
         Assert-ModelEffortSupported (Read-CodexModelCatalog) $model ([string]$job.effort)
         $auto = $job.autoResume -eq $true
         if ($auto -and -not $job.accountId) { throw 'Automatic retry requires a verified saved account identity. Reschedule after refreshing usage.' }
-        if ($auto -and [int]$job.retryAttempt -gt 0) {
+        if ($auto) {
             $state = Read-UsageState $model
             if (-not $state.accountId -or $job.accountId -cne $state.accountId) { throw 'Codex account identity unavailable or changed; refusing automated continuation.' }
+        }
+        if ($auto -and [int]$job.retryAttempt -gt 0) {
             if (-not $state.canAttempt) {
                 if ($state.recommendationKind -eq 'exhausted-window' -and $state.recommendedResetAt -and [int]$job.retryAttempt -lt 4) {
                     if (Schedule-LimitRetry $job ([long]$state.recommendedResetAt) ([long]$state.recommendedResetAt + 120) ([string]$state.bucketId) $AppDirectory $RuntimeDirectory) { return 0 }

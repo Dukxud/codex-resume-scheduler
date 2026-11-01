@@ -48,6 +48,7 @@ try {
         'components/README.md','components/AeroProgress/AeroProgress.psm1',
         'components/RuntimeBundle/RuntimeBundle.psm1','components/SettingsStore/SettingsStore.psm1',
         'components/ProgressHost/ProgressHost.psm1','components/WindowShell/WindowShell.psm1',
+        'components/FlowingProgress/FlowingProgress.psm1',
         'components/GitRepository/GitRepository.psm1','components/JobOutcomes/JobOutcomes.psm1',
         'components/Countdown/Countdown.psm1','components/OneTimeTasks/OneTimeTasks.psm1',
         'components/AeroProgress/AeroWebView2/WebView2Loader.dll','components/AeroProgress/AeroBar.html')){

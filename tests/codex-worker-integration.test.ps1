@@ -45,11 +45,13 @@ exit /b %errorlevel%
     $fingerprint=$runtime.Fingerprint
     $jobPath=Join-Path $temp 'job.json'
     $marker=Join-Path $temp 'executed.marker'
+    $outcomePath=[IO.Path]::ChangeExtension($jobPath,'.result.json')
     $settingsDir=Join-Path $temp 'isolated-appdata'
     [void](New-Item -ItemType Directory -Path $settingsDir -Force)
 
     function Run-CodexStub([int]$expectedExit,[bool]$auto,[string]$activeAccount,[bool]$emitLimit) {
         if(Test-Path $marker){Remove-Item -LiteralPath $marker -Force}
+        if(Test-Path $outcomePath){Remove-Item -LiteralPath $outcomePath -Force}
         [pscustomobject]@{
             sessionId='00000000-0000-0000-0000-000000000001'
             repo=$repoRoot;branch='feature';model='test-model';effort='high'
@@ -86,16 +88,26 @@ exit /b %errorlevel%
 
     $ok=Run-CodexStub 0 $false 'acct-1' $false
     Require ($ok.Exit -eq 0 -and $ok.Executed) "Successful Codex execution must return zero: $($ok.Output) $($ok.Errors)"
+    $outcome=Read-JobOutcome -Path $outcomePath
+    Require ($outcome.status -eq "completed" -and $outcome.exitCode -eq 0) "Successful run must report completed outcome."
     $failed=Run-CodexStub 17 $false 'acct-1' $false
     Require ($failed.Exit -eq 17 -and $failed.Executed) "CLI exit 17 must be preserved, not reported as success: $($failed.Output) $($failed.Errors)"
+    $outcome=Read-JobOutcome -Path $outcomePath
+    Require ($outcome.status -eq "failed" -and $outcome.exitCode -eq 17) "Failed Codex execution must record its actual failure."
     $stale=Run-CodexStub 0 $true 'acct-1' $true
     Require ($stale.Exit -eq 0 -and $stale.Executed) "Success must override stale limit-like events: $($stale.Output) $($stale.Errors)"
+    $outcome=Read-JobOutcome -Path $outcomePath
+    Require ($outcome.status -eq "completed") "Stale error events must not cause deferred outcome on success."
     $changed=Run-CodexStub 0 $true 'different-account' $false
     Require ($changed.Exit -ne 0 -and -not $changed.Executed) "Wrong account must stop before invoking Codex: $($changed.Output) $($changed.Errors)"
+    $outcome=Read-JobOutcome -Path $outcomePath
+    Require ($outcome.status -eq "failed") "Account mismatch must be recorded as a failed preflight."
     # A pinned runtime must fail closed after an existing dependency changes.
     Set-Content -LiteralPath (Join-Path $runtime.Directory 'CodexRetry.js') -Value 'tampered'
     $tampered=Run-CodexStub 0 $false 'acct-1' $false
     Require ($tampered.Exit -ne 0 -and -not $tampered.Executed) "Modified scheduled runtime must fail before Codex: $($tampered.Output) $($tampered.Errors)"
+    $outcome=Read-JobOutcome -Path $outcomePath
+    Require ($outcome.status -eq "failed") "Fingerprint failure must persist a failed outcome."
     Write-Host 'Isolated pinned worker: success, exit 17, stale error, identity and tampering PASS.'
 }finally{
     if(Test-Path $temp){Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue}

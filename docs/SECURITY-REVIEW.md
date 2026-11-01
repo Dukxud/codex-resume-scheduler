@@ -1,4 +1,4 @@
-# Security and code-quality review — v1.13.0 candidate
+# Security and code-quality review — v1.14.0 candidate
 
 ## Scope and evidence
 
@@ -22,10 +22,10 @@ Reviewed the actual Windows launchers, scheduled-task flow, WebView2 host, relea
 - **Standard PowerShell installation required:** Both launchers now require PowerShell 7 installed beneath `C:\Program Files\PowerShell\7`. A portable or non-standard install must be adapted explicitly; a silent PATH fallback would reintroduce the hijack risk.
 - **Certificate required:** Production builds will now fail rather than silently publish unsigned. Someone must establish an external publisher identity and provision a trusted code-signing certificate on the signing machine. Azure Artifact Signing can be integrated once an account and validated identity exist; it has a recurring cost. The current GitHub-hosted Windows runner does **not** have your private signing key or service access. Even an internal or locally trusted certificate that passes on one machine may not be trusted on other users' computers; verify the publisher chain publicly before shipping. Do not put private keys or plaintext PFX passwords into the repository.
 - **The `.vbs` launcher itself is still script-based.** PowerShell Authenticode does not sign it as a first-party PS script. Even with signed PowerShell payloads, WScript/hidden-PowerShell heuristics may remain. A future **signed native bootstrapper or Microsoft Store distribution** would remove that pattern; this change deliberately avoids introducing an unsigned new executable that could make things worse.
-- **Antivirus-specific evidence remains absent.** Bitdefender can terminate Chromium WebView2 child processes, producing a blank widget or crash, independently of SmartScreen. The module records process failure; automatic conversion of an already-running failed browser into WPF is not implemented.
+- **Antivirus-specific evidence remains absent.** Bitdefender can terminate Chromium WebView2 child processes, producing a blank widget or crash, independently of SmartScreen. The AeroProgress module reports process failure; the scheduler adapter replaces the failed view with a WPF fallback. Windows-specific renderer failures still require on-device verification.
 - Scheduled jobs run unattended and may invoke Codex with `--dangerously-bypass-approvals-and-sandbox` **only after an explicit user-selected YOLO mode and confirmation**. This remains inherently high risk. Run as an ordinary limited Windows user; avoid scheduling full-access jobs on untrusted repositories.
 - Scheduled job JSON, prompts, session metadata and transcripts are stored within user-writable LocalAppData. Same-user tampering and sensitive log retention are outside this component pass. Never upload raw scheduler logs or job JSON publicly.
-- The main WinForms file still combines GUI and scheduling orchestration. That longer cleanup should be a separate behavior-locked refactor rather than a risky rewrite alongside a security release.
+- The v1.14.0 review splits GUI presentation, background reads, event actions, lifecycle, and a separate CLI runner. The general-purpose modules carry no Codex or GUI orchestration state. A future application-specific UI rewrite should remain separately reviewable.
 - Checksums do not replace signatures. SmartScreen reputation is separate from an Authenticode signature; signed new releases can still be flagged until positive reputation develops.
 
 ## Reusable component contract
@@ -53,3 +53,13 @@ The command signs and verifies all PowerShell files, strips the execution-policy
 ## Finding the actual Bitdefender problem
 
 Run `scripts/Get-SchedulerSecurityDiagnostics.ps1` locally (read-only), and obtain the *Bitdefender detection name*, blocked file path and quarantine/event timestamp from the Bitdefender UI. Compare to `SHA256SUMS.txt` and Windows crash events. A verified false positive can be submitted through Bitdefender's sample-review process. **Do not turn off antivirus or add blanket exclusions.**
+
+
+## Added v1.14.0 review controls
+
+- One-time scheduled runners are content-addressed, copied once, and verified against saved SHA-256 metadata at execution. Existing tasks are never silently updated to another version.
+- Codex execution failures return nonzero process exit codes; Windows Script Host forwards them to Task Scheduler. Success explicitly blocks retry analysis.
+- Automatic retries fail closed when the account ID is unknown or changed; backend identity can be optional, so users must disable Auto-resume if their account does not supply a reliable identity.
+- WebView2-to-WPF recovered bars now follow scrolling and resizing, and both controls are disposed together. The existing visual regression suite remains necessary.
+- Generic Task Scheduler, settings, countdown and runtime modules are independently packaged and can be imported without Codex. The package's PowerShell scripts remain unsigned in preview artifacts.
+- Content-addressed snapshots do **not** prevent an attacker running as the same user from changing both the runtime files and their saved fingerprint; production trust continues to depend on authentic signed files and trusted distribution.

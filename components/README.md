@@ -37,7 +37,7 @@ Assert-RuntimeFingerprint -Directory $runtime.Directory -RelativeFiles @('worker
 
 OneTimeTasks accepts **your** executable path, arguments, working directory, task name and time; it does not assume PowerShell or Codex. The application must decide how to launch its worker and handle errors. A successfully registered task is **not** proof that the worker completed.
 
-See [AeroProgress](AeroProgress/README.md) for a complete standalone animated Windows Forms example. The advanced shader's Microsoft WebView2 SDK DLLs and the local AeroBar.html renderer are needed alongside that module.
+See [AeroProgress](AeroProgress/README.md) for a complete standalone animated Windows Forms example. The standalone reusable-kit ZIP places the advanced shader's AeroBar.html and Microsoft WebView2 SDK DLLs **inside** the AeroProgress folder so that folder can be copied and imported by itself.
 
 ## Boundaries and constraints
 

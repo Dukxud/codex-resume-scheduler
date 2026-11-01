@@ -1,5 +1,21 @@
 # Real WPF progress controls, hosted in the scheduler's existing WinForms process.
 # Preview only: these are live percentage-driven controls, not picture assets.
+# Start the highlight over the actual filled width. A fixed 600 px animation
+# left the glint invisible for much of the cycle at partial usage values.
+function Start-MaterialGlint {
+    param([System.Windows.Controls.Border]$Indicator)
+    if ($null -eq $Indicator -or $null -eq $Indicator.Child) { return }
+    $glint = @($Indicator.Child.Children | Where-Object { $_.Name -eq 'FlowGlint' } | Select-Object -First 1)
+    if ($glint.Count -ne 1 -or $Indicator.ActualWidth -le 1) { return }
+    $transform = [System.Windows.Media.TranslateTransform]$glint[0].RenderTransform
+    $animation = [System.Windows.Media.Animation.DoubleAnimation]::new()
+    $animation.From = -86.0
+    $animation.To = [double]$Indicator.ActualWidth + 86.0
+    $animation.Duration = [System.Windows.Duration]::new([TimeSpan]::FromSeconds(1.8))
+    $animation.RepeatBehavior = [System.Windows.Media.Animation.RepeatBehavior]::Forever
+    $transform.BeginAnimation([System.Windows.Media.TranslateTransform]::XProperty,$animation)
+}
+
 function New-MaterialProgressBar {
     param(
         [System.Windows.Forms.Control]$Parent,
@@ -102,17 +118,6 @@ function New-MaterialProgressBar {
             BorderBrush="#A8FFFFFF" CornerRadius="__RADIUS__"
             IsHitTestVisible="False" />
    </Grid>
-   <ControlTemplate.Triggers>
-    <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-     <BeginStoryboard>
-      <Storyboard>
-       <DoubleAnimation Storyboard.TargetName="FlowGlint"
-                        Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
-                        From="-86" To="600" Duration="0:0:2.8" RepeatBehavior="Forever"/>
-      </Storyboard>
-     </BeginStoryboard>
-    </EventTrigger>
-   </ControlTemplate.Triggers>
   </ControlTemplate>
  </ProgressBar.Template>
 </ProgressBar>
@@ -128,6 +133,17 @@ function New-MaterialProgressBar {
     }
     foreach ($key in $replacements.Keys) { $xaml = $xaml.Replace($key,[string]$replacements[$key]) }
     $control = [System.Windows.Markup.XamlReader]::Parse($xaml)
+    # Each bar's event handler binds to its own WPF visual tree, not a
+    # PowerShell function-local closure that disappears after construction.
+    $control.Add_Loaded({
+        param($sender,$eventArgs)
+        $indicator = [System.Windows.Controls.Border]$sender.Template.FindName('PART_Indicator',$sender)
+        $indicator.Add_SizeChanged({
+            param($changed,$sizeArgs)
+            Start-MaterialGlint $changed
+        })
+        Start-MaterialGlint $indicator
+    })
     $materialHost = [System.Windows.Forms.Integration.ElementHost]::new()
     $materialHost.Location = [System.Drawing.Point]::new($X,$Y)
     $materialHost.Size = [System.Drawing.Size]::new($Width,$Height)

@@ -1,4 +1,4 @@
-# Dashboard views. Animated bars are supplied by the WPF FlowingBar module.
+# Dashboard views. Approved Aero v3 bars use WebView2, with WPF fallback.
 
 function Get-RunCountdownText {
     param([datetime]$When, [datetime]$Now)
@@ -68,6 +68,14 @@ function Initialize-Dashboard {
     $form.Controls.Add($script:compactToggle)
     $script:compactToggle.BringToFront()
 
+    # Appearance controls remain accessible in both standard and compact layouts.
+    $script:appearanceButton = [System.Windows.Forms.Button]::new()
+    $script:appearanceButton.Text = 'Appearance...'
+    $script:appearanceButton.AccessibleName = 'Customize progress bar appearance'
+    $script:appearanceButton.Size = [System.Drawing.Size]::new(140,32)
+    $form.Controls.Add($script:appearanceButton)
+    $script:appearanceButton.Add_Click({ Show-AeroAppearanceDialog $form })
+
     $script:compactRunHeading = New-DashboardLabel $form 'Next run' 18 61 425 26
     $script:compactRunHeading.Font = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
     $script:compactRunPanel = [System.Windows.Forms.Panel]::new()
@@ -88,7 +96,7 @@ function Initialize-Dashboard {
     $script:compactRunDate = New-DashboardLabel $script:compactRunPanel '' 14 70 395 23
     $script:compactRunDate.ForeColor = [System.Drawing.Color]::DimGray
 
-    $script:compactRunTrack = New-FlowingProgressBar $script:compactRunPanel 14 101 396 17 'time'
+    $script:compactRunTrack = New-AeroProgressBar $script:compactRunPanel 14 101 396 17 'time'
 
     $script:compactUsageModel = New-DashboardLabel $form '' 232 240 210 26
     $script:compactUsageModel.ForeColor = [System.Drawing.Color]::DimGray
@@ -103,7 +111,7 @@ function Initialize-Dashboard {
 
     # Standard view displays the time label in the native grid, with a real
     # WPF progress control below it. The WPF compositor animates without timers.
-    $script:runBarHosts = [System.Collections.Generic.List[System.Windows.Forms.Integration.ElementHost]]::new()
+    $script:runBarHosts = [System.Collections.Generic.List[System.Windows.Forms.Control]]::new()
     $grid.Add_CellPainting({
         param($sender,$e)
         if ($e.RowIndex -lt 0 -or $e.ColumnIndex -ne 1) { return }
@@ -145,7 +153,7 @@ function Sync-DashboardRunBars {
         $script:runBarHosts.RemoveAt($last)
     }
     while ($script:runBarHosts.Count -lt $count) {
-        $new = New-FlowingProgressBar $grid 0 0 100 15 'time'
+        $new = New-AeroProgressBar $grid 0 0 100 15 'time'
         $script:runBarHosts.Add($new)
     }
     for ($i=0; $i -lt $count; $i++) {
@@ -160,7 +168,7 @@ function Sync-DashboardRunBars {
         $bar.Location = [System.Drawing.Point]::new($cell.X + 8,$cell.Bottom - 19)
         $bar.Size = [System.Drawing.Size]::new($cell.Width - 16,15)
         $bar.Visible = $true
-        Set-FlowingProgress $bar $grid.Rows[$i].Cells[1].Tag
+        Set-AeroProgress $bar $grid.Rows[$i].Cells[1].Tag
     }
 }
 
@@ -187,7 +195,7 @@ function Update-DashboardCountdowns {
     $script:compactRunDetails.Text = [string]$next.Description
     $script:compactRunDate.Text = 'Scheduled ' + $next.When.ToString('ddd MMM d, h:mm tt')
     $percent = Get-RunCountdownPercent $next.When $next.CreatedAt $now
-    Set-FlowingProgress $script:compactRunTrack $percent
+    Set-AeroProgress $script:compactRunTrack $percent
     $script:compactRunTrack.AccessibleName = $script:compactRunEta.Text + $(if ($null -ne $percent) { ", $percent% elapsed since scheduled" } else { ', schedule creation time unavailable' })
 }
 
@@ -202,6 +210,7 @@ function Update-DashboardLayout {
         $heading.Text = 'Schedule a continuation'
         $heading.Font = $script:fullTitleFont
         $heading.Width = 500
+        $script:appearanceButton.Location = [System.Drawing.Point]::new(574,15)
         $script:compactToggle.Location = [System.Drawing.Point]::new(728,13)
         $script:compactToggle.Size = [System.Drawing.Size]::new(170,38)
         $script:compactToggle.Text = 'Compact mode: OFF'
@@ -270,7 +279,10 @@ function Update-DashboardLayout {
         $height = $cardTop + 18
     }
     $form.MinimumSize = [System.Drawing.Size]::new(480,150)
-    $form.ClientSize = [System.Drawing.Size]::new(464,[math]::Max(126,$height))
+    # Reserve space below the final card for appearance customization.
+    $form.ClientSize = [System.Drawing.Size]::new(464,[math]::Max(166,$height+40))
+    $script:appearanceButton.Location = [System.Drawing.Point]::new(306,$form.ClientSize.Height-37)
+    $script:appearanceButton.Size = [System.Drawing.Size]::new(140,32)
     Update-DashboardCountdowns
     Sync-DashboardRunBars
 }

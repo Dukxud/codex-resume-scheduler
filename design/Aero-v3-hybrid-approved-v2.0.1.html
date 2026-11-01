@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>Windows v1.8 × Aero Liquid v3 — Corrected Hybrid</title>
+<style>
+:root{font-family:Segoe UI Variable,Segoe UI,Inter,system-ui,sans-serif;color:#edf4ff;background:#0b1220;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 55% -22%,#24405f,#111e30 54%,#0a101c);line-height:1.4}
+main{max-width:1110px;margin:auto;padding:30px 22px 48px}.eyebrow{color:#94bddd;letter-spacing:.15em;font-size:11px;font-weight:700}h1{font-size:29px;letter-spacing:-.04em;margin:5px 0 10px}p{margin:0}.intro{font-size:13px;color:#a0b9d0;max-width:900px;line-height:1.6;margin-bottom:23px}.badge{border:1px solid #375e5b;background:#0e2d2e;color:#c2ffe2;font-size:11px;padding:8px 12px;border-radius:100px;white-space:nowrap}.titleline{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.frame{background:linear-gradient(155deg,#1a2b3f,#101b2a);border:1px solid #3b526e;border-radius:15px;box-shadow:0 12px 35px #0005,inset 0 1px #ffffff13;overflow:hidden;margin:15px 0}
+.frame-head{padding:18px 22px 13px;display:flex;justify-content:space-between;align-items:center;gap:12px}.frame-head strong{font-size:15px}.frame-head span{font-size:11px;color:#9cb6ca}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:13px;padding:16px 18px;background:#152338;border:1px solid #3c5975;border-radius:13px;margin:15px 0}.fillgroup{display:flex;align-items:center;gap:12px;min-width:240px;flex:1}.fillgroup label,.selectgroup label{font-size:11px;color:#a6c3da;font-weight:700}.fillgroup strong{font-size:18px;font-variant-numeric:tabular-nums;min-width:51px}.fillgroup input{flex:1;min-width:75px;accent-color:#5bbfff;cursor:pointer}.selectgroup{display:flex;flex-direction:column;gap:5px}select,button{color:#eaf4ff;border:1px solid #506c8b;background:linear-gradient(#334c68,#223853);border-radius:8px;font:600 12px Segoe UI,system-ui,sans-serif;padding:9px 11px;cursor:pointer}button[aria-pressed=true]{color:#142844;background:linear-gradient(#d9efff,#a6d7f8);border-color:#ccecff}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #c5edff;outline-offset:3px}
+.v3stage{height:168px;position:relative;background:radial-gradient(ellipse at 50% 50%,#284665,#0a1729 80%)}.v3stage canvas{width:100%;height:100%;display:block}.description{font-size:11px;color:#99b2c9;padding:0 22px 15px}
+.grid-head{display:grid;grid-template-columns:112px minmax(0,1fr) minmax(0,1fr);gap:20px;padding:0 21px 10px;color:#90b4ce;text-transform:uppercase;letter-spacing:.12em;font-size:10px;font-weight:760}.row{display:grid;grid-template-columns:112px minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:center;padding:14px 21px;border-top:1px solid #2b4055}.row-name{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block;box-shadow:0 0 9px currentColor;flex:none}.tube{width:100%;max-width:400px;aspect-ratio:400/13;position:relative;display:block;overflow:hidden;border-radius:0}.tube canvas{display:block;position:absolute;width:100%;height:100%;inset:0}.tube .native{z-index:1}.tube .aero{z-index:2}.row-side{color:#7f9bb4;font-size:10px;margin-top:6px}.row-side em{font-style:normal;color:#bbd6e7}
+.zoom{padding:13px 21px 23px}.zoom .zoom-stage{background:radial-gradient(ellipse at center,#263c56,#0c182a 80%);padding:20px 21px;display:flex;justify-content:center;align-items:center;min-height:99px;border-radius:12px;border:1px solid #2f4860}.zoom .tube{max-width:850px;width:100%;height:47px;aspect-ratio:auto}.zoom .tube canvas{image-rendering:auto}
+.small-print{font-size:11px;color:#89a4ba;line-height:1.6;margin-top:16px}.small-print a{color:#90d4ff}.switches{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.note{color:#a4bed0;font-size:11px}.failure{display:none;color:#ffd0c9;background:#4b2525;border:1px solid #ae5b58;margin:14px 0;padding:14px;border-radius:9px}.failure.visible{display:block}
+@media(max-width:900px){.grid-head{display:none}.row{grid-template-columns:110px minmax(0,1fr);row-gap:12px}.row .hybrid-slot{grid-column:2}.zoom .zoom-stage{min-height:65px}.zoom .tube{height:37px}}@media(max-width:560px){main{padding:18px 12px 38px}.titleline{align-items:start}.badge{display:none}.controls{gap:10px}.frame-head{padding:13px 15px}.row{grid-template-columns:1fr;gap:8px;padding:13px 15px}.row .hybrid-slot{grid-column:1}.tube{width:100%;max-width:none}.zoom{padding:10px 14px 17px}.zoom .tube{height:25px}.v3stage{height:115px}}
+</style></head>
+<body><main>
+<div class="titleline"><div><div class="eyebrow">V1.8 WINDOWS ORIGINAL + ORIGINAL V3 OPTICAL SHADER</div><h1>Windows colors × Aero Liquid v3 — Tip Fix</h1></div><span class="badge" id="status">Initializing WebGL2</span></div>
+<p class="intro">The colored Windows v1.8 bars are reconstructed directly from the actual 400×13 Windows captures. The Aero layer runs the <b>real v3 colorSurface, Fresnel, refraction and studio reflections</b> on top—not the PowerShell drawing approximation. The original Aero v3 graphics are shown below unchanged. The leading edge now uses one shared convex shape in both composited layers.</p>
+<div class="controls">
+ <div class="fillgroup"><label for="progress">FILL</label><input id="progress" type="range" min="0" max="100" value="68"><strong id="value">68%</strong></div>
+ <div class="switches"><button id="toggle" aria-pressed="true">Aero v3: ON</button><button id="motion" aria-pressed="false">Pause light</button><button id="pulse">Pulse + settle</button></div>
+ <div class="selectgroup"><label for="finish">MATERIAL</label><select id="finish"><option value="0">Optical glass</option><option value="1">Mirror enamel</option><option value="2">Iridescent pearl</option></select></div>
+ <div class="selectgroup"><label for="lighting">STUDIO</label><select id="lighting"><option value="0">Product studio</option><option value="1">Aero daylight</option><option value="2">Neon showroom</option></select></div>
+</div>
+<section class="frame" aria-label="Original Aero Liquid v3 renderer"><div class="frame-head"><strong id="selected">Aero Sapphire — original v3 renderer</strong><span>Unmodified v3 optical shader</span></div><div class="v3stage"><canvas id="reference" aria-label="Real Aero Liquid v3 WebGL material preview"></canvas></div><p class="description">Click a color below to load that material. This large preview renders the original v3 fragment shader, unchanged.</p></section>
+<section class="frame" aria-label="Native Windows and hybrid comparison"><div class="frame-head"><strong>Windows v1.8: actual source pixels vs. native + v3</strong><span>At the real 400×13 desktop scale</span></div><div class="grid-head"><div>Color</div><div>Native v1.8</div><div>Native v1.8 + Aero Liquid v3</div></div><div id="rows"></div></section>
+<section class="frame" aria-label="Enlarged hybrid inspection"><div class="frame-head"><strong id="zoom-name">Selected hybrid — Blue</strong><span>Enlarged inspection, original 400×13 shown above</span></div><div class="zoom"><div class="zoom-stage"><div class="tube" id="zoom"><canvas class="native"></canvas><canvas class="aero"></canvas></div></div></div></section>
+<p class="small-print">This is an offline, interactive visual integration prototype. The original v3 HTML is supplied untouched in the ZIP. The native 400×13 textures come from your uploaded Windows screenshot; in this browser proof they are not live WinForms controls. No scheduler code, settings or scheduled tasks are modified.</p>
+<div class="failure" id="error"></div></main>
+<script id="native-images" type="application/json">{"amber":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAa0lEQVR4nO3cQQ2AMBREwQ/BITIQgwCsNMFFkQMa2EvTZEbB3t5tl9baWwDw01ZVdV/76B3AZI7zGT2BgXrvtY4eAcCcBASAiIAAEBEQACICAkBEQACICAgAEQEBICIgAEQEBIDI4gsLgMQHGB8MgdL0+ywAAAAASUVORK5CYII=","blue":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAaElEQVR4nO3cQQ2AMBREwV+Cw8rAYhNctHJAA3tpSGYU7O3dto0xngKAj86qqt7v3TuAn1nr2j2BjeacdeweAcA/CQgAEQEBICIgAEQEBICIgAAQERAAIgICQERAAIgICACR5gsLgMQL6EEMgccOM6cAAAAASUVORK5CYII=","cyan":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAaElEQVR4nO3cQQ2AMBREwV+CQ2RgsUldFDmggb00TWYU7O3dtvXe3wKAn86qqmuM1TuAzTz3vXoCC80561g9AoA9CQgAEQEBICIgAEQEBICIgAAQERAAIgICQERAAIgICACR5gsLgMQHr/8Mgf/cjSsAAAAASUVORK5CYII=","green":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAaElEQVR4nO3cQQ2AMBREwV+Cw8rAYhNctHJAA3tpSGYU7O3dto0xngKAj86qqn733TuAn1nX2j2BjeacdeweAcA/CQgAEQEBICIgAEQEBICIgAAQERAAIgICQERAAIgICACR5gsLgMQL6EEMgRy1Fa4AAAAASUVORK5CYII=","red":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAaElEQVR4nO3cQQ2AMBREwV+Cw8rAYhNctHJAA3tpSGYU7O3dto0xngKAj86qqrv33TuAn7nW2j2BjeacdeweAcA/CQgAEQEBICIgAEQEBICIgAAQERAAIgICQERAAIgICACR5gsLgMQL6EEMgWJvBTwAAAAASUVORK5CYII=","violet":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAa0lEQVR4nO3cQQ2AMBREwV+CQ+QgARFIwEB1FDmggb00JDMK9vZu23rvTwHAR2tV1blds3cAP3Pc++wJTDTGqGX2CAD+SUAAiAgIABEBASAiIABEBASAiIAAEBEQACICAkBEQACINF9YACRe5XAMgRXXvIAAAAAASUVORK5CYII="}</script>
+<script id="v3vert" type="x-shader/x-vertex">#version 300 es
+void main(){vec2 p=vec2(gl_VertexID==2?3.:-1.,gl_VertexID==1?3.:-1.);gl_Position=vec4(p,0.,1.);}
+</script>
+<script id="v3frag" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec2 uRes;
+uniform float uFill,uTime,uVel,uFinish,uLights,uLightBackground,uDepth,uCompact;
+uniform vec3 uAccent;
+#define PI 3.141592653589793
+float S(float v){return clamp(v,0.,1.);}vec3 C(vec3 v){return clamp(v,0.,1.);}
+float G(float a,float s){return exp(-.5*pow(a/max(.0001,s),2.));}
+float cap(vec2 p,vec2 a,vec2 b,float r){vec2 d=b-a;return length(p-a-d*S(dot(p-a,d)/dot(d,d)))-r;}
+float aabox(vec2 p,vec2 c,vec2 halfsize,vec2 edge){vec2 q=abs(p-c)-halfsize;return (1.-smoothstep(-edge.x,edge.x,q.x))*(1.-smoothstep(-edge.y,edge.y,q.y));}
+vec3 tonemap(vec3 a){return C((a*(2.51*a+.03))/(a*(2.43*a+.59)+.14));}
+float AA(){return max(.003,10./uRes.x);}
+float mask(float d){float e=AA();return 1.-smoothstep(-e,e,d);}
+float F(float ndv,float f0){return f0+(1.-f0)*pow(1.-S(ndv),5.);}
+float luminance(vec3 v){return dot(v,vec3(.2126,.7152,.0722));}
+vec3 tintedEnv(vec3 direction,vec3 x){
+ // Reflective photo-studio environment represented as actual softbox panels,
+ // dark flags and a horizon in angular direction space, not screen strips.
+ vec3 d=normalize(direction);
+ vec3 col=vec3(.028,.043,.077) + .055*S(d.y+.7);
+ float cool=uLights>.5 && uLights<1.5 ? 1.5:1.;
+ float night=step(1.5,uLights);
+ col+=mix(vec3(.18,.29,.43),vec3(.045,.08,.16),night)*G(d.y+.72,.28);
+ col+=vec3(.10,.125,.17)*G(d.y-.85,.24);
+ float big=aabox(d.xy,vec2(-.36,.63),vec2(.47,.085),vec2(.10,.065));
+ float side=aabox(d.xy,vec2(.82,-.06),vec2(.115,.76),vec2(.045,.11));
+ float strip=aabox(d.xy,vec2(-.67,-.20),vec2(.12,.65),vec2(.045,.11));
+ float lower=aabox(d.xy,vec2(.20,-.66),vec2(.85,.045),vec2(.14,.04));
+ col+=mix(vec3(2.7,3.2,3.9),vec3(2.1,2.25,2.75),night)*big*cool;
+ col+=vec3(2.2,2.45,3.0)*side;
+ col+=vec3(1.12,1.56,2.05)*strip;
+ col+=vec3(1.35,1.48,1.8)*lower;
+ col+=vec3(.75,.37,.34)*night*aabox(d.xy,vec2(.25,.18),vec2(.14,.6),vec2(.09,.12));
+ // Concentric black flags shape the mirrored surface into complex bands.
+ col*=1.-.78*aabox(d.xy,vec2(-.08,.32),vec2(.115,.045),vec2(.07,.04));
+ col*=1.-.55*aabox(d.xy,vec2(.44,-.43),vec2(.18,.065),vec2(.12,.05));
+ return col;
+}
+vec3 illuminate(vec3 normal,vec3 worldPos){
+ vec3 view=vec3(0.,0.,1.);vec3 r=reflect(-view,normal);
+ vec3 env=tintedEnv(r,worldPos);
+ // Area highlights depend on normal, world light location and a changing
+ // incident direction; never on a screen-space white rectangle.
+ vec3 lamp0=vec3(-3.7+4.7*sin(uTime*.31),2.7,4.5);
+ vec3 lamp1=vec3(2.4*cos(uTime*.23+.8),-2.2,4.0);
+ vec3 h0=normalize(normalize(lamp0-worldPos)+view);
+ vec3 h1=normalize(normalize(lamp1-worldPos)+view);
+ float spec0=pow(S(dot(normal,h0)),44.);
+ float spec1=pow(S(dot(normal,h1)),88.);
+ return env+vec3(2.0,2.12,2.30)*spec0+vec3(2.4,2.1,1.85)*spec1;
+}
+vec3 colorSurface(vec3 normal,vec3 position,float thickness,vec2 p,float front){
+ float nz=S(normal.z),fres=F(nz,.13);
+ vec3 e=illuminate(normal,position);
+ vec3 dye=pow(uAccent,vec3(1.09));
+ // Back-lit pigment is absorbed through a curved path (thicker in center),
+ // while the highly reflective upper boundary keeps neutral white reflections.
+ float through=S(thickness/.77);
+ vec3 transmission=dye*(.27+.61*pow(through,.53));
+ vec3 absorption=exp(-vec3(.12,.10,.09)*(.2+thickness));
+ transmission*=absorption;
+ float highBand=G(p.y-.17,.20),lowBand=G(p.y+.27,.10);
+ transmission*=.76+.24*highBand+.31*lowBand;
+ float mirror=uFinish;
+ float enamel=step(.5,mirror)*(1.-step(1.5,mirror));
+ float pearl=step(1.5,mirror);
+ float edgeShading=.85+.18*pow(nz,.34);
+ vec3 base=transmission*edgeShading;
+ // Snell-law refraction through the curved glass boundary. It modulates the
+ // transmitted colored light and is independent of the reflected studio rig.
+ vec3 refracted=refract(vec3(0.,0.,-1.),normal,1./1.47);
+ vec3 transmittedStudio=tintedEnv(refracted,position);
+ base+=pow(dye,vec3(.8))*transmittedStudio*(.055+.065*(1.-nz))*(1.-fres);
+ base+=dye*vec3(.14,.19,.22)*G(p.y+.30,.13);
+ base=mix(base,base*.80,enamel*.4);
+ float metalFresnel=mix(fres,.57+ .34*pow(1.-nz,3.),enamel);
+ vec3 reflectance=e*(.16+.68*metalFresnel)*mix(vec3(1.0),vec3(.90,.94,1.0),pearl);
+ float pearly=pearl*.45*(.5+.5*sin(19.*p.y+uTime*.47))*pow(1.-nz,2.);
+ reflectance+=pearly*vec3(.36,.48,.79);
+ // A rounded end catches a localized curved cap reflection and dark collar.
+ float collar=G(p.x-(front-.145),.052)*(1.-.65*abs(normal.y));
+ float capGlow=G(p.x-(front+.05),.17)*pow(1.-nz,1.4);
+ base*=1.-collar*.22;
+ reflectance+=vec3(.40,.54,.70)*capGlow;
+ float pFront=G(p.x-(front-.035),.07)*G(p.y-.02,.12);
+ reflectance+=vec3(.62,.80,1.0)*pFront*.45;
+ // Gloss appears as genuinely varying reflected environmental radiance.
+ return tonemap(base+reflectance);
+}
+vec3 scene(vec2 p){
+ float lite=uLightBackground;
+ vec3 bg=mix(vec3(.056,.094,.148),vec3(.77,.84,.91),lite);
+ bg+=mix(vec3(.042,.065,.104),vec3(.045,.07,.105),lite)*G(p.x-.4,3.0)*G(p.y+.20,1.75);
+ bg+=mix(vec3(.01,.018,.028),vec3(.12,.09,.08),lite)*G(p.x+2.9,2.2)*G(p.y-.72,.9);
+ vec3 col=bg;
+ float scale=1.;
+ vec2 a=vec2(-4.10,0),b=vec2(4.10,0);
+ float outer=cap(p,a,b,.59),inner=cap(p,a,b,.448);
+ float mOuter=mask(outer),mInner=mask(inner);
+ float shadow=mask(cap(p-vec2(.075,-.14),a,b,.78));
+ col*=1.-shadow*.35*(1.-lite*.48);
+ // Deep bezel: multi-layer machined chamfers and strong ambient occlusion.
+ vec3 rim=vec3(.06,.13,.22);
+ float yy=abs(p.y);
+ rim+=vec3(.36,.52,.69)*G(yy-.49,.055);
+ rim+=vec3(.53,.67,.81)*G(yy-.554,.028);
+ rim+=vec3(.21,.30,.43)*G(yy-.415,.033);
+ rim+=vec3(.14,.17,.22)*G(yy-.34,.07);
+ rim+=vec3(.27,.35,.43)*G(p.x+4.46,.12);
+ rim+=vec3(.30,.40,.50)*G(p.x-4.46,.12);
+ float littleGroove=G(yy-.475,.021);
+ rim*=1.-littleGroove*.42;
+ col=mix(col,tonemap(rim*1.5),mOuter);
+ // Recessed void with the back wall visible beyond the liquid front.
+ vec3 well=vec3(.008,.020,.036);
+ well+=vec3(.038,.065,.10)*S(-p.y*.9+.46);
+ well+=vec3(.12,.17,.23)*G(p.y+.36,.036);
+ well+=vec3(.066,.10,.15)*G(p.y-.33,.050);
+ well*=1.-.22*G(p.x,3.2);
+ well+=vec3(.028,.035,.060)*G(p.y,.18);
+ col=mix(col,well,mInner);
+ if(uFill>.00002){
+   float f=S(uFill);
+   float start=-4.08,full=8.16;
+   float front=start+f*full;
+   float wobble=S(abs(uVel))*sign(uVel);
+   float localFront=front+ .061*wobble*sin(4.9*p.y+uTime*3.)*G(p.x-front,.28);
+   float rd=.422;
+   vec2 delta=p-vec2(clamp(p.x,start,localFront),0.);
+   float rr=length(delta);
+   float liquidMask=1.-smoothstep(rd-AA(),rd+AA(),rr);
+   liquidMask*=smoothstep(0.,.006,f);
+   // Surface normal from a real curved cylindrical cross section and endcap.
+   float zz=sqrt(max(0.,rd*rd-rr*rr));
+   vec3 norm=normalize(vec3(delta,zz+.00001));
+   vec3 world=vec3(p,zz+.35);
+   float depth=2.*zz;
+   vec3 liquid=colorSurface(norm,world,depth,p,localFront);
+   // Rim occlusion and bloom: surface touches the tube and lights the wall.
+   float meniscusContact=G(rr-rd+.015,.023);
+   liquid=mix(liquid,liquid*.71,meniscusContact*.28);
+   float bloom=G(rr-rd+.07,.056)*(1.-S(rr-rd+.1))*S(f*20.);
+   col+=pow(uAccent,vec3(.65))*.11*bloom*mInner;
+   col=mix(col,liquid,liquidMask*mInner);
+   float edgeGlint=G(rr-rd+.012,.017)*liquidMask;
+   col+=vec3(.10,.17,.22)*edgeGlint;
+   float frontShadow=G(p.x-(front+.2),.16)*G(p.y,.25)*(1.-liquidMask)*S((1.-f)*5.);
+   col*=1.-frontShadow*.17*mInner;
+ }
+ // Inner sealing line and upper grazing reflection of the front glass.
+ col+=mOuter*(1.-mInner)*vec3(.22,.33,.40)*G(p.y-.535,.020);
+ col+=mOuter*(1.-mInner)*vec3(.08,.15,.21)*G(p.y+.537,.023);
+ // Controlled vignette outside the actual channel.
+ col*=1.-.07*G(p.y-1.5,1.0);
+ return C(pow(max(col,vec3(0.)),vec3(.87)));
+}
+void main(){
+ // Same 3D model at all sizes; correct aspect and antialiasing.
+ float asp=uRes.x/uRes.y;
+ float spanX=10.9; // shows the entire rounded capsule and its shadow
+ float spanY=mix(spanX/asp, (uRes.y*(1.18/26.)),uCompact);
+ vec2 p=(gl_FragCoord.xy/uRes.xy-.5)*vec2(spanX,spanY);
+ fragColor=vec4(scene(p),1.);
+}
+</script>
+<script id="hybridfrag" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec2 uRes;
+uniform float uFill,uTime,uVel,uFinish,uLights,uLightBackground,uDepth,uCompact;
+uniform vec3 uAccent;
+#define PI 3.141592653589793
+float S(float v){return clamp(v,0.,1.);}vec3 C(vec3 v){return clamp(v,0.,1.);}
+float G(float a,float s){return exp(-.5*pow(a/max(.0001,s),2.));}
+float cap(vec2 p,vec2 a,vec2 b,float r){vec2 d=b-a;return length(p-a-d*S(dot(p-a,d)/dot(d,d)))-r;}
+float aabox(vec2 p,vec2 c,vec2 halfsize,vec2 edge){vec2 q=abs(p-c)-halfsize;return (1.-smoothstep(-edge.x,edge.x,q.x))*(1.-smoothstep(-edge.y,edge.y,q.y));}
+vec3 tonemap(vec3 a){return C((a*(2.51*a+.03))/(a*(2.43*a+.59)+.14));}
+float AA(){return max(.003,10./uRes.x);}
+float mask(float d){float e=AA();return 1.-smoothstep(-e,e,d);}
+float F(float ndv,float f0){return f0+(1.-f0)*pow(1.-S(ndv),5.);}
+float luminance(vec3 v){return dot(v,vec3(.2126,.7152,.0722));}
+vec3 tintedEnv(vec3 direction,vec3 x){
+ // Reflective photo-studio environment represented as actual softbox panels,
+ // dark flags and a horizon in angular direction space, not screen strips.
+ vec3 d=normalize(direction);
+ vec3 col=vec3(.028,.043,.077) + .055*S(d.y+.7);
+ float cool=uLights>.5 && uLights<1.5 ? 1.5:1.;
+ float night=step(1.5,uLights);
+ col+=mix(vec3(.18,.29,.43),vec3(.045,.08,.16),night)*G(d.y+.72,.28);
+ col+=vec3(.10,.125,.17)*G(d.y-.85,.24);
+ float big=aabox(d.xy,vec2(-.36,.63),vec2(.47,.085),vec2(.10,.065));
+ float side=aabox(d.xy,vec2(.82,-.06),vec2(.115,.76),vec2(.045,.11));
+ float strip=aabox(d.xy,vec2(-.67,-.20),vec2(.12,.65),vec2(.045,.11));
+ float lower=aabox(d.xy,vec2(.20,-.66),vec2(.85,.045),vec2(.14,.04));
+ col+=mix(vec3(2.7,3.2,3.9),vec3(2.1,2.25,2.75),night)*big*cool;
+ col+=vec3(2.2,2.45,3.0)*side;
+ col+=vec3(1.12,1.56,2.05)*strip;
+ col+=vec3(1.35,1.48,1.8)*lower;
+ col+=vec3(.75,.37,.34)*night*aabox(d.xy,vec2(.25,.18),vec2(.14,.6),vec2(.09,.12));
+ // Concentric black flags shape the mirrored surface into complex bands.
+ col*=1.-.78*aabox(d.xy,vec2(-.08,.32),vec2(.115,.045),vec2(.07,.04));
+ col*=1.-.55*aabox(d.xy,vec2(.44,-.43),vec2(.18,.065),vec2(.12,.05));
+ return col;
+}
+vec3 illuminate(vec3 normal,vec3 worldPos){
+ vec3 view=vec3(0.,0.,1.);vec3 r=reflect(-view,normal);
+ vec3 env=tintedEnv(r,worldPos);
+ // Area highlights depend on normal, world light location and a changing
+ // incident direction; never on a screen-space white rectangle.
+ vec3 lamp0=vec3(-3.7+4.7*sin(uTime*.31),2.7,4.5);
+ vec3 lamp1=vec3(2.4*cos(uTime*.23+.8),-2.2,4.0);
+ vec3 h0=normalize(normalize(lamp0-worldPos)+view);
+ vec3 h1=normalize(normalize(lamp1-worldPos)+view);
+ float spec0=pow(S(dot(normal,h0)),44.);
+ float spec1=pow(S(dot(normal,h1)),88.);
+ return env+vec3(2.0,2.12,2.30)*spec0+vec3(2.4,2.1,1.85)*spec1;
+}
+vec3 colorSurface(vec3 normal,vec3 position,float thickness,vec2 p,float front){
+ float nz=S(normal.z),fres=F(nz,.13);
+ vec3 e=illuminate(normal,position);
+ vec3 dye=pow(uAccent,vec3(1.09));
+ // Back-lit pigment is absorbed through a curved path (thicker in center),
+ // while the highly reflective upper boundary keeps neutral white reflections.
+ float through=S(thickness/.77);
+ vec3 transmission=dye*(.27+.61*pow(through,.53));
+ vec3 absorption=exp(-vec3(.12,.10,.09)*(.2+thickness));
+ transmission*=absorption;
+ float highBand=G(p.y-.17,.20),lowBand=G(p.y+.27,.10);
+ transmission*=.76+.24*highBand+.31*lowBand;
+ float mirror=uFinish;
+ float enamel=step(.5,mirror)*(1.-step(1.5,mirror));
+ float pearl=step(1.5,mirror);
+ float edgeShading=.85+.18*pow(nz,.34);
+ vec3 base=transmission*edgeShading;
+ // Snell-law refraction through the curved glass boundary. It modulates the
+ // transmitted colored light and is independent of the reflected studio rig.
+ vec3 refracted=refract(vec3(0.,0.,-1.),normal,1./1.47);
+ vec3 transmittedStudio=tintedEnv(refracted,position);
+ base+=pow(dye,vec3(.8))*transmittedStudio*(.055+.065*(1.-nz))*(1.-fres);
+ base+=dye*vec3(.14,.19,.22)*G(p.y+.30,.13);
+ base=mix(base,base*.80,enamel*.4);
+ float metalFresnel=mix(fres,.57+ .34*pow(1.-nz,3.),enamel);
+ vec3 reflectance=e*(.16+.68*metalFresnel)*mix(vec3(1.0),vec3(.90,.94,1.0),pearl);
+ float pearly=pearl*.45*(.5+.5*sin(19.*p.y+uTime*.47))*pow(1.-nz,2.);
+ reflectance+=pearly*vec3(.36,.48,.79);
+ // A rounded end catches a localized curved cap reflection and dark collar.
+ float collar=G(p.x-(front-.145),.052)*(1.-.65*abs(normal.y));
+ float capGlow=G(p.x-(front+.05),.17)*pow(1.-nz,1.4);
+ base*=1.-collar*.22;
+ reflectance+=vec3(.40,.54,.70)*capGlow;
+ float pFront=G(p.x-(front-.035),.07)*G(p.y-.02,.12);
+ reflectance+=vec3(.62,.80,1.0)*pFront*.45;
+ // Gloss appears as genuinely varying reflected environmental radiance.
+ return tonemap(base+reflectance);
+}
+
+void main() {
+    vec2 uv=gl_FragCoord.xy/uRes.xy;
+    float f=clamp(uFill,0.,1.);
+    // Shared pixel-space capsule: native fill and WebGL optical layer use the
+    // SAME tip position, border inset and rounded endcap at every size.
+    // This replaces the previous concave-looking -0.20 offset and hard clip.
+    float px=uv.x*uRes.x;
+    float py=uv.y*uRes.y;
+    float edgeY=max(1.,floor(uRes.y/13.+.5));
+    float edgeX=max(1.,floor(uRes.x/400.+.5));
+    float radiusPx=max(.5,(uRes.y-2.*edgeY)*.5);
+    float tipPx=clamp(f*uRes.x-2.*uRes.x/400.,edgeX,uRes.x-edgeX);
+    float occupied=max(0.,tipPx-edgeX);
+    float rd=.422;
+    float rx=radiusPx;
+    float ry=radiusPx;
+    float centerPx=tipPx-radiusPx;
+    float dxPx,dyPx=py-uRes.y*.5;
+    if(occupied<2.*radiusPx){
+        // At 1-2% fill the tiny drop contracts into a circular bead.
+        rx=max(.05,occupied*.5);
+        ry=max(.05,min(radiusPx,rx));
+        centerPx=(edgeX+tipPx)*.5;
+        dxPx=px-centerPx;
+    }else{
+        // Normal fill: straight left body, convex hemispherical leading edge.
+        dxPx=max(px-centerPx,0.);
+    }
+    vec2 delta=vec2(dxPx*rd/rx,dyPx*rd/ry);
+    float rr=length(delta);
+    float aa=rd/max(ry,1.);
+    float cov=1.-smoothstep(rd-aa,rd+aa,rr);
+    float left=smoothstep(edgeX-.5,edgeX+.5,px);
+    float alpha=cov*left*step(.00001,f)*.94;
+    float zz=sqrt(max(0.,rd*rd-rr*rr));
+    vec3 norm=normalize(vec3(delta,zz+.00001));
+    float front=-4.08+centerPx/uRes.x*8.16;
+    vec2 world=vec2(-4.08+px/uRes.x*8.16,(uv.y-.5)*.845);
+    vec3 liquid=colorSurface(norm,vec3(world,zz+.35),2.*zz,world,front);
+    float meniscusContact=G(rr-rd+.015,.023);
+    liquid=mix(liquid,liquid*.71,meniscusContact*.28);
+    fragColor=vec4(liquid,alpha);
+}
+</script>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const colors=[
+ {key:'green',name:'Original green',v3:'Emerald Glass',rgb:[.030,.87,.37],hex:'#14DE8E'},
+ {key:'blue',name:'Blue',v3:'Aero Sapphire',rgb:[.025,.33,1.00],hex:'#168DFF'},
+ {key:'cyan',name:'Cyan',v3:'Lagoon Cyan',rgb:[.015,.81,1.00],hex:'#04D5F7'},
+ {key:'violet',name:'Violet',v3:'Royal Amethyst',rgb:[.47,.22,1.],hex:'#9D64FF'},
+ {key:'amber',name:'Amber',v3:'Solar Amber',rgb:[1.,.47,.035],hex:'#FFB328'},
+ {key:'red',name:'Red',v3:'Ruby Red',rgb:[1.,.045,.14],hex:'#FF3B62'}];
+const assets=JSON.parse($('native-images').textContent), images={},glItems=[],nativeItems=[];
+let value=.68,visual=.68,velocity=0,selected=1,playing=true,aero=true,phase=0,last=0,lastNativeVisual=-1,errors=[];
+const row=document.getElementById('rows');
+for(let i=0;i<colors.length;i++){
+ const c=colors[i],section=document.createElement('div');section.className='row';section.innerHTML=`<div class="row-name"><i class="dot" style="color:${c.hex};background:${c.hex}"></i>${c.name}</div><div class="native-slot"><div class="tube"><canvas class="native"></canvas></div><div class="row-side">From real Windows v1.8 capture</div></div><div class="hybrid-slot"><div class="tube"><canvas class="native"></canvas><canvas class="aero"></canvas></div><div class="row-side"><em>Aero v3 shader</em> · live optical material</div></div>`;
+ row.appendChild(section);
+ section.addEventListener('click',()=>choose(i));section.style.cursor='pointer';
+ const base=section.querySelectorAll('canvas.native');nativeItems.push({canvas:base[0],index:i,hybrid:false},{canvas:base[1],index:i,hybrid:true});
+ const overlay=section.querySelector('canvas.aero');glItems.push({canvas:overlay,index:i,hybrid:true});
+ const image=new Image();image.src=assets[c.key];images[c.key]=image;
+ image.addEventListener('load',drawNativeAll);
+}
+const zoom=$('zoom');nativeItems.push({canvas:zoom.querySelector('.native'),index:-1,hybrid:true});glItems.push({canvas:zoom.querySelector('.aero'),index:-1,hybrid:true});glItems.push({canvas:$('reference'),index:-1,hybrid:false});
+const sourceVertex=$('v3vert').textContent,sourceFrag=$('v3frag').textContent,hybridFrag=$('hybridfrag').textContent;
+function compile(gl,type,text){const s=gl.createShader(type);gl.shaderSource(s,text);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
+function makeGL(item){const canvas=item.canvas;const gl=canvas.getContext('webgl2',{antialias:true,alpha:!!item.hybrid,premultipliedAlpha:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});if(!gl)throw new Error('WebGL2 could not initialize. Use a current Edge/Chrome browser with graphics acceleration.');const pr=gl.createProgram();gl.attachShader(pr,compile(gl,gl.VERTEX_SHADER,sourceVertex));gl.attachShader(pr,compile(gl,gl.FRAGMENT_SHADER,item.hybrid?hybridFrag:sourceFrag));gl.linkProgram(pr);if(!gl.getProgramParameter(pr,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(pr));const vao=gl.createVertexArray();gl.bindVertexArray(vao);const u={};for(const k of ['uRes','uFill','uTime','uVel','uFinish','uLights','uLightBackground','uDepth','uCompact','uAccent'])u[k]=gl.getUniformLocation(pr,k);item.gl=gl;item.pr=pr;item.vao=vao;item.u=u;}
+function nativePaint(canvas,idx,hybrid){
+ const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;
+ const ratio=Math.min(3,devicePixelRatio||1);
+ const w=Math.round(r.width*ratio),h=Math.round(r.height*ratio);
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+ const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
+ const c=colors[idx],img=images[c.key];
+ if(!img||!img.complete||!img.naturalWidth)return;
+ ctx.clearRect(0,0,w,h);
+ ctx.drawImage(img,280,0,110,13,0,0,w,h);
+ const fy=Math.max(1,Math.round(h/13));
+ const edgeX=Math.max(1,Math.round(w/400));
+ const percent=(hybrid&&aero)?Math.max(0,Math.min(1,visual)):value;
+ const tip=Math.max(edgeX,Math.min(w-edgeX,percent*w-2*w/400));
+ if(tip>edgeX){
+   if(hybrid&&aero){
+     // Shared convex tip. A clip is applied to the captured Windows pigment
+     // BEFORE the original glass/track edges are redrawn. The straight native
+     // cutoff remains completely untouched in the comparison column and OFF.
+     const cy=h*.5,rad=Math.max(.5,(h-2*fy)*.5),used=tip-edgeX;
+     ctx.save();ctx.beginPath();
+     if(used<rad*2){
+       const rx=used*.5,ry=Math.min(rad,rx);
+       ctx.ellipse((tip+edgeX)*.5,cy,rx,Math.max(.05,ry),0,0,Math.PI*2);
+     }else{
+       const center=tip-rad;
+       ctx.moveTo(edgeX,cy-rad);ctx.lineTo(center,cy-rad);
+       ctx.arc(center,cy,rad,-Math.PI*.5,Math.PI*.5,false);
+       ctx.lineTo(edgeX,cy+rad);ctx.closePath();
+     }
+     ctx.clip();
+     ctx.drawImage(img,5,1,190,11,edgeX,fy,Math.max(.01,used),h-2*fy);
+     ctx.restore();
+   }else{
+     // Native v1.8 baseline deliberately remains byte-for-byte equivalent.
+     const px=Math.max(0,Math.round(400*value)-2);
+     const paintW=Math.round(px*w/400);
+     if(paintW>0)ctx.drawImage(img,5,1,190,11,edgeX,fy,paintW,h-2*fy);
+   }
+ }
+ ctx.drawImage(img,0,0,1,13,0,0,edgeX,h);
+ ctx.drawImage(img,399,0,1,13,w-edgeX,0,edgeX,h);
+}
+function drawNativeAll(){for(const x of nativeItems)nativePaint(x.canvas,x.index<0?selected:x.index,x.hybrid);}
+function drawGL(x){const gl=x.gl;if(!gl)return;const r=x.canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;const scale=x.hybrid?Math.min(3,devicePixelRatio||1):Math.min(1.6,devicePixelRatio||1);const w=Math.max(20,Math.round(r.width*scale)),h=Math.max(13,Math.round(r.height*scale));if(x.canvas.width!==w||x.canvas.height!==h){x.canvas.width=w;x.canvas.height=h;gl.viewport(0,0,w,h);}const color=colors[x.index<0?selected:x.index];gl.useProgram(x.pr);gl.bindVertexArray(x.vao);gl.uniform2f(x.u.uRes,w,h);gl.uniform1f(x.u.uFill,Math.max(0,Math.min(1,visual)));gl.uniform1f(x.u.uTime,phase);gl.uniform1f(x.u.uVel,velocity);gl.uniform1f(x.u.uFinish,Number($('finish').value));gl.uniform1f(x.u.uLights,Number($('lighting').value));gl.uniform1f(x.u.uLightBackground,0);gl.uniform1f(x.u.uDepth,1);gl.uniform1f(x.u.uCompact,0);gl.uniform3f(x.u.uAccent,...color.rgb);gl.drawArrays(gl.TRIANGLES,0,3);
+ x.canvas.style.visibility=x.hybrid&&!aero?'hidden':'visible';}
+function choose(idx){selected=idx;$('selected').textContent=colors[idx].v3+' — original v3 renderer';$('zoom-name').textContent='Selected hybrid — '+colors[idx].name;drawNativeAll();}
+$('progress').addEventListener('input',e=>{value=Number(e.target.value)/100;$('value').textContent=e.target.value+'%';drawNativeAll();});
+$('pulse').addEventListener('click',()=>{velocity+=1.3;});
+$('toggle').addEventListener('click',()=>{aero=!aero;$('toggle').setAttribute('aria-pressed',String(aero));$('toggle').textContent='Aero v3: '+(aero?'ON':'OFF');for(const x of glItems)if(x.hybrid)x.canvas.style.visibility=aero?'visible':'hidden';drawNativeAll();});
+$('motion').addEventListener('click',()=>{playing=!playing;$('motion').setAttribute('aria-pressed',String(!playing));$('motion').textContent=playing?'Pause light':'Resume light';});
+try{glItems.forEach(makeGL);$('status').textContent='Real Aero v3 · live WebGL2';}catch(e){errors.push(String(e));$('error').classList.add('visible');$('error').textContent=String(e);$('status').textContent='WebGL unavailable';console.error(e);}
+function frame(now){if(!last)last=now;const dt=Math.min(.15,Math.max(0,(now-last)/1000));last=now;if(playing){phase+=dt;const k=12.0,delta=visual-value,a=velocity+k*delta,decay=Math.exp(-k*dt);visual=value+(delta+a*dt)*decay;velocity=(velocity-k*a*dt)*decay;visual=Math.max(-.025,Math.min(1.025,visual));}
+ // Native pigment and v3 optics must track the same spring value on every
+ // animation frame, not separate target/visual percentages.
+ if(aero&&Math.abs(lastNativeVisual-visual)>.00015){drawNativeAll();lastNativeVisual=visual;}
+ for(const x of glItems)if(x.gl)drawGL(x);requestAnimationFrame(frame);}
+requestAnimationFrame(frame);drawNativeAll();
+window.hybridProof={getAeroEnabled:()=>aero,getFill:()=>value,getVisualFill:()=>visual,getVelocity:()=>velocity,getSelected:()=>colors[selected].key,getShaderSource:()=>sourceFrag,getHybridShaderSource:()=>hybridFrag,getErrors:()=>errors.slice(),render:()=>{drawNativeAll();glItems.forEach(x=>x.gl&&drawGL(x));}};
+})();
+</script></body></html>

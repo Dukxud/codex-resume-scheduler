@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'">
+<title>Aero v3 native bar • v2.0.1 approved</title>
+<style>
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:transparent}
+#tube{width:100%;height:100%;position:relative;overflow:hidden;pointer-events:none}
+canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
+#native{z-index:1}#aero{z-index:2}
+</style></head><body>
+<div id="tube"><canvas id="native" aria-hidden="true"></canvas><canvas id="aero" aria-hidden="true"></canvas></div>
+<script id="native-images" type="application/json">{"amber":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAa0lEQVR4nO3cQQ2AMBREwQ/BITIQgwCsNMFFkQMa2EvTZEbB3t5tl9baWwDw01ZVdV/76B3AZI7zGT2BgXrvtY4eAcCcBASAiIAAEBEQACICAkBEQACICAgAEQEBICIgAEQEBIDI4gsLgMQHGB8MgdL0+ywAAAAASUVORK5CYII=","blue":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAaElEQVR4nO3cQQ2AMBREwV+Cw8rAYhNctHJAA3tpSGYU7O3dto0xngKAj86qqt7v3TuAn1nr2j2BjeacdeweAcA/CQgAEQEBICIgAEQEBICIgAAQERAAIgICQERAAIgICACR5gsLgMQL6EEMgccOM6cAAAAASUVORK5CYII=","cyan":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAaElEQVR4nO3cQQ2AMBREwV+CQ2RgsUldFDmggb00TWYU7O3dtvXe3wKAn86qqmuM1TuAzTz3vXoCC80561g9AoA9CQgAEQEBICIgAEQEBICIgAAQERAAIgICQERAAIgICACR5gsLgMQHr/8Mgf/cjSsAAAAASUVORK5CYII=","green":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAaElEQVR4nO3cQQ2AMBREwV+Cw8rAYhNctHJAA3tpSGYU7O3dto0xngKAj86qqn733TuAn1nX2j2BjeacdeweAcA/CQgAEQEBICIgAEQEBICIgAAQERAAIgICQERAAIgICACR5gsLgMQL6EEMgRy1Fa4AAAAASUVORK5CYII=","red":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAaElEQVR4nO3cQQ2AMBREwV+Cw8rAYhNctHJAA3tpSGYU7O3dto0xngKAj86qqrv33TuAn7nW2j2BjeacdeweAcA/CQgAEQEBICIgAEQEBICIgAAQERAAIgICQERAAIgICACR5gsLgMQL6EEMgWJvBTwAAAAASUVORK5CYII=","violet":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAANCAYAAACHMDjlAAAAa0lEQVR4nO3cQQ2AMBREwV+CQ+QgARFIwEB1FDmggb00JDMK9vZu23rvTwHAR2tV1blds3cAP3Pc++wJTDTGqGX2CAD+SUAAiAgIABEBASAiIABEBASAiIAAEBEQACICAkBEQACINF9YACRe5XAMgRXXvIAAAAAASUVORK5CYII="}</script>
+<script id="v3vert" type="x-shader/x-vertex">#version 300 es
+void main(){vec2 p=vec2(gl_VertexID==2?3.:-1.,gl_VertexID==1?3.:-1.);gl_Position=vec4(p,0.,1.);}
+</script>
+<script id="hybridfrag" type="x-shader/x-fragment">#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec2 uRes;
+uniform float uFill,uTime,uVel,uFinish,uLights,uLightBackground,uDepth,uCompact,uShimmer;
+uniform vec3 uAccent;
+#define PI 3.141592653589793
+float S(float v){return clamp(v,0.,1.);}vec3 C(vec3 v){return clamp(v,0.,1.);}
+float G(float a,float s){return exp(-.5*pow(a/max(.0001,s),2.));}
+float cap(vec2 p,vec2 a,vec2 b,float r){vec2 d=b-a;return length(p-a-d*S(dot(p-a,d)/dot(d,d)))-r;}
+float aabox(vec2 p,vec2 c,vec2 halfsize,vec2 edge){vec2 q=abs(p-c)-halfsize;return (1.-smoothstep(-edge.x,edge.x,q.x))*(1.-smoothstep(-edge.y,edge.y,q.y));}
+vec3 tonemap(vec3 a){return C((a*(2.51*a+.03))/(a*(2.43*a+.59)+.14));}
+float AA(){return max(.003,10./uRes.x);}
+float mask(float d){float e=AA();return 1.-smoothstep(-e,e,d);}
+float F(float ndv,float f0){return f0+(1.-f0)*pow(1.-S(ndv),5.);}
+float luminance(vec3 v){return dot(v,vec3(.2126,.7152,.0722));}
+vec3 tintedEnv(vec3 direction,vec3 x){
+ // Reflective photo-studio environment represented as actual softbox panels,
+ // dark flags and a horizon in angular direction space, not screen strips.
+ vec3 d=normalize(direction);
+ vec3 col=vec3(.028,.043,.077) + .055*S(d.y+.7);
+ float cool=uLights>.5 && uLights<1.5 ? 1.5:1.;
+ float night=step(1.5,uLights);
+ col+=mix(vec3(.18,.29,.43),vec3(.045,.08,.16),night)*G(d.y+.72,.28);
+ col+=vec3(.10,.125,.17)*G(d.y-.85,.24);
+ float big=aabox(d.xy,vec2(-.36,.63),vec2(.47,.085),vec2(.10,.065));
+ float side=aabox(d.xy,vec2(.82,-.06),vec2(.115,.76),vec2(.045,.11));
+ float strip=aabox(d.xy,vec2(-.67,-.20),vec2(.12,.65),vec2(.045,.11));
+ float lower=aabox(d.xy,vec2(.20,-.66),vec2(.85,.045),vec2(.14,.04));
+ col+=mix(vec3(2.7,3.2,3.9),vec3(2.1,2.25,2.75),night)*big*cool;
+ col+=vec3(2.2,2.45,3.0)*side;
+ col+=vec3(1.12,1.56,2.05)*strip;
+ col+=vec3(1.35,1.48,1.8)*lower;
+ col+=vec3(.75,.37,.34)*night*aabox(d.xy,vec2(.25,.18),vec2(.14,.6),vec2(.09,.12));
+ // Concentric black flags shape the mirrored surface into complex bands.
+ col*=1.-.78*aabox(d.xy,vec2(-.08,.32),vec2(.115,.045),vec2(.07,.04));
+ col*=1.-.55*aabox(d.xy,vec2(.44,-.43),vec2(.18,.065),vec2(.12,.05));
+ return col;
+}
+vec3 illuminate(vec3 normal,vec3 worldPos){
+ vec3 view=vec3(0.,0.,1.);vec3 r=reflect(-view,normal);
+ vec3 env=tintedEnv(r,worldPos);
+ // Area highlights depend on normal, world light location and a changing
+ // incident direction; never on a screen-space white rectangle.
+ vec3 lamp0=vec3(-3.7+4.7*sin(uTime*.31),2.7,4.5);
+ vec3 lamp1=vec3(2.4*cos(uTime*.23+.8),-2.2,4.0);
+ vec3 h0=normalize(normalize(lamp0-worldPos)+view);
+ vec3 h1=normalize(normalize(lamp1-worldPos)+view);
+ float spec0=pow(S(dot(normal,h0)),44.);
+ float spec1=pow(S(dot(normal,h1)),88.);
+ return env+vec3(2.0,2.12,2.30)*spec0+vec3(2.4,2.1,1.85)*spec1;
+}
+vec3 colorSurface(vec3 normal,vec3 position,float thickness,vec2 p,float front){
+ float nz=S(normal.z),fres=F(nz,.13);
+ vec3 e=illuminate(normal,position);
+ vec3 dye=pow(uAccent,vec3(1.09));
+ // Back-lit pigment is absorbed through a curved path (thicker in center),
+ // while the highly reflective upper boundary keeps neutral white reflections.
+ float through=S(thickness/.77);
+ vec3 transmission=dye*(.27+.61*pow(through,.53));
+ vec3 absorption=exp(-vec3(.12,.10,.09)*(.2+thickness));
+ transmission*=absorption;
+ float highBand=G(p.y-.17,.20),lowBand=G(p.y+.27,.10);
+ transmission*=.76+.24*highBand+.31*lowBand;
+ float mirror=uFinish;
+ float enamel=step(.5,mirror)*(1.-step(1.5,mirror));
+ float pearl=step(1.5,mirror);
+ float edgeShading=.85+.18*pow(nz,.34);
+ vec3 base=transmission*edgeShading;
+ // Snell-law refraction through the curved glass boundary. It modulates the
+ // transmitted colored light and is independent of the reflected studio rig.
+ vec3 refracted=refract(vec3(0.,0.,-1.),normal,1./1.47);
+ vec3 transmittedStudio=tintedEnv(refracted,position);
+ base+=pow(dye,vec3(.8))*transmittedStudio*(.055+.065*(1.-nz))*(1.-fres);
+ base+=dye*vec3(.14,.19,.22)*G(p.y+.30,.13);
+ base=mix(base,base*.80,enamel*.4);
+ float metalFresnel=mix(fres,.57+ .34*pow(1.-nz,3.),enamel);
+ vec3 reflectance=e*(.16+.68*metalFresnel)*mix(vec3(1.0),vec3(.90,.94,1.0),pearl);
+ float pearly=pearl*.45*(.5+.5*sin(19.*p.y+uTime*.47))*pow(1.-nz,2.);
+ reflectance+=pearly*vec3(.36,.48,.79);
+ // A rounded end catches a localized curved cap reflection and dark collar.
+ float collar=G(p.x-(front-.145),.052)*(1.-.65*abs(normal.y));
+ float capGlow=G(p.x-(front+.05),.17)*pow(1.-nz,1.4);
+ base*=1.-collar*.22;
+ reflectance+=vec3(.40,.54,.70)*capGlow;
+ float pFront=G(p.x-(front-.035),.07)*G(p.y-.02,.12);
+ reflectance+=vec3(.62,.80,1.0)*pFront*.45;
+ // A wide, softly reflected studio light moves across the curved liquid.
+ // Its two-dimensional footprint, view-dependent response and curved falloff
+ // produce a shifting luminous patch, not a hard vertical zebra stripe.
+ float travel=fract(uTime*.18);
+ float lightX=mix(-4.95,4.95,travel);
+ vec3 view=vec3(.0,.0,1.0);
+ vec3 lamp=normalize(vec3(lightX-p.x,1.15-p.y,3.6-position.z));
+ vec3 halfLamp=normalize(lamp+view);
+ float angular=pow(S(dot(normal,halfLamp)),12.0);
+ float bentX=p.x-lightX+.32*normal.y+.13*sin(p.y*5.2+p.x*.65);
+ float horizontal=G(bentX,1.13);
+ float vertical=G(p.y-.11-.09*sin(p.x*.45+uTime*.17),.31);
+ float softbox=horizontal*vertical;
+ float specularPatch=softbox*(.24+.74*angular);
+ float diffuseHalo=G(bentX,1.76)*G(p.y-.08,.49)*.13;
+ reflectance+=vec3(.90,1.06,1.18)*(specularPatch+diffuseHalo)*uShimmer;
+ // Gloss appears as genuinely varying reflected environmental radiance.
+ return tonemap(base+reflectance);
+}
+
+void main() {
+    vec2 uv=gl_FragCoord.xy/uRes.xy;
+    float f=clamp(uFill,0.,1.);
+    // Shared pixel-space capsule: native fill and WebGL optical layer use the
+    // SAME tip position, border inset and rounded endcap at every size.
+    // This replaces the previous concave-looking -0.20 offset and hard clip.
+    float px=uv.x*uRes.x;
+    float py=uv.y*uRes.y;
+    float edgeY=max(1.,floor(uRes.y/13.+.5));
+    float edgeX=max(1.,floor(uRes.x/400.+.5));
+    float radiusPx=max(.5,(uRes.y-2.*edgeY)*.5);
+    float tipPx=clamp(f*uRes.x-2.*uRes.x/400.,edgeX,uRes.x-edgeX);
+    float occupied=max(0.,tipPx-edgeX);
+    float rd=.422;
+    float rx=radiusPx;
+    float ry=radiusPx;
+    float centerPx=tipPx-radiusPx;
+    float dxPx,dyPx=py-uRes.y*.5;
+    if(occupied<2.*radiusPx){
+        // At 1-2% fill the tiny drop contracts into a circular bead.
+        rx=max(.05,occupied*.5);
+        ry=max(.05,min(radiusPx,rx));
+        centerPx=(edgeX+tipPx)*.5;
+        dxPx=px-centerPx;
+    }else{
+        // Normal fill: straight left body, convex hemispherical leading edge.
+        dxPx=max(px-centerPx,0.);
+    }
+    vec2 delta=vec2(dxPx*rd/rx,dyPx*rd/ry);
+    float rr=length(delta);
+    float aa=rd/max(ry,1.);
+    float cov=1.-smoothstep(rd-aa,rd+aa,rr);
+    float left=smoothstep(edgeX-.5,edgeX+.5,px);
+    float alpha=cov*left*step(.00001,f)*.94;
+    float zz=sqrt(max(0.,rd*rd-rr*rr));
+    vec3 norm=normalize(vec3(delta,zz+.00001));
+    float front=-4.08+centerPx/uRes.x*8.16;
+    vec2 world=vec2(-4.08+px/uRes.x*8.16,(uv.y-.5)*.845);
+    vec3 liquid=colorSurface(norm,vec3(world,zz+.35),2.*zz,world,front);
+    float meniscusContact=G(rr-rd+.015,.023);
+    liquid=mix(liquid,liquid*.71,meniscusContact*.28);
+    fragColor=vec4(liquid,alpha);
+}
+</script>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const colors=[
+ {key:'green',name:'Original green',v3:'Emerald Glass',rgb:[.030,.87,.37],hex:'#14DE8E'},
+ {key:'blue',name:'Blue',v3:'Aero Sapphire',rgb:[.025,.33,1.00],hex:'#168DFF'},
+ {key:'cyan',name:'Cyan',v3:'Lagoon Cyan',rgb:[.015,.81,1.00],hex:'#04D5F7'},
+ {key:'violet',name:'Violet',v3:'Royal Amethyst',rgb:[.47,.22,1.],hex:'#9D64FF'},
+ {key:'amber',name:'Amber',v3:'Solar Amber',rgb:[1.,.47,.035],hex:'#FFB328'},
+ {key:'red',name:'Red',v3:'Ruby Red',rgb:[1.,.045,.14],hex:'#FF3B62'},
+ {key:'custom',name:'Custom color',v3:'User-selected optical pigment',rgb:[1.,.45,.25],hex:'#FF8040'}];
+const assets=JSON.parse($('native-images').textContent);
+const images={};
+let value=0, visual=0,velocity=0,phase=0,last=0,lastNative=-1,selected=0,selectedColor='green';
+let aeroEnabled=true, finish=0, lighting=0, shimmer=1.0, speed=1.0, frames=0;
+let ready=false,shaderReady=false,shaderError=null;
+const barCanvas=$('native'),overlay=$('aero');
+for(const color of colors){
+ const image=new Image();
+ image.onload=()=>nativePaint(barCanvas,selected,true);
+ image.src=assets[color.key];
+ images[color.key]=image;
+}
+// Derive user-chosen native fill pixels FROM the approved Windows source.
+// The neutral glass, track and original light/dark contrast stay unchanged.
+function updateCustomSprite(hex){
+ const source=images.green;
+ if(!source||!source.complete||!source.naturalWidth)return;
+ const canvas=document.createElement('canvas');canvas.width=400;canvas.height=13;
+ const c=canvas.getContext('2d',{willReadFrequently:true});c.drawImage(source,0,0);
+ const bitmap=c.getImageData(0,0,400,13),pixels=bitmap.data;
+ const target=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
+ for(let y=0;y<13;y++)for(let x=2;x<200;x++){
+  const i=(y*400+x)*4;
+  const low=Math.min(pixels[i],pixels[i+1],pixels[i+2]);
+  const high=Math.max(pixels[i],pixels[i+1],pixels[i+2]);
+  if(high-low<9)continue; // Preserve neutral edges and white highlights.
+  for(let channel=0;channel<3;channel++)pixels[i+channel]=Math.round(low+(high-low)*target[channel]);
+ }
+ c.putImageData(bitmap,0,0);
+ const image=new Image();image.onload=()=>paintNative();image.src=canvas.toDataURL('image/png');
+ images.custom=image;
+}
+images.green.addEventListener('load',()=>{if(selectedColor.startsWith('#'))updateCustomSprite(selectedColor);});
+// Keep the approved v2.0.1 source-pixel compositing algorithm verbatim.
+function nativePaint(canvas,idx,hybrid){
+ const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;
+ const ratio=Math.min(3,devicePixelRatio||1);
+ const w=Math.round(r.width*ratio),h=Math.round(r.height*ratio);
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+ const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
+ const c=colors[idx],img=images[c.key];
+ if(!img||!img.complete||!img.naturalWidth)return;
+ ctx.clearRect(0,0,w,h);
+ ctx.drawImage(img,280,0,110,13,0,0,w,h);
+ const fy=Math.max(1,Math.round(h/13));
+ const edgeX=Math.max(1,Math.round(w/400));
+ const percent=(hybrid&&aeroEnabled)?Math.max(0,Math.min(1,visual)):value;
+ const tip=Math.max(edgeX,Math.min(w-edgeX,percent*w-2*w/400));
+ if(tip>edgeX){
+   if(hybrid&&aeroEnabled){
+     // Shared convex tip. A clip is applied to the captured Windows pigment
+     // BEFORE the original glass/track edges are redrawn. The straight native
+     // cutoff remains completely untouched in the comparison column and OFF.
+     const cy=h*.5,rad=Math.max(.5,(h-2*fy)*.5),used=tip-edgeX;
+     ctx.save();ctx.beginPath();
+     if(used<rad*2){
+       const rx=used*.5,ry=Math.min(rad,rx);
+       ctx.ellipse((tip+edgeX)*.5,cy,rx,Math.max(.05,ry),0,0,Math.PI*2);
+     }else{
+       const center=tip-rad;
+       ctx.moveTo(edgeX,cy-rad);ctx.lineTo(center,cy-rad);
+       ctx.arc(center,cy,rad,-Math.PI*.5,Math.PI*.5,false);
+       ctx.lineTo(edgeX,cy+rad);ctx.closePath();
+     }
+     ctx.clip();
+     ctx.drawImage(img,5,1,190,11,edgeX,fy,Math.max(.01,used),h-2*fy);
+     ctx.restore();
+   }else{
+     // Native v1.8 baseline deliberately remains byte-for-byte equivalent.
+     const px=Math.max(0,Math.round(400*value)-2);
+     const paintW=Math.round(px*w/400);
+     if(paintW>0)ctx.drawImage(img,5,1,190,11,edgeX,fy,paintW,h-2*fy);
+   }
+ }
+ ctx.drawImage(img,0,0,1,13,0,0,edgeX,h);
+ ctx.drawImage(img,399,0,1,13,w-edgeX,0,edgeX,h);
+}
+
+function paintNative(){nativePaint(barCanvas,selected,true);}
+function shader(gl,type,src){const sh=gl.createShader(type);gl.shaderSource(sh,src);gl.compileShader(sh);
+ if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(sh));
+ return sh;
+}
+let gl=null,program=null,vao=null,uni={};
+try{
+ gl=overlay.getContext('webgl2',{antialias:true,alpha:true,premultipliedAlpha:false,preserveDrawingBuffer:false,powerPreference:'high-performance'});
+ if(!gl)throw Error('WebGL2 unavailable');
+ program=gl.createProgram();
+ gl.attachShader(program,shader(gl,gl.VERTEX_SHADER,$('v3vert').textContent));
+ gl.attachShader(program,shader(gl,gl.FRAGMENT_SHADER,$('hybridfrag').textContent));
+ gl.linkProgram(program);
+ if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
+ vao=gl.createVertexArray();
+ for(const key of ['uRes','uFill','uTime','uVel','uFinish','uLights','uLightBackground','uDepth','uCompact','uAccent','uShimmer'])uni[key]=gl.getUniformLocation(program,key);
+ shaderReady=true;
+}catch(error){shaderError=String(error);console.error(error);}
+function drawOptics(){
+ if(!shaderReady)return;
+ const bounds=overlay.getBoundingClientRect();if(bounds.width<1||bounds.height<1)return;
+ const scale=Math.min(3,devicePixelRatio||1);
+ const w=Math.max(1,Math.round(bounds.width*scale)),h=Math.max(1,Math.round(bounds.height*scale));
+ if(overlay.width!==w||overlay.height!==h){overlay.width=w;overlay.height=h;gl.viewport(0,0,w,h);}
+ gl.useProgram(program);gl.bindVertexArray(vao);
+ gl.uniform2f(uni.uRes,w,h);
+ gl.uniform1f(uni.uFill,Math.max(0,Math.min(1,visual)));
+ gl.uniform1f(uni.uTime,phase*speed);gl.uniform1f(uni.uVel,velocity);
+ gl.uniform1f(uni.uFinish,finish);gl.uniform1f(uni.uLights,lighting);gl.uniform1f(uni.uShimmer,shimmer);
+ gl.uniform1f(uni.uLightBackground,0);gl.uniform1f(uni.uDepth,1);gl.uniform1f(uni.uCompact,0);
+ gl.uniform3f(uni.uAccent,...colors[selected].rgb);
+ gl.drawArrays(gl.TRIANGLES,0,3);
+}
+function apply({value:next,color,finish:nextFinish,lighting:nextLighting,shimmer:nextShimmer,speed:nextSpeed,aero:nextAero}){
+ if(typeof next==='number' && Number.isFinite(next))value=Math.max(0,Math.min(1,next));
+ if(typeof color==='string'){
+  if(/^#[0-9a-fA-F]{6}$/.test(color)){
+   selectedColor=color.toUpperCase();selected=colors.length-1;
+   const c=colors[selected];c.hex=selectedColor;
+   c.rgb=[1,3,5].map(i=>Math.pow(parseInt(color.slice(i,i+2),16)/255,1.09));
+   updateCustomSprite(selectedColor);
+   paintNative();
+  }else{
+   const chosen=colors.findIndex(c=>c.key===color && c.key!=='custom');
+   if(chosen>=0){selected=chosen;selectedColor=color;paintNative();}
+  }
+ }
+ if(Number.isInteger(nextFinish)&&nextFinish>=0&&nextFinish<=2)finish=nextFinish;
+ if(Number.isInteger(nextLighting)&&nextLighting>=0&&nextLighting<=2)lighting=nextLighting;
+ if(typeof nextShimmer==='number'&&Number.isFinite(nextShimmer))shimmer=Math.max(0,Math.min(2,nextShimmer));
+ if(typeof nextSpeed==='number'&&Number.isFinite(nextSpeed))speed=Math.max(.25,Math.min(3,nextSpeed));
+ if(typeof nextAero==='boolean'){
+  aeroEnabled=nextAero;overlay.style.visibility=aeroEnabled?'visible':'hidden';paintNative();
+ }
+}
+if(window.chrome?.webview){
+ window.chrome.webview.addEventListener('message',event=>{
+  const data=event.data;
+  if(data && data.type==='set')apply(data);
+ });
+}
+function tick(now){
+ if(!last)last=now;const dt=Math.min(.15,Math.max(0,(now-last)*.001));last=now;
+ const k=12,delta=visual-value,a=velocity+k*delta,decay=Math.exp(-k*dt);
+ visual=value+(delta+a*dt)*decay;velocity=(velocity-k*a*dt)*decay;
+ visual=Math.max(-.025,Math.min(1.025,visual));phase+=dt;
+ if(Math.abs(lastNative-visual)>.00015 || barCanvas.width!==Math.round(barCanvas.getBoundingClientRect().width*Math.min(3,devicePixelRatio||1))){
+  paintNative();lastNative=visual;
+ }
+ drawOptics();frames++;requestAnimationFrame(tick);
+}
+window.aeroBarProof={
+ getTarget:()=>value,getVisual:()=>visual,getColor:()=>selectedColor,
+ isNativeSourceReady:()=>{const img=images[colors[selected].key];return !!(img&&img.complete&&img.naturalWidth);},
+ getEngine:()=>shaderReady?'webgl2':'native-only',getError:()=>shaderError,
+ getFrames:()=>frames,getPhase:()=>phase,getSettings:()=>({aero:aeroEnabled,finish,lighting,shimmer,speed}),
+ set:(next,color)=>apply({value:next,color}),setAppearance:apply,render:()=>{paintNative();drawOptics();}
+};
+ready=true;
+if(window.chrome?.webview)window.chrome.webview.postMessage({type:'ready',engine:window.aeroBarProof.getEngine()});
+requestAnimationFrame(tick);
+})();
+</script></body></html>

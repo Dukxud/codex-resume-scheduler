@@ -58,14 +58,14 @@ test('dashboard shares the pending snapshot and renders distinct countdown and q
   assert.match(source, /compactMode = \[bool\]\$script:compactToggle\.Checked/);
   assert.match(dash, /Get-RunCountdownPercent/);
   assert.match(dash, /\$grid\.Add_CellPainting/);
-  assert.match(dash, /Set-FlowingProgress \$script:compactRunTrack \$percent/);
-  assert.match(dash, /New-FlowingProgressBar \$script:compactRunPanel/);
+  assert.match(dash, /Set-AeroProgress \$script:compactRunTrack \$percent/);
+  assert.match(dash, /New-AeroProgressBar \$script:compactRunPanel/);
   assert.match(dash, /Sync-DashboardRunBars/);
   assert.match(dash, /\$script:compactRunHeading\.Visible = \$compact -and \$script:pendingSnapshot\.Count -gt 0/);
   assert.match(dash, /\$form\.ClientSize/);
-  assert.match(source, /New-FlowingProgressBar \$card 12 44 400 17 'quota'/);
-  assert.match(source, /Set-FlowingProgress \$Card.Bar \$remaining/);
-  assert.match(dash, /New-FlowingProgressBar \$grid 0 0 100 15 'time'/);
+  assert.match(source, /New-AeroProgressBar \$card 12 44 400 17 'quota'/);
+  assert.match(source, /Set-AeroProgress \$Card.Bar \$remaining/);
+  assert.match(dash, /New-AeroProgressBar \$grid 0 0 100 15 'time'/);
   assert.doesNotMatch(dash, /Draw-SchedulerProgress/);
 });
 

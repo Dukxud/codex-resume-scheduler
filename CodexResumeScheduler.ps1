@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
-# WinForms UI, Microsoft WPF progress effects, and Windows scheduled-task runner.
-# v1.11.0: WPF compositor-driven moving shine on all usage and countdown bars.
+# WinForms UI, owner-approved Aero v3 progress bars with WPF fallback, and scheduled runner.
+# v1.12.2: Softer optical reflections, live appearance previews and arbitrary RGB colors.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -228,7 +228,7 @@ public static extern bool ShowWindow(System.IntPtr handle, int command);
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.11.0'
+$form.Text = 'Codex Resume Scheduler v1.12.2'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'
@@ -405,6 +405,9 @@ $useReset = Add-Button 'Use reset +2 min' 755 320 143
 $useReset.Enabled = $false
 
 . (Join-Path $PSScriptRoot 'CodexFlowingBar.ps1')
+. (Join-Path $PSScriptRoot 'CodexAeroBar.ps1')
+. (Join-Path $PSScriptRoot 'CodexBarAppearance.ps1')
+Initialize-AeroAppearance $script:uiSettings
 . (Join-Path $PSScriptRoot 'CodexDashboard.ps1')
 
 function New-UsageCard {
@@ -428,7 +431,7 @@ function New-UsageCard {
     $remaining.Text = '—'
     $remaining.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
     $card.Controls.Add($remaining)
-    $bar = New-FlowingProgressBar $card 12 44 400 17 'quota'
+    $bar = New-AeroProgressBar $card 12 44 400 17 'quota'
     $reset = New-Object System.Windows.Forms.Label
     $reset.Location = [System.Drawing.Point]::new(12,72)
     $reset.Size = [System.Drawing.Size]::new(400,24)
@@ -684,18 +687,18 @@ function Render-UsageCard {
     if (-not $Window) {
         $Card.Title.Text = $FallbackTitle
         $Card.Remaining.Text = 'Not reported'
-        Set-FlowingProgress $Card.Bar $null
+        Set-AeroProgress $Card.Bar $null
         $Card.Reset.Text = 'No window supplied by Codex'
         return
     }
     $Card.Title.Text = [string]$Window.label
     if ($null -eq $Window.remainingPercent) {
         $Card.Remaining.Text = 'Unavailable'
-        Set-FlowingProgress $Card.Bar $null
+        Set-AeroProgress $Card.Bar $null
     } else {
         $remaining = [double]$Window.remainingPercent
         $Card.Remaining.Text = ('{0:0.#}% remaining' -f $remaining)
-        Set-FlowingProgress $Card.Bar $remaining
+        Set-AeroProgress $Card.Bar $remaining
     }
     $Card.Reset.Text = Format-ResetTime $Window.resetsAt
 }
@@ -853,7 +856,7 @@ function Save-CurrentFormState {
         autoResume = [bool]$autoResumeCheck.Checked
         runAt = $whenBox.Value.ToString('yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)
     }
-    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; compactMode = [bool]$script:compactToggle.Checked; draft = $draft })
+    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; compactMode = [bool]$script:compactToggle.Checked; barAppearance = $script:aeroAppearance; draft = $draft })
     $script:savedDraft = $draft
     $script:preferredSessionId = $sessionId
 }

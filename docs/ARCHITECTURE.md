@@ -1,4 +1,4 @@
-# Architecture — Codex Resume Scheduler v1.14.0
+# Architecture — Codex Resume Scheduler v1.15.0
 
 ## Design boundaries
 
@@ -10,13 +10,18 @@ There are two layers:
 - components/SettingsStore: atomic JSON read/write; does not define settings schema.
 - components/RuntimeBundle: immutable content-addressed worker file copies and fingerprint verification.
 - components/OneTimeTasks: platform task registration, validation, rollback and cancellation; executable and arguments are caller-owned.
+- components/WindowShell: general-purpose WinForms window, labels and buttons.
+- components/ProgressHost: renderer-neutral fallback, positioning and paired-control disposal.
+- components/GitRepository: independent read-only Git root and branch checks.
+- components/JobOutcomes: durable state distinction between completed, deferred, blocked, failed and cancelled, built on SettingsStore.
 
 **Application-specific adapters**:
 - CodexResumeScheduler.ps1 — thin entrypoint: worker mode or GUI mode.
 - CodexRunEngine.ps1 — Codex model/catalog validation, CLI session continuation, usage-based retry, pinned runtime contract.
 - CodexData.ps1 — local session, Git, pending task and UI-settings facade.
 - CodexUsage.js / CodexRetry.js — official App Server protocol reads and pure quota/retry decisions.
-- CodexUiForms.ps1 — WinForms layout and control construction.
+- CodexUiForms.ps1 — application-specific WinForms layout through reusable WindowShell primitives.
+- CodexUiState.ps1 — explicit, separately owned selection, usage, preferences and dashboard contexts; reusable modules do not import this.
 - CodexUiRefresh.ps1 — background data fetch and quota snapshots.
 - CodexUiActions.ps1 — user actions, autosave and task creation.
 - CodexUiLifecycle.ps1 — window startup/shutdown and resource cleanup.
@@ -48,3 +53,9 @@ Static tests cover protocol normalization, ambiguous quotas, malformed settings,
 ## Upgrade behavior
 
 New tasks use a separate fingerprinted runtime folder. Older tasks retain their original Windows Task Scheduler action and code copy; there is no automatic rewrite. Cancel and reschedule tasks to opt into the pinned worker. Existing source-based previews may use a different unsigned launcher, and successful CI is not a publisher signature.
+
+## Adversarial clean-code pass
+
+The standalone worker no longer imports CodexData or references UI globals; its Git and account checks are explicit imports. The UI has a declared state owner grouped by responsibility rather than dozens of unowned script variables. ProgressHost owns the primary/fallback lifecycle, and the dashboard allocates one bar per **visible row**, never per queued task. `account/read` provides a hashed ChatGPT-email fallback when the rate-limit account identifier is absent; the service never persists or exposes the raw email. A multi-workspace switch under the same email cannot be distinguished without an authoritative backend account identifier; unattended retry still refuses completely unknown identities.
+
+A queued retry is persisted as `deferred`, not `completed`. Removing an upcoming task unregisters it and records `cancelled`, while logs are retained for audit. Existing work may still be interrupted by Windows sign-out or sleeping, and real hardware/antivirus behavior remains outside CI.

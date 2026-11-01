@@ -19,6 +19,7 @@ if(process.argv.includes('app-server')){
  rl.on('line',line=>{
   const m=JSON.parse(line);
   if(m.method==='initialize')process.stdout.write(JSON.stringify({id:m.id,result:{userAgent:'test'}})+'\n');
+  if(m.method==='account/read')process.stdout.write(JSON.stringify({id:m.id,result:{account:{type:'chatgpt',email:'worker@example.test'}}})+'\n');
   if(m.method==='model/list')process.stdout.write(JSON.stringify({id:m.id,result:{data:[{model:'test-model',displayName:'Mock',defaultReasoningEffort:'high',supportedReasoningEfforts:[{reasoningEffort:'high'}],isDefault:true}],nextCursor:null}})+'\n');
   if(m.method==='account/rateLimits/read')process.stdout.write(JSON.stringify({id:m.id,result:{accountId:process.env.CODEX_STUB_ACCOUNT||'acct-1',ordinaryUsageAllowed:true,rateLimits:{limitId:'test-model',normalModelSlug:'test-model',primary:{usedPercent:0,resetsAt:Math.floor(Date.now()/1000)+3600,windowDurationMins:300}}}})+'\n');
  });

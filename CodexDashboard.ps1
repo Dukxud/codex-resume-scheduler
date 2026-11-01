@@ -68,6 +68,14 @@ function Initialize-Dashboard {
     $form.Controls.Add($script:compactToggle)
     $script:compactToggle.BringToFront()
 
+    # Appearance controls remain accessible in both standard and compact layouts.
+    $script:appearanceButton = [System.Windows.Forms.Button]::new()
+    $script:appearanceButton.Text = 'Appearance...'
+    $script:appearanceButton.AccessibleName = 'Customize progress bar appearance'
+    $script:appearanceButton.Size = [System.Drawing.Size]::new(140,32)
+    $form.Controls.Add($script:appearanceButton)
+    $script:appearanceButton.Add_Click({ Show-AeroAppearanceDialog $form })
+
     $script:compactRunHeading = New-DashboardLabel $form 'Next run' 18 61 425 26
     $script:compactRunHeading.Font = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
     $script:compactRunPanel = [System.Windows.Forms.Panel]::new()
@@ -202,6 +210,7 @@ function Update-DashboardLayout {
         $heading.Text = 'Schedule a continuation'
         $heading.Font = $script:fullTitleFont
         $heading.Width = 500
+        $script:appearanceButton.Location = [System.Drawing.Point]::new(574,15)
         $script:compactToggle.Location = [System.Drawing.Point]::new(728,13)
         $script:compactToggle.Size = [System.Drawing.Size]::new(170,38)
         $script:compactToggle.Text = 'Compact mode: OFF'
@@ -270,7 +279,10 @@ function Update-DashboardLayout {
         $height = $cardTop + 18
     }
     $form.MinimumSize = [System.Drawing.Size]::new(480,150)
-    $form.ClientSize = [System.Drawing.Size]::new(464,[math]::Max(126,$height))
+    # Reserve space below the final card for appearance customization.
+    $form.ClientSize = [System.Drawing.Size]::new(464,[math]::Max(166,$height+40))
+    $script:appearanceButton.Location = [System.Drawing.Point]::new(306,$form.ClientSize.Height-37)
+    $script:appearanceButton.Size = [System.Drawing.Size]::new(140,32)
     Update-DashboardCountdowns
     Sync-DashboardRunBars
 }

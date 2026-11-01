@@ -5,8 +5,9 @@ $version = '1.0.4314.35'
 $root = Split-Path -Parent $PSScriptRoot
 $folder = Join-Path $root 'AeroWebView2'
 [void](New-Item -ItemType Directory -Force -Path $folder)
-$package = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$version.zip"
-$expanded = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$version"
+$tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
+$package = Join-Path $tempRoot "Microsoft.Web.WebView2.$version.zip"
+$expanded = Join-Path $tempRoot "Microsoft.Web.WebView2.$version"
 $url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$version/microsoft.web.webview2.$version.nupkg"
 # Audited SHA-256 of the exact NuGet SDK archive, independently of the
 # downloaded archive contents. A mismatch aborts before extracting binaries.

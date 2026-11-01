@@ -8,7 +8,16 @@ $folder = Join-Path $root 'AeroWebView2'
 $package = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$version.zip"
 $expanded = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$version"
 $url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$version/microsoft.web.webview2.$version.nupkg"
+# Audited SHA-256 of the exact NuGet SDK archive, independently of the
+# downloaded archive contents. A mismatch aborts before extracting binaries.
+$expectedSha256 = '90778deb1b77e36292828b4b5833c9255c27533f40e0ddd55891ae718944edc4'
 Invoke-WebRequest -Uri $url -OutFile $package
+$sha256 = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($sha256 -cne $expectedSha256) {
+    Remove-Item -LiteralPath $package -Force -ErrorAction SilentlyContinue
+    throw "Microsoft WebView2 SDK SHA-256 mismatch for $version."
+}
+Write-Host "Verified pinned Microsoft WebView2 SDK SHA-256."
 if (Test-Path $expanded) { Remove-Item $expanded -Recurse -Force }
 Expand-Archive -Path $package -DestinationPath $expanded -Force
 

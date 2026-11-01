@@ -2,17 +2,27 @@ name: Tests
 on:
   push:
   pull_request:
+permissions:
+  contents: read
 jobs:
   validate:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Prepare signed Microsoft WebView2 SDK
         shell: pwsh
         run: ./scripts/Prepare-AeroWebView2.ps1
+      - name: Standalone AeroProgress API and signed-release gate
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/aero-component-contract.test.ps1
+      - name: Verify both release ZIP inventories
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/release-bundle-integrity.test.ps1
       - name: Codex usage tests
         run: node --test tests/*.test.js
       - name: Appearance dialog and saved preferences
@@ -21,6 +31,9 @@ jobs:
       - name: Actual Aero v3 Windows rendering
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/aero-webview-rendering.test.ps1
+      - name: WebView2 crash recovery to WPF
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/aero-runtime-fallback.test.ps1
       - name: Upload Aero Windows rendering evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,21 +83,41 @@ jobs:
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |
-          foreach ($source in Get-ChildItem -Path . -Filter '*.ps1' -File) {
+          foreach ($source in Get-ChildItem -Path . -Recurse -Include '*.ps1','*.psm1','*.psd1' -File) {
             $tokens = $null
             $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($source.FullName, [ref]$tokens, [ref]$errors)
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($source.FullName, [ref]$tokens, [ref]$errors)
             if ($errors.Count) { $errors | Out-String | Write-Error; exit 1 }
+            # The PowerShell $Host automatic variable is read-only. Assigning it
+            # broke a real recovery path; reject the bug statically everywhere.
+            $reserved = @($ast.FindAll({
+              param($node)
+              $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+              $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
+              $node.Left.VariablePath.UserPath -ieq 'host'
+            }, $true))
+            if ($reserved.Count) { throw "Reserved Host assignment in $($source.FullName)" }
           }
       - name: Assemble versioned review ZIP
         if: github.ref != 'refs/heads/main'
         shell: pwsh
         run: ./scripts/Package-CodexScheduler.ps1 -OutputDirectory ./PreviewArtifacts -Preview
+      - name: Assemble reusable AeroProgress component preview
+        if: github.ref != 'refs/heads/main'
+        shell: pwsh
+        run: ./scripts/Package-AeroComponent.ps1 -OutputDirectory ./ComponentArtifacts -Preview
+      - name: Upload standalone AeroProgress component
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AeroProgress-Component-Preview
+          path: ComponentArtifacts/*.zip
+          retention-days: 30
       - name: Upload integrated scheduler preview
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: CodexResumeScheduler-v1.12.2-Aero-Preview
+          name: CodexResumeScheduler-v1.13.0-Security-Preview
           path: PreviewArtifacts/*.zip
           retention-days: 30
 
@@ -98,14 +131,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Prepare signed Microsoft WebView2 SDK
         shell: pwsh
         run: ./scripts/Prepare-AeroWebView2.ps1
       - name: Assemble numbered Windows release
         shell: pwsh
+        env:
+          CODEX_SIGNING_THUMBPRINT: ${{ secrets.CODEX_SIGNING_THUMBPRINT }}
+          CODEX_TIMESTAMP_SERVER: ${{ vars.CODEX_TIMESTAMP_SERVER }}
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
-          $archive = ./scripts/Package-CodexScheduler.ps1 -OutputDirectory $env:RUNNER_TEMP
+          $archive = ./scripts/Package-CodexScheduler.ps1 -OutputDirectory $env:RUNNER_TEMP -CertificateThumbprint $env:CODEX_SIGNING_THUMBPRINT -TimestampServer $env:CODEX_TIMESTAMP_SERVER
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_VERSION=$version"
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_ARCHIVE=$archive"
       - name: Publish versioned GitHub release

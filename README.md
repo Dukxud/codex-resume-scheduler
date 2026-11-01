@@ -6,7 +6,7 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 
 **Latest versioned release: [GitHub Releases](https://github.com/Dukxud/codex-resume-scheduler/releases/latest)**
 
-Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The package contains PowerShell/JavaScript files plus Microsoft-signed WebView2 SDK libraries; no custom or unsigned executable.
+Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The review package contains PowerShell/JavaScript, a reusable AeroProgress module and Microsoft WebView2 SDK libraries. First-party preview scripts are **unsigned**, and no executable is supplied.
 
 ## What it does
 
@@ -42,9 +42,17 @@ The dialog controls:
 
 Use **Save and close** to apply to all visible bars and persist the choices locally with other scheduler preferences; **Cancel** discards edits, and **Defaults** restores the approved baseline. The moving light is now a wider, curved, view-dependent pool of reflection instead of the previous narrow zebra-stripe sweep. Its motion remains visible at the actual 400×17 usage-bar scale. This is an Aero/WebGL2 visual effect; machines without WebView2 continue using the prior WPF fallback instead.
 
+## Security and reusable components (v1.13.0 review)
+
+**Current preview builds remain unsigned.** The previous hidden Windows Script Host/PowerShell launcher may still be flagged by antivirus. This preview does **not** disable antivirus or ask for exclusions. A production build now fails unless it has a real publisher code-signing certificate and timestamp; signed launcher scripts no longer request `-ExecutionPolicy Bypass`. Signing does not guarantee immediate SmartScreen reputation.
+
+The Aero progress-bar renderer has been separated into an independently importable **[AeroProgress PowerShell module](components/AeroProgress/README.md)**. Windows CI packages it separately as `AeroProgress-Component-v1.13.0-Preview.zip`; other WinForms apps can use its API without importing the scheduler or Task Scheduler. The existing scheduler adapter retains WPF fallback, including recovery if WebView2 reports a child-process failure.
+
+See [security review, risks and signing workflow](docs/SECURITY-REVIEW.md). A read-only security diagnostics script is included at `tools/Get-SchedulerSecurityDiagnostics.ps1` in the packaged app (or in the repository `scripts` directory). It does not change Bitdefender settings.
+
 ## Requirements
 
-- Windows 10/11 x64, signed-in desktop session, **PowerShell 7**. The Aero graphics need the Microsoft Edge WebView2 Runtime, normally installed on Windows 11. WPF fallback remains available without it.
+- Windows 10/11 x64, signed-in desktop session, **PowerShell 7 installed to the standard `C:\Program Files\PowerShell\7` location**. The launcher deliberately refuses unqualified executables from `PATH` or a repository folder. The Aero graphics need the Microsoft Edge WebView2 Runtime, normally installed on Windows 11. WPF fallback remains available without it.
 - Codex CLI installed through **npm** and logged in with a ChatGPT account.
 - **Node.js** available on `PATH` (installed already for npm-based Codex).
 - Git available on `PATH`.

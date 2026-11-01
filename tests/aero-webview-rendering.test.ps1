@@ -10,7 +10,7 @@ function Require($ok,[string]$what) { if (-not $ok) { throw $what } }
 function PumpUntil([scriptblock]$condition,[int]$seconds=25) {
     $deadline = (Get-Date).AddSeconds($seconds)
     while (-not (& $condition)) {
-        if ((Get-Date) -gt $deadline) { throw "Timed out awaiting WebView2 rendering: $script:aeroError; quotaReady=$($quota.Tag.Ready); runReady=$($run.Tag.Ready); quotaCore=$($null -ne $quota.CoreWebView2); runCore=$($null -ne $run.CoreWebView2)" }
+        if ((Get-Date) -gt $deadline) { throw "Timed out awaiting WebView2 rendering: $script:aeroError; quotaReady=$($quota.Tag.Ready); runReady=$($run.Tag.Ready); quotaCore=$($null -ne $quota.CoreWebView2); runCore=$($null -ne $run.CoreWebView2); quotaFailure=$($quota.Tag.Failure); runFailure=$($run.Tag.Failure)" }
         [System.Windows.Forms.Application]::DoEvents()
         Start-Sleep -Milliseconds 50
     }

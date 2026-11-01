@@ -44,7 +44,7 @@ try{
     [void]$grid.Rows.Add('Next','10m')
     $script:ui.Dashboard.runBarHosts=[Collections.Generic.List[Windows.Forms.Control]]::new()
     $runBar=New-AeroProgressBar $grid 0 0 100 15 'time'
-    $script:runBarHosts.Add($runBar)
+    $script:ui.Dashboard.runBarHosts.Add($runBar)
     $grid.Rows[0].Cells[1].Tag=45
     $runBar.Tag.Failure='Simulated failure in a grid cell'
     Ensure-AeroFallback $runBar

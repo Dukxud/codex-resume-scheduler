@@ -1,5 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $root 'CodexUiState.ps1')
+$script:ui = New-CodexUiState
 . (Join-Path $root 'CodexDashboard.ps1')
 function Require($Condition, $Message) { if (-not $Condition) { throw $Message } }
 
@@ -22,12 +24,12 @@ Require ($null -eq (Get-RunCountdownPercent $runAt 'not-a-time' $created)) 'Inva
 Require ($null -eq (Get-RunCountdownPercent $created $epoch $created)) 'Nonpositive durations must be unknown.'
 
 function Get-SelectedModel { 'form-model' }
-$script:pendingSnapshot = @([pscustomobject]@{ Model = 'queued-model' })
-$script:compactToggle = [pscustomobject]@{ Checked = $true }
+$script:ui.Dashboard.pendingSnapshot = @([pscustomobject]@{ Model = 'queued-model' })
+$script:ui.Dashboard.compactToggle = [pscustomobject]@{ Checked = $true }
 Require ((Get-DashboardUsageModel) -eq 'queued-model') 'Compact mode must use the next run model for quota reads.'
-$script:pendingSnapshot = @()
+$script:ui.Dashboard.pendingSnapshot = @()
 Require ((Get-DashboardUsageModel) -eq 'form-model') 'Empty queue must fall back to the selected form model.'
-$script:compactToggle.Checked = $false
-$script:pendingSnapshot = @([pscustomobject]@{ Model = 'queued-model' })
+$script:ui.Dashboard.compactToggle.Checked = $false
+$script:ui.Dashboard.pendingSnapshot = @([pscustomobject]@{ Model = 'queued-model' })
 Require ((Get-DashboardUsageModel) -eq 'form-model') 'Full mode must use the selected form model.'
 Write-Host 'Countdown format, clamping, legacy fallback, and model targeting passed.'

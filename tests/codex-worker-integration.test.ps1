@@ -40,7 +40,8 @@ exit /b %errorlevel%
     & git -C $repo init --quiet -b feature
     if($LASTEXITCODE -ne 0){throw 'Failed to initialize isolated test repository.'}
     $repoRoot=([string](& git -C $repo rev-parse --show-toplevel)).Trim()
-    $fingerprint=Get-RuntimeFingerprint -Directory $root -RelativeFiles (Get-CodexRuntimeFiles)
+    $runtime=Publish-ImmutableRuntime -SourceDirectory $root -DestinationDirectory (Join-Path $temp 'runtimes') -RelativeFiles (Get-CodexRuntimeFiles)
+    $fingerprint=$runtime.Fingerprint
     $jobPath=Join-Path $temp 'job.json'
     $marker=Join-Path $temp 'executed.marker'
     $settingsDir=Join-Path $temp 'isolated-appdata'
@@ -57,7 +58,7 @@ exit /b %errorlevel%
         } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $jobPath
         $psi=[Diagnostics.ProcessStartInfo]::new()
         $psi.FileName=(Get-Command pwsh.exe -ErrorAction Stop).Source
-        foreach($argument in @('-NoLogo','-NoProfile','-File',(Join-Path $root 'CodexResumeScheduler.ps1'),'-RunJob','-JobFile',$jobPath)){
+        foreach($argument in @('-NoLogo','-NoProfile','-File',(Join-Path $runtime.Directory 'CodexResumeScheduler.ps1'),'-RunJob','-JobFile',$jobPath)){
             [void]$psi.ArgumentList.Add($argument)
         }
         $psi.UseShellExecute=$false
@@ -90,7 +91,11 @@ exit /b %errorlevel%
     Require ($stale.Exit -eq 0 -and $stale.Executed) "Success must override stale limit-like events: $($stale.Output) $($stale.Errors)"
     $changed=Run-CodexStub 0 $true 'different-account' $false
     Require ($changed.Exit -ne 0 -and -not $changed.Executed) "Wrong account must stop before invoking Codex: $($changed.Output) $($changed.Errors)"
-    Write-Host 'Isolated Codex mock: success, exit 17, stale error and wrong-account preflight PASS.'
+    # A pinned runtime must fail closed after an existing dependency changes.
+    Set-Content -LiteralPath (Join-Path $runtime.Directory 'CodexRetry.js') -Value 'tampered'
+    $tampered=Run-CodexStub 0 $false 'acct-1' $false
+    Require ($tampered.Exit -ne 0 -and -not $tampered.Executed) "Modified scheduled runtime must fail before Codex: $($tampered.Output) $($tampered.Errors)"
+    Write-Host 'Isolated pinned worker: success, exit 17, stale error, identity and tampering PASS.'
 }finally{
     if(Test-Path $temp){Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue}
 }

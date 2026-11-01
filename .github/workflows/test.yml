@@ -42,6 +42,9 @@ jobs:
       - name: Dashboard window layout
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/dashboard-layout.test.ps1
+      - name: Real 3D material gallery and captures
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/3d-material-gallery.test.ps1
       - name: Hidden script host launcher behavior
         shell: pwsh
         run: ./tests/script-host-launcher.test.ps1
@@ -60,6 +63,34 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseFile($source.FullName, [ref]$tokens, [ref]$errors)
             if ($errors.Count) { $errors | Out-String | Write-Error; exit 1 }
           }
+
+      - name: Assemble versioned 3D preview package
+        shell: pwsh
+        run: |
+          $name = 'CodexResumeScheduler-v1.11.0-3D-PREVIEW'
+          $dir = Join-Path $env:RUNNER_TEMP $name
+          New-Item -Path $dir -ItemType Directory -Force | Out-Null
+          $files = @('CodexResumeScheduler.ps1','CodexDashboard.ps1','CodexFlowingBar.ps1',
+            'CodexBarGallery.ps1','CodexData.ps1','CodexUsage.js','CodexRetry.js',
+            'Start-Codex-Scheduler.vbs','Start-Codex-Scheduler.cmd',
+            'CodexRunJob.vbs','README.md','LICENSE','VERSION')
+          foreach ($path in $files) { Copy-Item -LiteralPath $path -Destination $dir -ErrorAction Stop }
+          $zip = Join-Path $env:RUNNER_TEMP "$name.zip"
+          Compress-Archive -Path $dir -DestinationPath $zip -Force
+          New-Item -Path preview-dist -ItemType Directory -Force | Out-Null
+          Copy-Item -LiteralPath $zip -Destination preview-dist
+      - name: Upload tested executable preview package
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodexResumeScheduler-v1.11.0-3D-PREVIEW
+          path: preview-dist/*.zip
+          retention-days: 30
+      - name: Upload real WPF screenshot evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodexScheduler-real-WPF-bar-captures
+          path: preview-captures/*.png
+          retention-days: 30
 
   release:
     # Never publish an untested source-branch ZIP. Main is published only after

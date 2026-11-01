@@ -57,6 +57,9 @@ jobs:
           pwsh -NoProfile -STA -File ./NativeBarColorLab.ps1 -TestDir ./native-color-captures
           if (-not (Test-Path native-color-captures/native-plus-aero.png)) { throw 'Aero hybrid render missing.' }
           if (-not (Test-Path native-color-captures/approved-v18-no-aero.png)) { throw 'Original native comparison missing.' }
+      - name: Standalone hybrid VBS launcher visibility
+        shell: pwsh
+        run: ./tests/native-aero-launcher.test.ps1
       - name: Package working standalone native-bar comparison
         shell: pwsh
         run: |

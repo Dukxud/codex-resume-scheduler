@@ -8,7 +8,7 @@ try {
     [void](New-Item -ItemType Directory -Path $app -Force)
     Copy-Item -LiteralPath (Join-Path $root 'components') -Destination $app -Recurse
     if(Test-Path (Join-Path $app 'CodexRunEngine.ps1')){throw 'Independent application must not contain Codex code.'}
-    foreach($name in @('Countdown','SettingsStore','RuntimeBundle','GitRepository','OneTimeTasks','JobOutcomes','WindowShell','ProgressHost','AeroProgress')){
+    foreach($name in @('Countdown','SettingsStore','RuntimeBundle','GitRepository','OneTimeTasks','JobOutcomes','WindowShell','ProgressHost','FlowingProgress','AeroProgress')){
         Import-Module (Join-Path $app "components/$name/$name.psd1") -Force -ErrorAction Stop
     }
     function Require($ok,[string]$message){if(-not $ok){throw $message}}
@@ -34,6 +34,9 @@ try {
         $title=Add-DesktopLabel -Parent $form -Text 'Unrelated' -X 8 -Y 8 -Width 200
         $button=Add-DesktopButton -Parent $form -Text 'Example' -X 8 -Y 36
         Require ($title.Parent -eq $form -and $button.Parent -eq $form) 'Desktop window shell has hidden application dependencies.'
+        $gloss=New-FlowingProgressView -Parent $form -X 270 -Y 40 -Width 130 -Height 17 -Colors @{BaseTop='#ED9CFF';BaseBottom='#552099';Track='#ECE8FF';Outline='#CCC2DE'} -AccessibleName 'Unrelated application progress'
+        Set-FlowingProgressViewState -Bar $gloss -Percent 37.5
+        Require ($gloss.Child.Value -eq 37.5 -and $gloss.AccessibleName -eq 'Unrelated application progress') 'Standalone WPF animation requires Codex adapter.'
         $primary=[System.Windows.Forms.Panel]::new()
         $primary.Bounds=[System.Drawing.Rectangle]::new(8,80,240,20)
         $primary.Tag=[pscustomobject]@{Failure='Simulated primary renderer failure';Fallback=$null}
@@ -48,7 +51,7 @@ try {
         Remove-ProgressHost -Primary $primary
         Require ($primary.IsDisposed -and $fallback.IsDisposed) 'Progress control ownership leak.'
     }finally{$form.Dispose()}
-    Write-Host 'Independent consumer of nine standalone modules PASS.'
+    Write-Host 'Independent consumer of ten standalone modules PASS.'
 }finally{
     if(Test-Path $temp){Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue}
 }

@@ -50,7 +50,7 @@ The Aero progress-bar renderer has been separated into an independently importab
 
 See [security review, risks and signing workflow](docs/SECURITY-REVIEW.md). A read-only security diagnostics script is included at `tools/Get-SchedulerSecurityDiagnostics.ps1` in the packaged app (or in the repository `scripts` directory). It does not change Bitdefender settings.
 
-## Modular architecture and reusable components (v1.14.0 review)
+## Modular architecture and reusable components (v1.15.0 adversarial review)
 
 The GUI now has a thin entrypoint and separate files for layout, asynchronous reads, user actions, and application lifecycle. The Codex-specific worker lives in CodexRunEngine.ps1, **outside the GUI**. Generic infrastructure is independently importable:
 
@@ -59,12 +59,16 @@ The GUI now has a thin entrypoint and separate files for layout, asynchronous re
 - **SettingsStore:** atomic JSON persistence without application-specific fields.
 - **RuntimeBundle:** immutable content-addressed snapshots of worker files.
 - **OneTimeTasks:** validated Windows one-time task registration and cancellation.
+- **WindowShell:** standalone WinForms window and control constructors.
+- **ProgressHost:** renderer-neutral fallback recovery and safe disposal.
+- **GitRepository:** generic read-only Git root/branch checks.
+- **JobOutcomes:** persistent completed, deferred, failed, blocked and cancelled outcomes.
 
 See [reusable components and usage examples](components/README.md) and [architecture / boundaries](docs/ARCHITECTURE.md). The review workflow produces a standalone reusable-components ZIP, separate from the scheduler and AeroProgress-only ZIP. Windows-specific components require Windows; the others require PowerShell 7.
 
 **Scheduled jobs are pinned to their original worker files.** A later app upgrade creates a new runtime snapshot rather than overwriting the runner for existing tasks. Before execution, the worker validates every pinned file against the saved SHA-256 fingerprint. This detects accidental runtime changes; it does not defend against the same Windows account intentionally rewriting both job metadata and files.
 
-The scheduler now returns a failure exit code when Codex fails, and successful Codex executions cannot trigger automatic retries. Retries require the **same verified account ID** recorded when the job was scheduled; if backend identity is unavailable, automatic retry cannot be enabled. Refresh usage to check identity, or disable Auto-resume and schedule a manual run. Older tasks without runtime pinning keep their existing registered launchers; cancel and reschedule to adopt version-pinned execution.
+The scheduler records distinct completed, deferred, failed and blocked outcomes. Nonzero Codex errors remain nonzero unless a verified retry is registered; that case is saved explicitly as deferred. Retries require verified account identity. When the rate-limit response omits accountId, the documented account/read endpoint can supply a hashed ChatGPT email fingerprint; no raw email is saved. If neither identity exists, automatic retry is unavailable and manual scheduling remains allowed. Refresh usage to check identity, or disable Auto-resume and schedule a manual run. Older tasks without runtime pinning keep their existing registered launchers; cancel and reschedule to adopt version-pinned execution.
 
 ## Requirements
 
@@ -150,3 +154,7 @@ This is an independent community utility, not an official OpenAI product.
 ## Publishing a new public repository (maintainer)
 
 The optional `Publish-To-GitHub.cmd` launches the publication helper, which uses an authenticated [GitHub CLI](https://cli.github.com/) to create `Dukxud/codex-resume-scheduler` as a public repository. It checks the GitHub login, uses GitHub's no-reply commit email, refuses to overwrite an existing repository, and verifies that the public `main` branch received the intended commit. This script is not part of normal app operation.
+
+### Reuse acceptance
+
+The standalone component kit is exercised by a **second unrelated Windows application**, using only copied component folders and no Codex runtime, source files or user profile. The scheduler UI uses an explicit selection/usage/preferences/dashboard state context; the Codex worker has no GUI state dependency. Queued tasks allocate browser-backed progress views only for visible rows. These are verified by isolated Windows tests; application-specific forms and renderer integrations remain Windows-only.

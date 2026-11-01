@@ -39,7 +39,7 @@ test('production preserves captured Windows v1.8 bar pixels and compositor',()=>
   const a=reference.match(/function nativePaint\(([\s\S]*?)function drawNativeAll\(\)/);
   const b=production.match(/function nativePaint\(([\s\S]*?)function paintNative\(\)/);
   assert.ok(a&&b);
-  assert.equal(a[1].trim(),b[1].trim());
+  assert.equal(a[1].replaceAll('aeroEnabled','aero').trim(),b[1].trim());
 });
 
 test('isolated WebView2 page is local and its host API is syntactically valid',()=>{

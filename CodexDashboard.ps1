@@ -1,29 +1,14 @@
+Import-Module (Join-Path $PSScriptRoot 'components/Countdown/Countdown.psm1') -Force -ErrorAction Stop
 # Dashboard views. Approved Aero v3 bars use WebView2, with WPF fallback.
 
+# UI names preserved while calculations live in the reusable Countdown API.
 function Get-RunCountdownText {
-    param([datetime]$When, [datetime]$Now)
-    $seconds = [long][math]::Ceiling(($When - $Now).TotalSeconds)
-    if ($seconds -le 0) { return 'Due now' }
-    $days = [long][math]::Floor($seconds / 86400)
-    $hours = [long][math]::Floor(($seconds % 86400) / 3600)
-    $minutes = [long][math]::Floor(($seconds % 3600) / 60)
-    $remainder = $seconds % 60
-    if ($days) { return ('{0}d {1}h {2}m' -f $days,$hours,$minutes) }
-    if ($hours) { return ('{0}h {1}m' -f $hours,$minutes) }
-    if ($minutes) { return ('{0}m {1}s' -f $minutes,$remainder) }
-    return ('{0}s' -f $remainder)
+    param([datetime]$When,[datetime]$Now)
+    return Get-CountdownText -DueAt $When -Now $Now
 }
-
 function Get-RunCountdownPercent {
-    param([datetime]$When, $CreatedAt, [datetime]$Now)
-    if ($null -eq $CreatedAt -or [string]$CreatedAt -notmatch '^\d{9,12}$') { return $null }
-    try {
-        $start = [DateTimeOffset]::FromUnixTimeSeconds([long]$CreatedAt).LocalDateTime
-        $duration = ($When - $start).TotalSeconds
-        if ($duration -le 0) { return $null }
-        $elapsed = ($Now - $start).TotalSeconds
-        return [int][math]::Round([math]::Clamp(100 * $elapsed / $duration, 0, 100))
-    } catch { return $null }
+    param([datetime]$When,$CreatedAt,[datetime]$Now)
+    return Get-CountdownElapsedPercent -DueAt $When -CreatedAt $CreatedAt -Now $Now
 }
 
 function Get-DashboardUsageModel {

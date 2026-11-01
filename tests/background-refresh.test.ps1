@@ -1,7 +1,7 @@
 # Verify costly data reads are dispatched to background jobs, never from refresh handlers.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$gui = Get-Content -LiteralPath (Join-Path $root 'CodexResumeScheduler.ps1') -Raw
+$gui = Get-Content -LiteralPath (Join-Path $root 'CodexUiRefresh.ps1') -Raw
 $data = Get-Content -LiteralPath (Join-Path $root 'CodexData.ps1') -Raw
 $tokens = $null; $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseInput($gui, [ref]$tokens, [ref]$parseErrors)
@@ -12,7 +12,8 @@ if ($gui -notmatch 'Get-ReportedThreadDirectory' -or $gui -notmatch 'Find-Sessio
 if ($data -notmatch 'thread/read' -or $data -notmatch 'Get-ReportedThreadDirectory') { throw 'Codex metadata lookup missing from the data helper.' }
 if ($gui -notmatch 'Start-ThreadJob' -or $gui -notmatch '\$dataPoll\.Add_Tick') { throw 'Background refresh and result polling missing.' }
 if ($data -notmatch "Get-ScheduledTask -TaskName 'CodexResume-\*'") { throw 'Pending refresh must use task name filtering.' }
-if ($gui -notmatch "'CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1','CodexFlowingBar.ps1','CodexRunJob.vbs'") { throw 'Scheduled runner needs all helper files installed.' }
+$worker = Get-Content -LiteralPath (Join-Path $root 'CodexRunEngine.ps1') -Raw
+if ($worker -notmatch 'Get-CodexRuntimeFiles' -or $worker -notmatch 'Assert-RuntimeFingerprint') { throw 'Scheduled runner must use an immutable runtime snapshot.' }
 $definitions = @($ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in @('Refresh-SessionList','Refresh-PendingList','Request-SelectionLookup','Start-DataRead')}, $true))
 if ($definitions.Count -ne 4) { throw 'Expected four async data-refresh entrypoints.' }
 foreach ($definition in $definitions | Where-Object Name -in @('Refresh-SessionList','Refresh-PendingList','Request-SelectionLookup')) {

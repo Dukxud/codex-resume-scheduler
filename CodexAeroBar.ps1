@@ -79,7 +79,7 @@ function Test-AeroRenderer {
 
 function Send-AeroState {
     param([System.Windows.Forms.Control]$Bar)
-    if (-not $Bar -or $Bar.IsDisposed) { return }
+    if (-not $Bar -or $Bar.IsDisposed -or $Bar.Tag.Fallback -or $Bar.Tag.Failure) { return }
     # The module queues this state if WebView2 has not finished starting.
     Set-AeroProgressViewState -View $Bar -State @{
         type='set'
@@ -91,6 +91,42 @@ function Send-AeroState {
         speed=[double]$script:aeroAppearance['speed']/100.0
         aero=[bool]$script:aeroAppearance['aero']
     }
+}
+
+# A failed renderer must not leave a permanent blank bar. The view itself
+# stays as the stable caller reference; its fallback is a WPF ElementHost.
+function Ensure-AeroFallback {
+    param([System.Windows.Forms.Control]$Bar)
+    if (-not $Bar -or $Bar.IsDisposed -or -not $Bar.Tag.Failure -or $Bar.Tag.Fallback) { return }
+    $parent = $Bar.Parent
+    if (-not $parent -or $parent.IsDisposed) { return }
+    try {
+        $host = New-FlowingProgressBar $parent $Bar.Left $Bar.Top $Bar.Width $Bar.Height ([string]$Bar.Tag.Kind)
+        $Bar.Tag.Fallback = $host
+        $Bar.Visible = $false
+        $host.BringToFront()
+        Set-FlowingProgress $host $Bar.Tag.Percent
+    } catch {
+        $script:aeroError = "Aero recovery failed: $($_.Exception.Message)"
+    }
+}
+
+function Start-AeroHealthMonitor {
+    if (-not $script:aeroHealthTimer) {
+        $script:aeroHealthTimer = [System.Windows.Forms.Timer]::new()
+        $script:aeroHealthTimer.Interval = 900
+        $script:aeroHealthTimer.Add_Tick({
+            foreach ($bar in @($script:aeroBars)) {
+                if ($bar.IsDisposed) {
+                    [void]$script:aeroBars.Remove($bar)
+                    continue
+                }
+                Ensure-AeroFallback $bar
+            }
+            if ($script:aeroBars.Count -eq 0) { $script:aeroHealthTimer.Stop() }
+        })
+    }
+    if (-not $script:aeroHealthTimer.Enabled) { $script:aeroHealthTimer.Start() }
 }
 
 function New-AeroProgressBar {
@@ -113,6 +149,7 @@ function New-AeroProgressBar {
             -UserDataDirectory (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CodexResumeScheduler/AeroWebView2')
         $view.Tag.Kind = $Kind
         $script:aeroBars.Add($view)
+        Start-AeroHealthMonitor
         Send-AeroState $view
         return $view
     } catch {
@@ -130,5 +167,8 @@ function Set-AeroProgress {
     $value = if ($null -eq $Percent) { $null } else { [double][math]::Clamp([double]$Percent,0,100) }
     if ($Bar.Tag.Percent -eq $value) { return }
     $Bar.Tag.Percent = $value
+    if ($Bar.Tag.Fallback) { Set-FlowingProgress $Bar.Tag.Fallback $value; return }
+    Ensure-AeroFallback $Bar
+    if ($Bar.Tag.Fallback) { Set-FlowingProgress $Bar.Tag.Fallback $value; return }
     Send-AeroState $Bar
 }

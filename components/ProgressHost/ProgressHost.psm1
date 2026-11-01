@@ -9,7 +9,7 @@ function Get-ProgressHostSurface {
     if($replacement -and -not $replacement.IsDisposed){return $replacement}
     return $Primary
 }
-function Ensure-ProgressHostFallback {
+function Repair-ProgressHost {
     [CmdletBinding()]
     param([Parameter(Mandatory)][System.Windows.Forms.Control]$Primary,
           [Parameter(Mandatory)][scriptblock]$FallbackFactory)
@@ -57,4 +57,4 @@ function Remove-ProgressHost {
     if($Primary.Parent){$Primary.Parent.Controls.Remove($Primary)}
     $Primary.Dispose()
 }
-Export-ModuleMember -Function Get-ProgressHostSurface,Ensure-ProgressHostFallback,Set-ProgressHostLayout,Remove-ProgressHost
+Export-ModuleMember -Function Get-ProgressHostSurface,Repair-ProgressHost,Set-ProgressHostLayout,Remove-ProgressHost

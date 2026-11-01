@@ -35,7 +35,7 @@ try {
     if($actualFiles.Count -ne $checked){throw 'Extra files not inventoried in checksum manifest.'}
     if(-not (Test-Path (Join-Path $base 'UNSIGNED-REVIEW-ONLY.txt'))){throw 'Unsigned preview not labeled.'}
     if($zip -eq $one){
-      foreach($file in @('CodexResumeScheduler.ps1','CodexRunJob.vbs','components/AeroProgress/AeroProgress.psm1','tools/Get-SchedulerSecurityDiagnostics.ps1','docs/SECURITY-REVIEW.md','docs/ARCHITECTURE.md')){
+      foreach($file in @('CodexResumeScheduler.ps1','CodexRunJob.vbs','CodexUiState.ps1','components/AeroProgress/AeroProgress.psm1','tools/Get-SchedulerSecurityDiagnostics.ps1','docs/SECURITY-REVIEW.md','docs/ARCHITECTURE.md')){
         if(-not (Test-Path -LiteralPath (Join-Path $base $file))){throw "Missing scheduler release component: $file"}
       }
     }elseif($zip -eq $two){
@@ -47,6 +47,8 @@ try {
       foreach($file in @(
         'components/README.md','components/AeroProgress/AeroProgress.psm1',
         'components/RuntimeBundle/RuntimeBundle.psm1','components/SettingsStore/SettingsStore.psm1',
+        'components/ProgressHost/ProgressHost.psm1','components/WindowShell/WindowShell.psm1',
+        'components/GitRepository/GitRepository.psm1','components/JobOutcomes/JobOutcomes.psm1',
         'components/Countdown/Countdown.psm1','components/OneTimeTasks/OneTimeTasks.psm1',
         'components/AeroProgress/AeroWebView2/WebView2Loader.dll','components/AeroProgress/AeroBar.html')){
         if(-not (Test-Path -LiteralPath (Join-Path $base $file))){throw "Missing reusable module artifact: $file"}

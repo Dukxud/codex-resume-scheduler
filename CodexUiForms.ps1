@@ -18,6 +18,23 @@ public static extern bool ShowWindow(System.IntPtr handle, int command);
 
 
 
+# Legacy settings.json files contain only lastAccess. A draft is optional.
+$script:uiSettings = Read-CodexUiSettings $appDir
+$script:savedDraft = if ($script:uiSettings -and $script:uiSettings.draft) { $script:uiSettings.draft } else { $null }
+$script:preferredSessionId = if ($script:savedDraft) { [string]$script:savedDraft.sessionId } else { '' }
+$script:preferredModelId = if ($script:savedDraft) { [string]$script:savedDraft.model } else { '' }
+$script:preferredEffort = if ($script:savedDraft) { [string]$script:savedDraft.effort } else { '' }
+$script:startupSavedSessionId = $script:preferredSessionId
+$script:startupSavedModelId = $script:preferredModelId
+$script:repoSelectionSessionId = ''
+$script:settingsReady = $false
+
+function Get-SavedAccessPreference {
+    if ($script:savedDraft -and $script:savedDraft.access -in @('workspace-write','yolo','read-only')) { return [string]$script:savedDraft.access }
+    if ($script:uiSettings -and $script:uiSettings.lastAccess -in @('workspace-write','yolo','read-only')) { return [string]$script:uiSettings.lastAccess }
+    return 'workspace-write'
+}
+
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Codex Resume Scheduler v1.14.0'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)

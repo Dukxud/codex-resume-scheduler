@@ -17,9 +17,11 @@ $folder=Join-Path $tempRoot $name
 if(Test-Path $folder){Remove-Item -LiteralPath $folder -Recurse -Force}
 [void](New-Item -ItemType Directory -Path $folder -Force)
 Copy-Item -LiteralPath (Join-Path $root 'components') -Destination $folder -Recurse
-Copy-Item -LiteralPath (Join-Path $root 'AeroWebView2') -Destination $folder -Recurse
-[void](New-Item -ItemType Directory -Path (Join-Path $folder 'assets') -Force)
-Copy-Item -LiteralPath (Join-Path $root 'assets/AeroBar.html') -Destination (Join-Path $folder 'assets/AeroBar.html')
+# Make each module folder independently portable: AeroProgress carries its
+# renderer and the required Microsoft SDK DLLs beside its own module.
+$aeroFolder=Join-Path $folder 'components/AeroProgress'
+Copy-Item -LiteralPath (Join-Path $root 'AeroWebView2') -Destination $aeroFolder -Recurse
+Copy-Item -LiteralPath (Join-Path $root 'assets/AeroBar.html') -Destination (Join-Path $aeroFolder 'AeroBar.html')
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $folder
 Copy-Item -LiteralPath (Join-Path $root 'VERSION') -Destination $folder
 if(-not $Preview){

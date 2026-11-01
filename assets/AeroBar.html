@@ -329,6 +329,7 @@ function tick(now){
 }
 window.aeroBarProof={
  getTarget:()=>value,getVisual:()=>visual,getColor:()=>selectedColor,
+ isNativeSourceReady:()=>{const img=images[colors[selected].key];return !!(img&&img.complete&&img.naturalWidth);},
  getEngine:()=>shaderReady?'webgl2':'native-only',getError:()=>shaderError,
  getFrames:()=>frames,getPhase:()=>phase,getSettings:()=>({aero:aeroEnabled,finish,lighting,shimmer,speed}),
  set:(next,color)=>apply({value:next,color}),setAppearance:apply,render:()=>{paintNative();drawOptics();}

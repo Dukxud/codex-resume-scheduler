@@ -23,3 +23,8 @@ test('successful Codex executions never enter retry analysis and failures return
  assert.match(ps,/return \$\(if \(\[int\]\$result -eq 0\)/);
  assert.match(ps,/return 1\s+\} finally/);
 });
+
+test('account binding is checked before every automatic worker run',()=>{
+ assert.match(ps,/if \(\$auto\) \{\s+\$state = Read-UsageState \$model/);
+ assert.match(ps,/if \(-not \$state\.accountId -or \$job\.accountId -cne \$state\.accountId\)/);
+});

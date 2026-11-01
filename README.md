@@ -4,9 +4,9 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 
 ![Windows](https://img.shields.io/badge/Windows-PowerShell%207-blue)
 
-**Latest versioned release: [GitHub Releases](https://github.com/Dukxud/codex-resume-scheduler/releases/latest)**
+**Latest published versioned release (main branch): [GitHub Releases](https://github.com/Dukxud/codex-resume-scheduler/releases/latest)**
 
-Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The review package contains PowerShell/JavaScript, a reusable AeroProgress module and Microsoft WebView2 SDK libraries. First-party preview scripts are **unsigned**, and no executable is supplied.
+Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The review package contains PowerShell/JavaScript, independently importable modules, the AeroProgress material and Microsoft WebView2 SDK libraries. First-party preview scripts are **unsigned**, and no executable is supplied.
 
 ## What it does
 
@@ -25,7 +25,7 @@ Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. T
 
 ## Responsiveness and concurrent sessions
 
-The GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI. The interface groups model and reasoning settings, displays recognizable project names rather than opaque task IDs, and keeps full details in tooltips. When there are no scheduled runs, the upcoming-run section collapses. Background pending refresh no longer replaces actionable status messages.
+The modular GUI dispatches saved-conversation discovery, repository lookup, and pending scheduled-task reads to short-lived background PowerShell jobs. It coalesces overlapping refresh requests, and all UI updates occur on the interface thread. No persistent service runs after you close the GUI. The interface groups model and reasoning settings, displays recognizable project names rather than opaque task IDs, and keeps full details in tooltips. When there are no scheduled runs, the upcoming-run section collapses. Background pending refresh no longer replaces actionable status messages.
 
 **Concurrent sessions:** the previous process-based open-session detector was removed because it could not reliably identify an independently opened interactive Codex conversation. Before scheduling a continuation, close any other Codex window that might be using that conversation.
 
@@ -49,6 +49,22 @@ Use **Save and close** to apply to all visible bars and persist the choices loca
 The Aero progress-bar renderer has been separated into an independently importable **[AeroProgress PowerShell module](components/AeroProgress/README.md)**. Windows CI packages it separately as `AeroProgress-Component-v1.13.0-Preview.zip`; other WinForms apps can use its API without importing the scheduler or Task Scheduler. The existing scheduler adapter retains WPF fallback, including recovery if WebView2 reports a child-process failure.
 
 See [security review, risks and signing workflow](docs/SECURITY-REVIEW.md). A read-only security diagnostics script is included at `tools/Get-SchedulerSecurityDiagnostics.ps1` in the packaged app (or in the repository `scripts` directory). It does not change Bitdefender settings.
+
+## Modular architecture and reusable components (v1.14.0 review)
+
+The GUI now has a thin entrypoint and separate files for layout, asynchronous reads, user actions, and application lifecycle. The Codex-specific worker lives in CodexRunEngine.ps1, **outside the GUI**. Generic infrastructure is independently importable:
+
+- **AeroProgress:** reusable animated material and WebView2 host.
+- **Countdown:** independent text and percentage calculations.
+- **SettingsStore:** atomic JSON persistence without application-specific fields.
+- **RuntimeBundle:** immutable content-addressed snapshots of worker files.
+- **OneTimeTasks:** validated Windows one-time task registration and cancellation.
+
+See [reusable components and usage examples](components/README.md) and [architecture / boundaries](docs/ARCHITECTURE.md). The review workflow produces a standalone reusable-components ZIP, separate from the scheduler and AeroProgress-only ZIP. Windows-specific components require Windows; the others require PowerShell 7.
+
+**Scheduled jobs are pinned to their original worker files.** A later app upgrade creates a new runtime snapshot rather than overwriting the runner for existing tasks. Before execution, the worker validates every pinned file against the saved SHA-256 fingerprint. This detects accidental runtime changes; it does not defend against the same Windows account intentionally rewriting both job metadata and files.
+
+The scheduler now returns a failure exit code when Codex fails, and successful Codex executions cannot trigger automatic retries. Retries require the **same verified account ID** recorded when the job was scheduled; if backend identity is unavailable, automatic retry cannot be enabled. Refresh usage to check identity, or disable Auto-resume and schedule a manual run. Older tasks without runtime pinning keep their existing registered launchers; cancel and reschedule to adopt version-pinned execution.
 
 ## Requirements
 

@@ -22,7 +22,7 @@ test('production uses exact owner-approved vertex shader and corrected optical f
   const augmented=script(production,'hybridfrag');
   const stripped=augmented
     .replace('uDepth,uCompact,uShimmer;','uDepth,uCompact;')
-    .replace(/ \/\/ A travelling area-light reflection,[\s\S]*?\*uShimmer;\n/, '');
+    .replace(/ \/\/ A travelling area-light reflection,[\s\S]*?\*uShimmer;\r?\n/, '');
   assert.equal(stripped,approved);
   assert.match(augmented,/sweepCenter/);
   assert.match(production,/getFrames:\(\)=>frames/);

@@ -51,7 +51,7 @@ jobs:
         run: pwsh -NoProfile -File ./tests/reusable-components.test.ps1
       - name: Prove standalone components in a separate application
         shell: pwsh
-        run: pwsh -NoProfile -File ./tests/second-application-reuse.test.ps1
+        run: pwsh -NoProfile -STA -File ./tests/second-application-reuse.test.ps1
       - name: Real worker failure exit-code propagation
         shell: pwsh
         run: pwsh -NoProfile -File ./tests/worker-exit-status.test.ps1

@@ -18,16 +18,16 @@ try{
     $bar.Tag.Failure='Simulated WebView2 renderer process exit'
     $bar.Tag.Ready=$false
     Ensure-AeroFallback $bar
-    $host=$bar.Tag.Fallback
-    Require ($host -is [Windows.Forms.Integration.ElementHost]) 'WPF recovery bar was not created.'
-    Require (-not $bar.Visible -and $host.Visible) 'Failed WebView must be hidden and WPF visible.'
-    Require ([math]::Abs([double]$host.Tag-62) -lt .001) 'Recovery lost last authoritative percentage.'
+    $fallbackHost=$bar.Tag.Fallback
+    Require ($fallbackHost -is [Windows.Forms.Integration.ElementHost]) 'WPF recovery bar was not created.'
+    Require (-not $bar.Visible -and $fallbackHost.Visible) 'Failed WebView must be hidden and WPF visible.'
+    Require ([math]::Abs([double]$fallbackHost.Tag-62) -lt .001) 'Recovery lost last authoritative percentage.'
     Set-AeroProgress $bar 91
-    Require ([math]::Abs([double]$host.Tag-91) -lt .001) 'Further percentage updates failed after recovery.'
+    Require ([math]::Abs([double]$fallbackHost.Tag-91) -lt .001) 'Further percentage updates failed after recovery.'
     Set-AeroProgress $bar $null
-    Require ($null -eq $host.Tag) 'Unknown percentage must remain unknown after recovery.'
+    Require ($null -eq $fallbackHost.Tag) 'Unknown percentage must remain unknown after recovery.'
     Ensure-AeroFallback $bar
-    Require ([object]::ReferenceEquals($host,$bar.Tag.Fallback)) 'Recovery created duplicate controls.'
+    Require ([object]::ReferenceEquals($fallbackHost,$bar.Tag.Fallback)) 'Recovery created duplicate controls.'
     Write-Host 'WebView2 failure -> WPF fallback, prior value, future values, null and idempotence PASS.'
 } finally {
     $form.Close();$form.Dispose()

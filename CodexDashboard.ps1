@@ -133,8 +133,7 @@ function Sync-DashboardRunBars {
     while ($script:runBarHosts.Count -gt $count) {
         $last = $script:runBarHosts.Count - 1
         $obsolete = $script:runBarHosts[$last]
-        $grid.Controls.Remove($obsolete)
-        $obsolete.Dispose()
+        Remove-AeroProgressBar $obsolete
         $script:runBarHosts.RemoveAt($last)
     }
     while ($script:runBarHosts.Count -lt $count) {
@@ -146,13 +145,16 @@ function Sync-DashboardRunBars {
         $cell = $grid.GetCellDisplayRectangle(1,$i,$true)
         $inside = $grid.Visible -and $grid.Rows[$i].Visible -and
             $cell.Width -gt 32 -and $cell.Height -ge 22
+        $surface = Get-AeroProgressSurface $bar
         if (-not $inside) {
-            $bar.Visible = $false
+            $surface.Visible = $false
+            if ($surface -ne $bar) { $bar.Visible = $false }
             continue
         }
-        $bar.Location = [System.Drawing.Point]::new($cell.X + 8,$cell.Bottom - 19)
-        $bar.Size = [System.Drawing.Size]::new($cell.Width - 16,15)
-        $bar.Visible = $true
+        $surface.Location = [System.Drawing.Point]::new($cell.X + 8,$cell.Bottom - 19)
+        $surface.Size = [System.Drawing.Size]::new($cell.Width - 16,15)
+        $surface.Visible = $true
+        if ($surface -ne $bar) { $bar.Visible = $false }
         Set-AeroProgress $bar $grid.Rows[$i].Cells[1].Tag
     }
 }

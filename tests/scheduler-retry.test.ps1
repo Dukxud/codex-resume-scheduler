@@ -61,6 +61,8 @@ try {
     try { [void](Schedule-LimitRetry $job $reset $run 'meter-1' $appDir $root) } catch { $rejected = $true }
     Assert $rejected 'Missing identity must reject retry.'
     Assert ($script:registered.Count -eq 1) 'Identity failure must not register a task.'
+    Remove-OneTimeTask -Name $item.TaskName
+    Assert ($script:registered.Count -eq 0) 'Removing a pending task must unregister it rather than merely disabling it.'
     Write-Host 'Retries honor pinned runtime, account identity, timing and cap.'
 } finally {
     Remove-Item -LiteralPath $appDir -Recurse -Force -ErrorAction SilentlyContinue

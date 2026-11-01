@@ -111,6 +111,28 @@ function Ensure-AeroFallback {
     }
 }
 
+# Return the currently visible control; WPF recovery is a sibling of WebView2.
+function Get-AeroProgressSurface {
+    param([System.Windows.Forms.Control]$Bar)
+    if ($Bar -is [System.Windows.Forms.Integration.ElementHost]) { return $Bar }
+    if ($Bar.Tag -and $Bar.Tag.Fallback -and -not $Bar.Tag.Fallback.IsDisposed) { return $Bar.Tag.Fallback }
+    return $Bar
+}
+function Remove-AeroProgressBar {
+    param([System.Windows.Forms.Control]$Bar)
+    if (-not $Bar) { return }
+    if ($Bar -isnot [System.Windows.Forms.Integration.ElementHost]) {
+        $fallback = if ($Bar.Tag) { $Bar.Tag.Fallback } else { $null }
+        if ($fallback -and -not $fallback.IsDisposed) {
+            if ($fallback.Parent) { $fallback.Parent.Controls.Remove($fallback) }
+            $fallback.Dispose()
+        }
+        [void]$script:aeroBars.Remove($Bar)
+    }
+    if ($Bar.Parent) { $Bar.Parent.Controls.Remove($Bar) }
+    if (-not $Bar.IsDisposed) { $Bar.Dispose() }
+}
+
 function Start-AeroHealthMonitor {
     if (-not $script:aeroHealthTimer) {
         $script:aeroHealthTimer = [System.Windows.Forms.Timer]::new()

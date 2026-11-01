@@ -36,7 +36,7 @@ function Get-SavedAccessPreference {
     return 'workspace-write'
 }
 
-$form = New-DesktopWindow -Title 'Codex Resume Scheduler v1.14.0' -Width 920 -Height 865 -MinimumWidth 940 -MinimumHeight 875
+$form = New-DesktopWindow -Title 'Codex Resume Scheduler v1.15.0' -Width 920 -Height 865 -MinimumWidth 940 -MinimumHeight 875
 function Add-Label {
     param([string]$Text,[int]$X,[int]$Y,[int]$W=130)
     return Add-DesktopLabel -Parent $form -Text $Text -X $X -Y $Y -Width $W

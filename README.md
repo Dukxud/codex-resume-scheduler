@@ -61,6 +61,7 @@ The GUI now has a thin entrypoint and separate files for layout, asynchronous re
 - **OneTimeTasks:** validated Windows one-time task registration and cancellation.
 - **WindowShell:** standalone WinForms window and control constructors.
 - **ProgressHost:** renderer-neutral fallback recovery and safe disposal.
+- **FlowingProgress:** reusable glossy WPF progress bars with independent palettes and compositor animation.
 - **GitRepository:** generic read-only Git root/branch checks.
 - **JobOutcomes:** persistent completed, deferred, failed, blocked and cancelled outcomes.
 

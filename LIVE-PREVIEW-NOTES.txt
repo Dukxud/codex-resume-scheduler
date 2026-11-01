@@ -1,0 +1,21 @@
+Codex Resume Scheduler — LIVE 3D MATERIAL BAR PREVIEW
+
+This is an experimental, fully functioning Windows preview based on v1.11.0.
+The four comparison bars are live Windows Presentation Foundation (WPF)
+ProgressBar controls hosted inside the real scheduler, not pictures.
+
+Run:
+1. Extract the ENTIRE versioned ZIP into a new folder.
+2. Double-click Start-Codex-Scheduler.vbs (PowerShell 7 is required).
+3. In standard/full mode, click "Compare 3D bars" next to "Usage remaining".
+4. Move the percentage slider. All four bars respond independently to the
+   sample percentage, and their highlights animate while the value is fixed.
+
+This preview does NOT replace the existing usage or countdown bars, does NOT
+save a preferred style, and does NOT modify scheduled jobs or preferences.
+
+For visual evidence, the Windows CI build captures actual WPF control pixels
+at 68% and a sequence of real animation frames. They are not generated art.
+
+The production release remains v1.11.0. The display quality of this
+experimental preview has NOT been approved.

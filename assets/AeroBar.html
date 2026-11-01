@@ -103,12 +103,22 @@ vec3 colorSurface(vec3 normal,vec3 position,float thickness,vec2 p,float front){
  reflectance+=vec3(.40,.54,.70)*capGlow;
  float pFront=G(p.x-(front-.035),.07)*G(p.y-.02,.12);
  reflectance+=vec3(.62,.80,1.0)*pFront*.45;
- // A travelling area-light reflection, curved by the same surface normals.
- // This makes the approved optical material read at actual 17px scheduler size.
- float sweepCenter=-4.56+9.12*fract(uTime*.40);
- float sweepBand=G(p.x-(sweepCenter+.19*normal.y),.21);
- float specFacing=pow(S(dot(normal,normalize(vec3(.0,.24,.97)))),1.8);
- reflectance+=vec3(2.0,2.14,2.26)*sweepBand*(.30+.70*specFacing)*uShimmer;
+ // A wide, softly reflected studio light moves across the curved liquid.
+ // Its two-dimensional footprint, view-dependent response and curved falloff
+ // produce a shifting luminous patch, not a hard vertical zebra stripe.
+ float travel=fract(uTime*.18);
+ float lightX=mix(-4.95,4.95,travel);
+ vec3 view=vec3(.0,.0,1.0);
+ vec3 lamp=normalize(vec3(lightX-p.x,1.15-p.y,3.6-position.z));
+ vec3 halfLamp=normalize(lamp+view);
+ float angular=pow(S(dot(normal,halfLamp)),12.0);
+ float bentX=p.x-lightX+.32*normal.y+.13*sin(p.y*5.2+p.x*.65);
+ float horizontal=G(bentX,1.13);
+ float vertical=G(p.y-.11-.09*sin(p.x*.45+uTime*.17),.31);
+ float softbox=horizontal*vertical;
+ float specularPatch=softbox*(.24+.74*angular);
+ float diffuseHalo=G(bentX,1.76)*G(p.y-.08,.49)*.13;
+ reflectance+=vec3(.90,1.06,1.18)*(specularPatch+diffuseHalo)*uShimmer;
  // Gloss appears as genuinely varying reflected environmental radiance.
  return tonemap(base+reflectance);
 }
@@ -166,10 +176,11 @@ const colors=[
  {key:'cyan',name:'Cyan',v3:'Lagoon Cyan',rgb:[.015,.81,1.00],hex:'#04D5F7'},
  {key:'violet',name:'Violet',v3:'Royal Amethyst',rgb:[.47,.22,1.],hex:'#9D64FF'},
  {key:'amber',name:'Amber',v3:'Solar Amber',rgb:[1.,.47,.035],hex:'#FFB328'},
- {key:'red',name:'Red',v3:'Ruby Red',rgb:[1.,.045,.14],hex:'#FF3B62'}];
+ {key:'red',name:'Red',v3:'Ruby Red',rgb:[1.,.045,.14],hex:'#FF3B62'},
+ {key:'custom',name:'Custom color',v3:'User-selected optical pigment',rgb:[1.,.45,.25],hex:'#FF8040'}];
 const assets=JSON.parse($('native-images').textContent);
 const images={};
-let value=0, visual=0,velocity=0,phase=0,last=0,lastNative=-1,selected=0;
+let value=0, visual=0,velocity=0,phase=0,last=0,lastNative=-1,selected=0,selectedColor='green';
 let aeroEnabled=true, finish=0, lighting=0, shimmer=1.0, speed=1.0, frames=0;
 let ready=false,shaderReady=false,shaderError=null;
 const barCanvas=$('native'),overlay=$('aero');
@@ -179,6 +190,27 @@ for(const color of colors){
  image.src=assets[color.key];
  images[color.key]=image;
 }
+// Derive user-chosen native fill pixels FROM the approved Windows source.
+// The neutral glass, track and original light/dark contrast stay unchanged.
+function updateCustomSprite(hex){
+ const source=images.green;
+ if(!source||!source.complete||!source.naturalWidth)return;
+ const canvas=document.createElement('canvas');canvas.width=400;canvas.height=13;
+ const c=canvas.getContext('2d',{willReadFrequently:true});c.drawImage(source,0,0);
+ const bitmap=c.getImageData(0,0,400,13),pixels=bitmap.data;
+ const target=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
+ for(let y=0;y<13;y++)for(let x=2;x<200;x++){
+  const i=(y*400+x)*4;
+  const low=Math.min(pixels[i],pixels[i+1],pixels[i+2]);
+  const high=Math.max(pixels[i],pixels[i+1],pixels[i+2]);
+  if(high-low<9)continue; // Preserve neutral edges and white highlights.
+  for(let channel=0;channel<3;channel++)pixels[i+channel]=Math.round(low+(high-low)*target[channel]);
+ }
+ c.putImageData(bitmap,0,0);
+ const image=new Image();image.onload=()=>paintNative();image.src=canvas.toDataURL('image/png');
+ images.custom=image;
+}
+images.green.addEventListener('load',()=>{if(selectedColor.startsWith('#'))updateCustomSprite(selectedColor);});
 // Keep the approved v2.0.1 source-pixel compositing algorithm verbatim.
 function nativePaint(canvas,idx,hybrid){
  const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;
@@ -260,8 +292,16 @@ function drawOptics(){
 function apply({value:next,color,finish:nextFinish,lighting:nextLighting,shimmer:nextShimmer,speed:nextSpeed,aero:nextAero}){
  if(typeof next==='number' && Number.isFinite(next))value=Math.max(0,Math.min(1,next));
  if(typeof color==='string'){
-  const chosen=colors.findIndex(c=>c.key===color);
-  if(chosen>=0){selected=chosen;paintNative();}
+  if(/^#[0-9a-fA-F]{6}$/.test(color)){
+   selectedColor=color.toUpperCase();selected=colors.length-1;
+   const c=colors[selected];c.hex=selectedColor;
+   c.rgb=[1,3,5].map(i=>Math.pow(parseInt(color.slice(i,i+2),16)/255,1.09));
+   updateCustomSprite(selectedColor);
+   paintNative();
+  }else{
+   const chosen=colors.findIndex(c=>c.key===color && c.key!=='custom');
+   if(chosen>=0){selected=chosen;selectedColor=color;paintNative();}
+  }
  }
  if(Number.isInteger(nextFinish)&&nextFinish>=0&&nextFinish<=2)finish=nextFinish;
  if(Number.isInteger(nextLighting)&&nextLighting>=0&&nextLighting<=2)lighting=nextLighting;
@@ -288,7 +328,7 @@ function tick(now){
  drawOptics();frames++;requestAnimationFrame(tick);
 }
 window.aeroBarProof={
- getTarget:()=>value,getVisual:()=>visual,getColor:()=>colors[selected].key,
+ getTarget:()=>value,getVisual:()=>visual,getColor:()=>selectedColor,
  getEngine:()=>shaderReady?'webgl2':'native-only',getError:()=>shaderError,
  getFrames:()=>frames,getPhase:()=>phase,getSettings:()=>({aero:aeroEnabled,finish,lighting,shimmer,speed}),
  set:(next,color)=>apply({value:next,color}),setAppearance:apply,render:()=>{paintNative();drawOptics();}

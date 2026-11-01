@@ -1,4 +1,6 @@
 # Small, reusable Windows Forms shell primitives. No application settings or Codex.
+Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+Add-Type -AssemblyName System.Drawing -ErrorAction Stop
 function New-DesktopWindow {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Title,

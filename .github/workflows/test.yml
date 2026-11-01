@@ -73,6 +73,17 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseFile($source.FullName, [ref]$tokens, [ref]$errors)
             if ($errors.Count) { $errors | Out-String | Write-Error; exit 1 }
           }
+      - name: Assemble versioned review ZIP
+        if: github.ref != 'refs/heads/main'
+        shell: pwsh
+        run: ./scripts/Package-CodexScheduler.ps1 -OutputDirectory ./PreviewArtifacts -Preview
+      - name: Upload integrated scheduler preview
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodexResumeScheduler-v1.12.0-Aero-Preview
+          path: PreviewArtifacts/*.zip
+          retention-days: 30
 
   release:
     # Never publish an untested source-branch ZIP. Main is published only after
@@ -91,21 +102,7 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
-          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid VERSION file.' }
-          $bundleName = "CodexResumeScheduler-v$version"
-          $folder = Join-Path $env:RUNNER_TEMP $bundleName
-          [void](New-Item -ItemType Directory -Path $folder -Force)
-          $files = @('CodexResumeScheduler.ps1','CodexDashboard.ps1',
-            'CodexFlowingBar.ps1','CodexAeroBar.ps1','CodexData.ps1','CodexUsage.js','CodexRetry.js','Start-Codex-Scheduler.vbs',
-            'Start-Codex-Scheduler.cmd','CodexRunJob.vbs','README.md','LICENSE','VERSION')
-          foreach ($name in $files) {
-            if (-not (Test-Path -LiteralPath $name -PathType Leaf)) { throw "Release file missing: $name" }
-            Copy-Item -LiteralPath $name -Destination $folder
-          }
-          Copy-Item -LiteralPath assets -Destination $folder -Recurse
-          Copy-Item -LiteralPath AeroWebView2 -Destination $folder -Recurse
-          $archive = Join-Path $env:RUNNER_TEMP "$bundleName.zip"
-          Compress-Archive -Path $folder -DestinationPath $archive -Force
+          $archive = ./scripts/Package-CodexScheduler.ps1 -OutputDirectory $env:RUNNER_TEMP
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_VERSION=$version"
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_ARCHIVE=$archive"
       - name: Publish versioned GitHub release

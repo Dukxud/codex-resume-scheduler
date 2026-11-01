@@ -2,7 +2,9 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+$env:CODEX_BAR_RENDERER = 'wpf'
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexFlowingBar.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexAeroBar.ps1')
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexDashboard.ps1')
 function Require($Condition, $Message) { if (-not $Condition) { throw $Message } }
 function New-TestControl {

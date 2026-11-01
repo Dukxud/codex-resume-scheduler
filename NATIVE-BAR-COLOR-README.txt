@@ -1,19 +1,24 @@
-Native Windows v1.8 ProgressBar — recoloring test
+Original Windows v1.8 Bar + Aero Liquid — LIVE preview
 
 Run: double-click Start-Native-Bar-Color-Lab.vbs
-Prerequisite: Windows with PowerShell 7.
+Requires Windows and PowerShell 7.
 
-The first bar is an unmodified WinForms ProgressBar at the original
-v1.8 dimensions (400 x 13).
+The ORIGINAL GREEN row is still the exact v1.8 WinForms ProgressBar,
+with Windows visual styles active. The other five bars still use a
+color remap of the actual original Windows control's rendered pixels.
 
-All other colors use frames sampled from that exact original, remapped
-through GDI+ RGB channel matrices. Grey tracks and white highlights
-remain neutral. There are NO replacement bar skins or gradient templates.
+NEW:
+  - Aero Liquid checked: soft curved internal reflections, caustics,
+    and a rounded liquid front travel inside the existing Windows fill.
+  - Uncheck Aero Liquid: return to the exact approved recolored bars.
+  - Aero intensity: change the strength of the optical overlay.
+  - Percentage slider: real native progress value remains authoritative.
 
-The slider changes the single original native bar's percentage.
-The colored copies follow it. The source is sampled about 13 times per
-second; the application does not alter your scheduler or its settings.
+No custom executable, WebView2 dependency, commercial controls, or
+third-party runtime. All visuals come from Windows Forms and GDI+.
+This is a small Aero-inspired optical overlay at the original 400x13
+Windows bar dimensions, not a full GPU fluid simulation.
 
-This is a visual feasibility experiment, not a published product change.
-Do not assume animated theme reflections will survive until the capture
-and animation tests have been checked on your Windows version.
+This is an unmerged preview. It changes no scheduler settings,
+scheduled runs, or production UI. Windows CI captures OFF, ON, and
+two motion phases at an unchanged percentage for comparison.

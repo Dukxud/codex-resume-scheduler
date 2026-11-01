@@ -40,6 +40,7 @@ foreach($dir in @('assets','AeroWebView2','components')){
 # Ship security-review instructions and read-only diagnostics with the app.
 [void](New-Item -ItemType Directory -Path (Join-Path $folder 'docs') -Force)
 Copy-Item -LiteralPath (Join-Path $root 'docs/SECURITY-REVIEW.md') -Destination (Join-Path $folder 'docs/SECURITY-REVIEW.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/ARCHITECTURE.md') -Destination (Join-Path $folder 'docs/ARCHITECTURE.md')
 [void](New-Item -ItemType Directory -Path (Join-Path $folder 'tools') -Force)
 Copy-Item -LiteralPath (Join-Path $root 'scripts/Get-SchedulerSecurityDiagnostics.ps1') -Destination (Join-Path $folder 'tools/Get-SchedulerSecurityDiagnostics.ps1')
 # A signed release MUST NOT ask PowerShell to bypass signature checks.

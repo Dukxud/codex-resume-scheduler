@@ -126,36 +126,35 @@ function Initialize-Dashboard {
 }
 
 function Sync-DashboardRunBars {
-    # The DataGridView remains responsible for text, scrolling, selection and
-    # task identity. One WPF ElementHost is positioned in each visible time cell.
-    if ($null -eq $script:ui.Dashboard.runBarHosts -or $grid.Columns.Count -lt 2) { return }
-    $count = $grid.Rows.Count
-    while ($script:ui.Dashboard.runBarHosts.Count -gt $count) {
-        $last = $script:ui.Dashboard.runBarHosts.Count - 1
-        $obsolete = $script:ui.Dashboard.runBarHosts[$last]
-        Remove-AeroProgressBar $obsolete
-        $script:ui.Dashboard.runBarHosts.RemoveAt($last)
-    }
-    while ($script:ui.Dashboard.runBarHosts.Count -lt $count) {
-        $new = New-AeroProgressBar $grid 0 0 100 15 'time'
-        $script:ui.Dashboard.runBarHosts.Add($new)
-    }
-    for ($i=0; $i -lt $count; $i++) {
-        $bar = $script:ui.Dashboard.runBarHosts[$i]
-        $cell = $grid.GetCellDisplayRectangle(1,$i,$true)
-        $inside = $grid.Visible -and $grid.Rows[$i].Visible -and
-            $cell.Width -gt 32 -and $cell.Height -ge 22
-        $surface = Get-AeroProgressSurface $bar
-        if (-not $inside) {
-            $surface.Visible = $false
-            if ($surface -ne $bar) { $bar.Visible = $false }
-            continue
+    # Browser-backed views are expensive. Keep one live bar for each visible
+    # grid cell, not one hidden WebView2 per scheduled job.
+    $hosts=$script:ui.Dashboard.runBarHosts
+    if ($null -eq $hosts -or $grid.Columns.Count -lt 2) { return }
+    $visible=[Collections.Generic.List[object]]::new()
+    if($grid.Visible){
+        for($rowIndex=0;$rowIndex -lt $grid.Rows.Count;$rowIndex++){
+            if(-not $grid.Rows[$rowIndex].Visible){continue}
+            $cell=$grid.GetCellDisplayRectangle(1,$rowIndex,$true)
+            if($cell.Width -gt 32 -and $cell.Height -ge 22){
+                $visible.Add([pscustomobject]@{ Row=$rowIndex; Cell=$cell })
+            }
         }
-        $surface.Location = [System.Drawing.Point]::new($cell.X + 8,$cell.Bottom - 19)
-        $surface.Size = [System.Drawing.Size]::new($cell.Width - 16,15)
-        $surface.Visible = $true
-        if ($surface -ne $bar) { $bar.Visible = $false }
-        Set-AeroProgress $bar $grid.Rows[$i].Cells[1].Tag
+    }
+    while($hosts.Count -gt $visible.Count){
+        $index=$hosts.Count-1
+        Remove-AeroProgressBar $hosts[$index]
+        $hosts.RemoveAt($index)
+    }
+    while($hosts.Count -lt $visible.Count){
+        $hosts.Add((New-AeroProgressBar $grid 0 0 100 15 'time'))
+    }
+    for($index=0;$index -lt $visible.Count;$index++){
+        $entry=$visible[$index]
+        $bar=$hosts[$index]
+        $cell=$entry.Cell
+        $bounds=[System.Drawing.Rectangle]::new($cell.X+8,$cell.Bottom-19,$cell.Width-16,15)
+        Set-ProgressHostLayout -Primary $bar -Bounds $bounds -Visible $true
+        Set-AeroProgress $bar $grid.Rows[$entry.Row].Cells[1].Tag
     }
 }
 

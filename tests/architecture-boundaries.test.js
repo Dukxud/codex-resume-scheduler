@@ -56,5 +56,5 @@ test('scheduled runtime snapshot excludes every GUI module',()=>{
                      'components/JobOutcomes/JobOutcomes.psm1','components/SettingsStore/SettingsStore.psm1']){
    assert.ok(runtime.includes("'"+file+"'"),'worker missing '+file);
  }
- assert.doesNotMatch(runtime,/CodexUiForms|CodexUiState|CodexDashboard|AeroBar\.html/);
+ assert.doesNotMatch(runtime,/CodexUiForms|CodexUiState|CodexDashboard|CodexData|AeroBar\.html/);
 });

@@ -16,7 +16,19 @@ function script(source,id) {
 
 test('production uses exact owner-approved vertex shader and corrected optical fragment',()=>{
   assert.equal(script(production,'v3vert'),script(reference,'v3vert'));
-  assert.equal(script(production,'hybridfrag'),script(reference,'hybridfrag'));
+  // The approved 2.0.1 shader is unchanged except for a dedicated moving
+  // specular reflection and its intensity uniform.
+  const approved=script(reference,'hybridfrag');
+  const augmented=script(production,'hybridfrag');
+  const stripped=augmented
+    .replace('uDepth,uCompact,uShimmer;','uDepth,uCompact;')
+    .replace(/ \/\/ A travelling area-light reflection,[\s\S]*?\*uShimmer;\n/, '');
+  assert.equal(stripped,approved);
+  assert.match(augmented,/sweepCenter/);
+  assert.match(production,/getFrames:\(\)=>frames/);
+  assert.match(production,/getSettings:\(\)=>/);
+  assert.ok(!production.includes('hybrid&&aero)'));
+
   assert.match(script(production,'hybridfrag'),/Shared pixel-space capsule/);
   assert.match(script(production,'hybridfrag'),/float cov=1\.-smoothstep/);
 });

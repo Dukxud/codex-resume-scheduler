@@ -46,4 +46,10 @@ function Disable-OneTimeTask {
     param([Parameter(Mandatory)][string]$Name)
     Disable-ScheduledTask -TaskName $Name -ErrorAction Stop | Out-Null
 }
-Export-ModuleMember -Function Register-OneTimeTask,Disable-OneTimeTask
+function Remove-OneTimeTask {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Name)
+    if ($Name -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$') { throw 'Invalid one-time task name.' }
+    Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction Stop | Out-Null
+}
+Export-ModuleMember -Function Register-OneTimeTask,Disable-OneTimeTask,Remove-OneTimeTask

@@ -65,14 +65,13 @@ function New-AeroProgressView {
     $view.Tag = [pscustomobject]@{
         Percent = $null; Color = $Color; Kind = ''
         Ready = $false; State = $null; Failure = $null
+        AllowedUri = $support.AssetUri.AbsoluteUri
     }
     $creation = [Microsoft.Web.WebView2.WinForms.CoreWebView2CreationProperties]::new()
     $creation.UserDataFolder = [IO.Path]::GetFullPath($UserDataDirectory)
     $view.CreationProperties = $creation
-    $expected = $support.AssetUri.AbsoluteUri
     $view.Add_CoreWebView2InitializationCompleted({
         param($control,$eventArgs)
-        Write-Host "AeroProgress Init completed: $($eventArgs.IsSuccess)"
         if (-not $eventArgs.IsSuccess) {
             $control.Tag.Failure = $eventArgs.InitializationException.Message
             return
@@ -82,10 +81,10 @@ function New-AeroProgressView {
         $settings.AreDevToolsEnabled = $false
         $settings.AreBrowserAcceleratorKeysEnabled = $false
         $settings.IsZoomControlEnabled = $false
+        $allowedUri = [string]$control.Tag.AllowedUri
         $control.CoreWebView2.Add_NavigationStarting({
             param($source,$event)
-            Write-Host "AeroProgress navigating: $($event.Uri) expected=$expected"
-            if ($event.Uri -ne $expected) { $event.Cancel = $true }
+            if ($event.Uri -ne $allowedUri) { $event.Cancel = $true }
         }.GetNewClosure())
         $control.CoreWebView2.Add_NewWindowRequested({
             param($source,$event)
@@ -105,7 +104,6 @@ function New-AeroProgressView {
     }.GetNewClosure())
     $view.Add_NavigationCompleted({
         param($control,$eventArgs)
-        Write-Host "AeroProgress navigated: success=$($eventArgs.IsSuccess) status=$($eventArgs.WebErrorStatus)"
         if ($eventArgs.IsSuccess -and -not $control.IsDisposed) {
             $control.Tag.Ready = $true
             if ($null -ne $control.Tag.State) {

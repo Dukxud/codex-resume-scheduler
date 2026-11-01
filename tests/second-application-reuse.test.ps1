@@ -39,7 +39,7 @@ try {
         $primary.Tag=[pscustomobject]@{Failure='Simulated primary renderer failure';Fallback=$null}
         $form.Controls.Add($primary)
         $factory={param($parent,$bounds) return [System.Windows.Forms.Panel]::new()}
-        $fallback=Ensure-ProgressHostFallback -Primary $primary -FallbackFactory $factory
+        $fallback=Repair-ProgressHost -Primary $primary -FallbackFactory $factory
         Require ($fallback -is [System.Windows.Forms.Control] -and $fallback.Parent -eq $form) 'Fallback creation requires Codex.'
         $target=[System.Drawing.Rectangle]::new(25,90,290,24)
         Set-ProgressHostLayout -Primary $primary -Bounds $target -Visible $true

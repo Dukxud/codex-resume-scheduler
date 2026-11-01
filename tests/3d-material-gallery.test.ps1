@@ -38,7 +38,7 @@ try {
     [System.Windows.Forms.Application]::DoEvents()
     foreach ($bar in $lab.Bars) {
         Require ($bar.Child.Value -eq 42) 'Moving the actual slider must update every underlying native WPF percentage.'
-        Require ($bar.Parent.Controls["GalleryValue_$($bar.Tag)"].Text -match '^42%') 'Visible percentage must follow the slider.'
+        Require ($lab.ValueLabels[$lab.Bars.IndexOf($bar)].Text -match '^42%') 'Visible percentage must follow the slider.'
     }
     $lab.Slider.Value = 68
     [System.Windows.Forms.Application]::DoEvents()

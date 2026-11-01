@@ -8,7 +8,17 @@ $folder = Join-Path $root 'AeroWebView2'
 $package = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$version.zip"
 $expanded = Join-Path $env:RUNNER_TEMP "Microsoft.Web.WebView2.$version"
 $url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$version/microsoft.web.webview2.$version.nupkg"
+# Pin the SDK version and compare its SHA-512 against the NuGet v3 hash.
+# This checks transfer integrity; the official NuGet HTTPS origin is the trust root.
 Invoke-WebRequest -Uri $url -OutFile $package
+$expected = (Invoke-RestMethod -Uri "$url.sha512" -ErrorAction Stop).Trim()
+$actual = [Convert]::ToBase64String(
+    [Security.Cryptography.SHA512]::HashData([IO.File]::ReadAllBytes($package)))
+if ($actual -cne $expected) {
+    Remove-Item -LiteralPath $package -Force -ErrorAction SilentlyContinue
+    throw "WebView2 NuGet SDK $version SHA-512 mismatch. Refusing extraction."
+}
+Write-Host "WebView2 SDK SHA-512 verified for $version."
 if (Test-Path $expanded) { Remove-Item $expanded -Recurse -Force }
 Expand-Archive -Path $package -DestinationPath $expanded -Force
 

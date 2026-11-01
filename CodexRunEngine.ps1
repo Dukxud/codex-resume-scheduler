@@ -167,7 +167,7 @@ function Invoke-CodexScheduledJob {
         $argsList += @('resume', [string]$job.sessionId, [string]$job.message)
         $codex = (Get-Command codex.cmd -ErrorAction Stop).Source
         $events = Join-Path $appDir (([IO.Path]::GetFileNameWithoutExtension($JobFile)) + '.jsonl')
-        & $codex @argsList 2>&1 | Tee-Object -FilePath $events
+        & $codex @argsList 2>&1 | Tee-Object -FilePath $events | Out-Host
         $result = $LASTEXITCODE
         Write-Host "Codex exit code: $result" -ForegroundColor $(if ($result -eq 0) { 'Green' } else { 'Yellow' })
         if ($auto -and $result -ne 0) {

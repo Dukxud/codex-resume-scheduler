@@ -113,10 +113,25 @@ try {
     }
     Require ((Evaluate $quota 'window.aeroBarProof.getSettings().finish') -eq 2) 'Material setting not applied.'
     Require ((Evaluate $run 'window.aeroBarProof.getSettings().lighting') -eq 2) 'Lighting not applied.'
+    # A true arbitrary RGB color must produce a non-empty native source
+    # and reach the live WebView2 control without restarting it.
+    Update-AeroAppearance ([ordered]@{
+        quota='#F08A3C'; time='#2AC1DD'; finish=0; lighting=0
+        shimmer=100; speed=100; aero=$true
+    })
+    PumpUntil {
+        (Evaluate $quota 'window.aeroBarProof.getColor()') -eq '#F08A3C' -and
+        (Evaluate $run 'window.aeroBarProof.getColor()') -eq '#2AC1DD' -and
+        (Evaluate $quota 'window.aeroBarProof.isNativeSourceReady()') -eq $true
+    }
+    $orange = Snapshot $quota (Join-Path $captures 'aero-custom-orange.png')
     Update-AeroAppearance ([ordered]@{
         quota='green'; time='blue'; finish=0; lighting=0
         shimmer=100; speed=100; aero=$true
     })
+    PumpUntil { (Evaluate $quota 'window.aeroBarProof.getColor()') -eq 'green' }
+    $green = Snapshot $quota (Join-Path $captures 'aero-green-default.png')
+    Require ($orange.ToArgb() -ne $green.ToArgb()) 'Custom RGB selection did not change rendered native color.'
     PumpUntil { (Evaluate $quota 'window.aeroBarProof.getColor()') -eq 'green' }
 
     Set-AeroProgress $quota 0

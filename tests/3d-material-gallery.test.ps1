@@ -84,9 +84,9 @@ try {
     $framesDir = Join-Path $output 'motion-frames'
     [void](New-Item -Path $framesDir -ItemType Directory -Force)
     $names = @('A — Optical Crystal','B — Liquid Gel','C — Machined Alloy','D — Prism Energy')
-    for ($frame = 0; $frame -lt 12; $frame++) {
+    for ($frame = 0; $frame -lt 24; $frame++) {
         [System.Windows.Forms.Application]::DoEvents()
-        Start-Sleep -Milliseconds 90
+        Start-Sleep -Milliseconds 125
         $surface = [System.Drawing.Bitmap]::new(850,600)
         $drawing = [System.Drawing.Graphics]::FromImage($surface)
         $capturedFont = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
@@ -118,9 +118,12 @@ try {
             $drawing.Dispose();$surface.Dispose()
         }
     }
-    $firstFrame = (Get-FileHash (Join-Path $framesDir 'frame-00.png') -Algorithm SHA256).Hash
-    $lastFrame = (Get-FileHash (Join-Path $framesDir 'frame-11.png') -Algorithm SHA256).Hash
-    Require ($firstFrame -ne $lastFrame) 'Actual WPF rendered frames must differ as the shine moves.'
+    $frameHashes = @(
+        Get-ChildItem -LiteralPath $framesDir -Filter 'frame-*.png' |
+            ForEach-Object { (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } |
+            Select-Object -Unique
+    )
+    Require ($frameHashes.Count -ge 5) "At least five distinct rendered animation frames required; got $($frameHashes.Count)."
     $hashes = @($snapshots | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
     Require (($hashes | Select-Object -Unique).Count -eq 4) 'Each real WPF material style must render differently.'
     Write-Host "REAL WPF BAR PREVIEW PASSED: four distinct styles, slider updates, visible gallery, animated glint $from to $to"

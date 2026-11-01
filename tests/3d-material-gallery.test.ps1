@@ -79,6 +79,48 @@ try {
     } finally {
         $subBrush.Dispose();$textBrush.Dispose();$small.Dispose();$font.Dispose();$g.Dispose();$sheet.Dispose()
     }
+    # Capture successive frames directly from the moving WPF visual tree.
+    # Users can see an animated comparison assembled from these verified frames.
+    $framesDir = Join-Path $output 'motion-frames'
+    [void](New-Item -Path $framesDir -ItemType Directory -Force)
+    $names = @('A — Optical Crystal','B — Liquid Gel','C — Machined Alloy','D — Prism Energy')
+    for ($frame = 0; $frame -lt 12; $frame++) {
+        [System.Windows.Forms.Application]::DoEvents()
+        Start-Sleep -Milliseconds 90
+        $surface = [System.Drawing.Bitmap]::new(850,600)
+        $drawing = [System.Drawing.Graphics]::FromImage($surface)
+        $capturedFont = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
+        $captionFont = [System.Drawing.Font]::new('Segoe UI',9)
+        $light = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(232,241,250))
+        try {
+            $drawing.Clear([System.Drawing.Color]::FromArgb(21,27,38))
+            $drawing.DrawString('LIVE WPF RENDER CAPTURE — 68% FIXED',$capturedFont,$light,25,24)
+            $drawing.DrawString('Each frame was rendered from the actual animated WPF controls on Windows.',$captionFont,$light,26,64)
+            for ($i=0;$i -lt 4;$i++) {
+                $y=118+$i*113
+                $drawing.DrawString($names[$i],$captionFont,$light,28,$y)
+                $capture = [System.Windows.Media.Imaging.RenderTargetBitmap]::new(500,40,96,96,[System.Windows.Media.PixelFormats]::Pbgra32)
+                $capture.Render($lab.Bars[$i].Child)
+                $encoder = [System.Windows.Media.Imaging.PngBitmapEncoder]::new()
+                [void]$encoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($capture))
+                $buffer=[System.IO.MemoryStream]::new()
+                try {
+                    $encoder.Save($buffer)
+                    $buffer.Position=0
+                    $materialImage=[System.Drawing.Image]::FromStream($buffer)
+                    try { $drawing.DrawImage($materialImage,[System.Drawing.Rectangle]::new(190,$y-9,500,40)) }
+                    finally { $materialImage.Dispose() }
+                } finally { $buffer.Dispose() }
+            }
+            $surface.Save((Join-Path $framesDir ('frame-{0:D2}.png' -f $frame)),[System.Drawing.Imaging.ImageFormat]::Png)
+        } finally {
+            $light.Dispose();$captionFont.Dispose();$capturedFont.Dispose()
+            $drawing.Dispose();$surface.Dispose()
+        }
+    }
+    $firstFrame = (Get-FileHash (Join-Path $framesDir 'frame-00.png') -Algorithm SHA256).Hash
+    $lastFrame = (Get-FileHash (Join-Path $framesDir 'frame-11.png') -Algorithm SHA256).Hash
+    Require ($firstFrame -ne $lastFrame) 'Actual WPF rendered frames must differ as the shine moves.'
     $hashes = @($snapshots | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash })
     Require (($hashes | Select-Object -Unique).Count -eq 4) 'Each real WPF material style must render differently.'
     Write-Host "REAL WPF BAR PREVIEW PASSED: four distinct styles, slider updates, visible gallery, animated glint $from to $to"

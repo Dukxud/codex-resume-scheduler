@@ -5,7 +5,7 @@
     Author = 'Codex Resume Scheduler contributors'
     Description = 'Reusable, validated one-time Windows Task Scheduler registration and cancellation.'
     PowerShellVersion = '7.0'
-    FunctionsToExport = @('Register-OneTimeTask','Disable-OneTimeTask')
+    FunctionsToExport = @('Register-OneTimeTask','Disable-OneTimeTask','Remove-OneTimeTask')
     CmdletsToExport = @()
     VariablesToExport = @()
     AliasesToExport = @()

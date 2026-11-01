@@ -1,6 +1,7 @@
 # Scheduler adapter around the standalone AeroProgress component.
 # Only this file knows Codex settings, WPF fallback and quota/countdown roles.
 Import-Module (Join-Path $PSScriptRoot 'components/AeroProgress/AeroProgress.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'components/ProgressHost/ProgressHost.psm1') -Force -ErrorAction Stop
 $script:aeroChecked = $false
 $script:aeroAvailable = $false
 $script:aeroError = ''
@@ -98,40 +99,27 @@ function Send-AeroState {
 function Ensure-AeroFallback {
     param([System.Windows.Forms.Control]$Bar)
     if (-not $Bar -or $Bar.IsDisposed -or -not $Bar.Tag.Failure -or $Bar.Tag.Fallback) { return }
-    $parent = $Bar.Parent
-    if (-not $parent -or $parent.IsDisposed) { return }
+    $kind=[string]$Bar.Tag.Kind
+    $factory={
+        param($parent,$bounds)
+        return New-FlowingProgressBar $parent $bounds.X $bounds.Y $bounds.Width $bounds.Height $kind
+    }.GetNewClosure()
     try {
-        $replacementBar = New-FlowingProgressBar $parent $Bar.Left $Bar.Top $Bar.Width $Bar.Height ([string]$Bar.Tag.Kind)
-        $replacementBar.Visible = $Bar.Visible
-        $Bar.Tag.Fallback = $replacementBar
-        $Bar.Visible = $false
-        $replacementBar.BringToFront()
-        Set-FlowingProgress $replacementBar $Bar.Tag.Percent
+        $replacement=Ensure-ProgressHostFallback -Primary $Bar -FallbackFactory $factory
+        if($replacement){Set-FlowingProgress $replacement $Bar.Tag.Percent}
     } catch {
         $script:aeroError = "Aero recovery failed: $($_.Exception.Message)"
     }
 }
-
-# Return the currently visible control; WPF recovery is a sibling of WebView2.
 function Get-AeroProgressSurface {
     param([System.Windows.Forms.Control]$Bar)
-    if ($Bar -is [System.Windows.Forms.Integration.ElementHost]) { return $Bar }
-    if ($Bar.Tag -and $Bar.Tag.Fallback -and -not $Bar.Tag.Fallback.IsDisposed) { return $Bar.Tag.Fallback }
-    return $Bar
+    return Get-ProgressHostSurface -Primary $Bar
 }
 function Remove-AeroProgressBar {
     param([System.Windows.Forms.Control]$Bar)
-    if (-not $Bar) { return }
-    if ($Bar -isnot [System.Windows.Forms.Integration.ElementHost]) {
-        $fallback = if ($Bar.Tag) { $Bar.Tag.Fallback } else { $null }
-        if ($fallback -and -not $fallback.IsDisposed) {
-            if ($fallback.Parent) { $fallback.Parent.Controls.Remove($fallback) }
-            $fallback.Dispose()
-        }
-        [void]$script:aeroBars.Remove($Bar)
-    }
-    if ($Bar.Parent) { $Bar.Parent.Controls.Remove($Bar) }
-    if (-not $Bar.IsDisposed) { $Bar.Dispose() }
+    if(-not $Bar){return}
+    [void]$script:aeroBars.Remove($Bar)
+    Remove-ProgressHost -Primary $Bar
 }
 
 function Start-AeroHealthMonitor {

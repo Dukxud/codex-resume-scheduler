@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'components/GitRepository/GitRepository.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'components/SettingsStore/SettingsStore.psm1') -Force -ErrorAction Stop
 # Codex Resume Scheduler - local data readers (PowerShell 7).
 # Used by the GUI's short-lived background thread jobs and scheduled runners.
@@ -5,12 +6,7 @@ Import-Module (Join-Path $PSScriptRoot 'components/SettingsStore/SettingsStore.p
 
 function Get-RepositoryRoot {
     param([string]$Path)
-    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) { return $null }
-    try {
-        $result = & git -C $Path rev-parse --show-toplevel 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $result) { return $null }
-        return ([string]($result | Select-Object -First 1)).Trim()
-    } catch { return $null }
+    return Get-GitRepositoryRoot -Path $Path
 }
 
 function Get-RecentCliSessions {

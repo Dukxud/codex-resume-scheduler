@@ -77,7 +77,13 @@ $cancelRun.Add_Click({
     $name = [string]$grid.SelectedRows[0].Tag
     if ([System.Windows.Forms.MessageBox]::Show("Disable the one-time task '$name'?",'Cancel scheduled run','YesNo','Question') -ne 'Yes') { return }
     try {
-        Disable-OneTimeTask -Name $name
+        Remove-OneTimeTask -Name $name
+        $payloadPath=Join-Path $appDir ($name + '.json')
+        if(Test-Path -LiteralPath $payloadPath -PathType Leaf){
+            $payload=Get-Content -LiteralPath $payloadPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            [void](Write-JobOutcome -Path ([IO.Path]::ChangeExtension($payloadPath,'.result.json')) -Status 'cancelled' -Attempt ([int]$payload.retryAttempt) -Message 'Cancelled by the operator before execution.')
+            Remove-Item -LiteralPath $payloadPath -Force -ErrorAction Stop
+        }
         Refresh-PendingList
         Request-UsageRefresh
     } catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Cancellation failed') | Out-Null }

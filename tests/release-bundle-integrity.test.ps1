@@ -1,15 +1,18 @@
 # Tests both versioned ZIP distributions, path allowlists and post-build SHA256.
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
-$work=Join-Path $env:RUNNER_TEMP ('aero-integrity-' + [guid]::NewGuid().ToString('N'))
+$tempRoot=if($env:RUNNER_TEMP){$env:RUNNER_TEMP}else{[IO.Path]::GetTempPath()}
+$work=Join-Path $tempRoot ('aero-integrity-' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $work -Force)
 try {
   $one=& (Join-Path $root 'scripts/Package-CodexScheduler.ps1') -OutputDirectory $work -Preview |
     Where-Object {$_ -is [string] -and $_ -like '*.zip'} | Select-Object -Last 1
   $two=& (Join-Path $root 'scripts/Package-AeroComponent.ps1') -OutputDirectory $work -Preview |
     Where-Object {$_ -is [string] -and $_ -like '*.zip'} | Select-Object -Last 1
-  if(-not (Test-Path -LiteralPath $one) -or -not (Test-Path -LiteralPath $two)){throw 'Missing ZIP build outputs.'}
-  $paths=@($one,$two)
+  $three=& (Join-Path $root 'scripts/Package-ReusableComponents.ps1') -OutputDirectory $work -Preview |
+    Where-Object {$_ -is [string] -and $_ -like '*.zip'} | Select-Object -Last 1
+  if(-not (Test-Path -LiteralPath $one) -or -not (Test-Path -LiteralPath $two) -or -not (Test-Path -LiteralPath $three)){throw 'Missing ZIP build outputs.'}
+  $paths=@($one,$two,$three)
   foreach($zip in $paths){
     $target=Join-Path $work ([IO.Path]::GetFileNameWithoutExtension($zip))
     Expand-Archive -LiteralPath $zip -DestinationPath $target -Force
@@ -35,11 +38,20 @@ try {
       foreach($file in @('CodexResumeScheduler.ps1','CodexRunJob.vbs','components/AeroProgress/AeroProgress.psm1','tools/Get-SchedulerSecurityDiagnostics.ps1','docs/SECURITY-REVIEW.md')){
         if(-not (Test-Path -LiteralPath (Join-Path $base $file))){throw "Missing scheduler release component: $file"}
       }
-    }else{
+    }elseif($zip -eq $two){
       foreach($file in @('AeroProgress.psm1','AeroProgress.psd1','AeroBar.html','AeroWebView2/WebView2Loader.dll')){
         if(-not (Test-Path -LiteralPath (Join-Path $base $file))){throw "Missing reusable component: $file"}
       }
       if(Test-Path (Join-Path $base 'CodexResumeScheduler.ps1')){throw 'Reusable component includes scheduler core.'}
+    }else{
+      foreach($file in @(
+        'components/README.md','components/AeroProgress/AeroProgress.psm1',
+        'components/RuntimeBundle/RuntimeBundle.psm1','components/SettingsStore/SettingsStore.psm1',
+        'components/Countdown/Countdown.psm1','components/OneTimeTasks/OneTimeTasks.psm1',
+        'AeroWebView2/WebView2Loader.dll','assets/AeroBar.html')){
+        if(-not (Test-Path -LiteralPath (Join-Path $base $file))){throw "Missing reusable module artifact: $file"}
+      }
+      if(Test-Path (Join-Path $base 'CodexResumeScheduler.ps1')){throw 'Reusable kit must not contain Codex or UI runtime.'}
     }
     Write-Host "$([IO.Path]::GetFileName($zip)): $checked files independently verified."
   }

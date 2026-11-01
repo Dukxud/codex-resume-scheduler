@@ -64,7 +64,7 @@ function New-AeroProgressView {
     $view.AccessibleName = $AccessibleName
     $view.Tag = [pscustomobject]@{
         Percent = $null; Color = $Color; Kind = ''
-        Ready = $false; State = $null; Failure = $null
+        Ready = $false; State = $null; Failure = $null; Fallback = $null
         AllowedUri = $support.AssetUri.AbsoluteUri
     }
     $creation = [Microsoft.Web.WebView2.WinForms.CoreWebView2CreationProperties]::new()
@@ -76,6 +76,7 @@ function New-AeroProgressView {
             $control.Tag.Failure = $eventArgs.InitializationException.Message
             return
         }
+        $control.Tag.Failure = $null
         $settings = $control.CoreWebView2.Settings
         $settings.AreDefaultContextMenusEnabled = $false
         $settings.AreDevToolsEnabled = $false
@@ -106,6 +107,7 @@ function New-AeroProgressView {
         param($control,$eventArgs)
         if ($eventArgs.IsSuccess -and -not $control.IsDisposed) {
             $control.Tag.Ready = $true
+            $control.Tag.Failure = $null
             if ($null -ne $control.Tag.State) {
                 $control.CoreWebView2.PostWebMessageAsJson(
                     ($control.Tag.State | ConvertTo-Json -Compress -Depth 4))
@@ -115,7 +117,12 @@ function New-AeroProgressView {
         }
     })
     $Parent.Controls.Add($view)
-    $view.Source = $support.AssetUri
+    try { $view.Source = $support.AssetUri }
+    catch {
+        $Parent.Controls.Remove($view)
+        $view.Dispose()
+        throw
+    }
     return $view
 }
 

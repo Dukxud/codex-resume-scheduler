@@ -86,8 +86,17 @@ jobs:
           foreach ($source in Get-ChildItem -Path . -Recurse -Include '*.ps1','*.psm1','*.psd1' -File) {
             $tokens = $null
             $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($source.FullName, [ref]$tokens, [ref]$errors)
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($source.FullName, [ref]$tokens, [ref]$errors)
             if ($errors.Count) { $errors | Out-String | Write-Error; exit 1 }
+            # The PowerShell $Host automatic variable is read-only. Assigning it
+            # broke a real recovery path; reject the bug statically everywhere.
+            $reserved = @($ast.FindAll({
+              param($node)
+              $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+              $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
+              $node.Left.VariablePath.UserPath -ieq 'host'
+            }, $true))
+            if ($reserved.Count) { throw "Reserved Host assignment in $($source.FullName)" }
           }
       - name: Assemble versioned review ZIP
         if: github.ref != 'refs/heads/main'

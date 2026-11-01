@@ -406,6 +406,8 @@ $useReset.Enabled = $false
 
 . (Join-Path $PSScriptRoot 'CodexFlowingBar.ps1')
 . (Join-Path $PSScriptRoot 'CodexAeroBar.ps1')
+. (Join-Path $PSScriptRoot 'CodexBarAppearance.ps1')
+Initialize-AeroAppearance $script:uiSettings
 . (Join-Path $PSScriptRoot 'CodexDashboard.ps1')
 
 function New-UsageCard {
@@ -854,7 +856,7 @@ function Save-CurrentFormState {
         autoResume = [bool]$autoResumeCheck.Checked
         runAt = $whenBox.Value.ToString('yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)
     }
-    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; compactMode = [bool]$script:compactToggle.Checked; draft = $draft })
+    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; compactMode = [bool]$script:compactToggle.Checked; barAppearance = $script:aeroAppearance; draft = $draft })
     $script:savedDraft = $draft
     $script:preferredSessionId = $sessionId
 }

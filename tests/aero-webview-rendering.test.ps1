@@ -38,6 +38,23 @@ function Snapshot($bar,[string]$path) {
     } finally { $stream.Dispose() }
 }
 
+function Count-VisualChanges([string]$pathA,[string]$pathB) {
+    $a = [System.Drawing.Bitmap]::new($pathA)
+    $b = [System.Drawing.Bitmap]::new($pathB)
+    try {
+        $changes = 0
+        for ($y = 3; $y -lt [math]::Min(15,$a.Height); $y+=2) {
+            for ($x = 12; $x -lt [math]::Min(260,$a.Width); $x+=2) {
+                $p = $a.GetPixel($x,$y)
+                $q = $b.GetPixel($x,$y)
+                if ([math]::Abs([int]$p.R-[int]$q.R) -gt 14 -or
+                    [math]::Abs([int]$p.G-[int]$q.G) -gt 14 -or
+                    [math]::Abs([int]$p.B-[int]$q.B) -gt 14) { $changes++ }
+            }
+        }
+        return $changes
+    } finally { $a.Dispose();$b.Dispose() }
+}
 Require (Test-AeroRenderer) "Aero renderer unavailable: $script:aeroError"
 $form = [System.Windows.Forms.Form]::new()
 $form.ClientSize = [System.Drawing.Size]::new(480,145)
@@ -61,10 +78,49 @@ try {
     Require ((Evaluate $quota 'window.aeroBarProof.getEngine()') -eq 'webgl2') 'Approved optical shader failed to initialize.'
     Require ((Evaluate $run 'window.aeroBarProof.getEngine()') -eq 'webgl2') 'Second shader failed.'
 
-    Set-AeroProgress $quota 0
-    PumpUntil { [math]::Abs([double](Evaluate $quota 'window.aeroBarProof.getVisual()')) -lt .005 }
+    # The original CI only tested that percentages changed. It did not
+    # prove animation continued at a CONSTANT percentage.
+    Set-AeroProgress $quota 68
+    PumpUntil { [math]::Abs([double](Evaluate $quota 'window.aeroBarProof.getVisual()') - .68) -lt .001 }
     $captures = Join-Path $root 'AeroScreenshots'
     [void](New-Item -ItemType Directory -Path $captures -Force)
+    $initialFrame = [int](Evaluate $quota 'window.aeroBarProof.getFrames()')
+    $first = Join-Path $captures 'shimmer-frame-a.png'
+    $second = Join-Path $captures 'shimmer-frame-b.png'
+    [void](Snapshot $quota $first)
+    $strongMotion = 0
+    foreach($i in 1..7) {
+        Start-Sleep -Milliseconds 370
+        [System.Windows.Forms.Application]::DoEvents()
+        [void](Snapshot $quota $second)
+        $strongMotion = [math]::Max($strongMotion,(Count-VisualChanges $first $second))
+        if ($strongMotion -gt 10) { break }
+    }
+    $laterFrame = [int](Evaluate $quota 'window.aeroBarProof.getFrames()')
+    Require ($laterFrame -gt $initialFrame + 5) 'WebGL frame loop stopped at fixed progress.'
+    Require ($strongMotion -gt 10) "Shimmer invisible: only $strongMotion strongly changed pixels at fixed progress."
+    Write-Host "Visible shimmer at 68%: $strongMotion changed sampled pixels; $($laterFrame-$initialFrame) frames."
+
+    # Per-bar preferences must update already-running WebView2 controls.
+    Update-AeroAppearance ([ordered]@{
+        quota='violet'; time='amber'; finish=2; lighting=2
+        shimmer=165; speed=190; aero=$true
+    })
+    PumpUntil {
+        (Evaluate $quota 'window.aeroBarProof.getColor()') -eq 'violet' -and
+        (Evaluate $run 'window.aeroBarProof.getColor()') -eq 'amber' -and
+        [double](Evaluate $quota 'window.aeroBarProof.getSettings().shimmer') -gt 1.6
+    }
+    Require ((Evaluate $quota 'window.aeroBarProof.getSettings().finish') -eq 2) 'Material setting not applied.'
+    Require ((Evaluate $run 'window.aeroBarProof.getSettings().lighting') -eq 2) 'Lighting not applied.'
+    Update-AeroAppearance ([ordered]@{
+        quota='green'; time='blue'; finish=0; lighting=0
+        shimmer=100; speed=100; aero=$true
+    })
+    PumpUntil { (Evaluate $quota 'window.aeroBarProof.getColor()') -eq 'green' }
+
+    Set-AeroProgress $quota 0
+    PumpUntil { [math]::Abs([double](Evaluate $quota 'window.aeroBarProof.getVisual()')) -lt .005 }
     $emptyColor = Snapshot $quota (Join-Path $captures 'aero-empty.png')
 
     foreach ($value in @(1,2,5,25,68,100)) {

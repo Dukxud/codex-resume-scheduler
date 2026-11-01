@@ -68,6 +68,6 @@ Run `scripts/Get-SchedulerSecurityDiagnostics.ps1` locally (read-only), and obta
 
 - Unattended account binding comes from a rate-limit account ID when supplied, else a SHA-256 fingerprint of the ChatGPT account email via documented account/read. The email is never persisted. An identical email across multiple workspaces remains a limitation if the backend provides no workspace-specific ID.
 - Worker imports generic GitRepository, not GUI session helpers or ambient variables. Task state is explicitly recorded as deferred, blocked, completed, failed, or cancelled.
-- ProgressHost now owns recovery and disposal; WindowShell owns generic WinForms primitives; UI modules own an explicit state context.
+- ProgressHost now owns recovery and disposal; WPF fallback uses the standalone FlowingProgress component and retains the requested hue; WindowShell owns generic WinForms primitives; UI modules own an explicit state context.
 - The unrelated-application integration test copies only reusable components and exercises them without scheduler code.
 - The Aero browser process is still an independent WebView2 subprocess; the host uses a finite number of views proportional to visible scheduled rows, not total pending tasks.

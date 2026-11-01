@@ -46,13 +46,13 @@ Use **Save and close** to apply to all visible bars and persist the choices loca
 
 **Current preview builds remain unsigned.** The previous hidden Windows Script Host/PowerShell launcher may still be flagged by antivirus. This preview does **not** disable antivirus or ask for exclusions. A production build now fails unless it has a real publisher code-signing certificate and timestamp; signed launcher scripts no longer request `-ExecutionPolicy Bypass`. Signing does not guarantee immediate SmartScreen reputation.
 
-The Aero progress-bar renderer has been separated into an independently importable **[AeroProgress PowerShell module](components/AeroProgress/README.md)**. Windows CI packages it separately as `AeroProgress-Component-v1.13.0-Preview.zip`; other WinForms apps can use its API without importing the scheduler or Task Scheduler. The existing scheduler adapter retains WPF fallback.
+The Aero progress-bar renderer has been separated into an independently importable **[AeroProgress PowerShell module](components/AeroProgress/README.md)**. Windows CI packages it separately as `AeroProgress-Component-v1.13.0-Preview.zip`; other WinForms apps can use its API without importing the scheduler or Task Scheduler. The existing scheduler adapter retains WPF fallback, including recovery if WebView2 reports a child-process failure.
 
 See [security review, risks and signing workflow](docs/SECURITY-REVIEW.md). A read-only security diagnostics script is included at `tools/Get-SchedulerSecurityDiagnostics.ps1` in the packaged app (or in the repository `scripts` directory). It does not change Bitdefender settings.
 
 ## Requirements
 
-- Windows 10/11 x64, signed-in desktop session, **PowerShell 7**. The Aero graphics need the Microsoft Edge WebView2 Runtime, normally installed on Windows 11. WPF fallback remains available without it.
+- Windows 10/11 x64, signed-in desktop session, **PowerShell 7 installed to the standard `C:\Program Files\PowerShell\7` location**. The launcher deliberately refuses unqualified executables from `PATH` or a repository folder. The Aero graphics need the Microsoft Edge WebView2 Runtime, normally installed on Windows 11. WPF fallback remains available without it.
 - Codex CLI installed through **npm** and logged in with a ChatGPT account.
 - **Node.js** available on `PATH` (installed already for npm-based Codex).
 - Git available on `PATH`.

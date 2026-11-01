@@ -22,9 +22,9 @@ test('production uses exact owner-approved vertex shader and corrected optical f
   const augmented=script(production,'hybridfrag');
   const stripped=augmented
     .replace('uDepth,uCompact,uShimmer;','uDepth,uCompact;')
-    .replace(/ \/\/ A travelling area-light reflection,[\s\S]*?\*uShimmer;\r?\n/, '');
+    .replace(/ \/\/ A wide, softly reflected studio light[\s\S]*?\*uShimmer;\r?\n/, '');
   assert.equal(stripped,approved);
-  assert.match(augmented,/sweepCenter/);
+  assert.match(augmented,/specularPatch/);
   assert.match(production,/getFrames:\(\)=>frames/);
   assert.match(production,/getSettings:\(\)=>/);
   assert.ok(!production.includes('hybrid&&aero)'));
@@ -52,4 +52,6 @@ test('isolated WebView2 page is local and its host API is syntactically valid',(
   assert.match(source[1],/window\.aeroBarProof/);
   assert.match(source[1],/requestAnimationFrame\(tick\)/);
   assert.equal((production.match(/getContext\('webgl2'/g)||[]).length,1);
+  assert.match(source[1],/function updateCustomSprite/);
+  assert.match(source[1],/selectedColor\.startsWith/);
 });

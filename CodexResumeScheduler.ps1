@@ -112,7 +112,7 @@ function Schedule-LimitRetry {
         createdAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); accountId=$Job.accountId; retryAttempt=$attempt; previousResetAt=$ResetAt;
         log=(Join-Path $appDir ($name + '.log')) }
     $next | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFile -Encoding utf8
-    # Run the saved job through the signed Windows Script Host, not a custom executable.
+    # Run the saved job through Microsoft's Windows Script Host; the VBS wrapper itself is not publisher-signed.
     $runnerScript = Join-Path $appDir 'CodexRunJob.vbs'
     if (-not (Test-Path -LiteralPath $runnerScript -PathType Leaf)) { throw 'CodexRunJob.vbs missing; install the complete release.' }
     $arguments = '//B //Nologo "' + $runnerScript + '" "' + $jobFile + '"'

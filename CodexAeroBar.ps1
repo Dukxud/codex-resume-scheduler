@@ -75,6 +75,7 @@ function New-AeroProgressBar {
 
     $bar.Add_CoreWebView2InitializationCompleted({
         param($sender,$args)
+        Write-Host "Aero WebView2 init: success=$($args.IsSuccess)"
         if (-not $args.IsSuccess) {
             $script:aeroError = "WebView2 failed: $($args.InitializationException.Message)"
             return
@@ -86,11 +87,13 @@ function New-AeroProgressBar {
         $settings.IsZoomControlEnabled = $false
         $sender.CoreWebView2.Add_NavigationStarting({
             param($source,$event)
+            Write-Host "Aero navigating: $($event.Uri); expected: $($script:aeroDocumentUri.AbsoluteUri)"
             if ($event.Uri -ne $script:aeroDocumentUri.AbsoluteUri) { $event.Cancel = $true }
         })
     })
     $bar.Add_NavigationCompleted({
         param($sender,$args)
+        Write-Host "Aero navigation completed: $($args.IsSuccess), $($args.WebErrorStatus)"
         if ($args.IsSuccess -and -not $sender.IsDisposed) {
             $sender.Tag.Ready = $true
             Send-AeroState $sender

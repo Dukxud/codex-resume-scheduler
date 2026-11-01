@@ -6,6 +6,8 @@ $root=Split-Path -Parent $PSScriptRoot
 . (Join-Path $root 'CodexFlowingBar.ps1')
 . (Join-Path $root 'CodexAeroBar.ps1')
 . (Join-Path $root 'CodexDashboard.ps1')
+. (Join-Path $root 'CodexUiState.ps1')
+$script:ui = New-CodexUiState
 function Require($condition,[string]$message){if(-not $condition){throw $message}}
 Require (Test-AeroRenderer) "Aero prerequisite absent: $script:aeroError"
 $form=[Windows.Forms.Form]::new()
@@ -40,7 +42,7 @@ try{
     [void]$grid.Columns.Add('Countdown','Time')
     $form.Controls.Add($grid)
     [void]$grid.Rows.Add('Next','10m')
-    $script:runBarHosts=[Collections.Generic.List[Windows.Forms.Control]]::new()
+    $script:ui.Dashboard.runBarHosts=[Collections.Generic.List[Windows.Forms.Control]]::new()
     $runBar=New-AeroProgressBar $grid 0 0 100 15 'time'
     $script:runBarHosts.Add($runBar)
     $grid.Rows[0].Cells[1].Tag=45

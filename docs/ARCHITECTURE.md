@@ -12,6 +12,7 @@ There are two layers:
 - components/OneTimeTasks: platform task registration, validation, rollback and cancellation; executable and arguments are caller-owned.
 - components/WindowShell: general-purpose WinForms window, labels and buttons.
 - components/ProgressHost: renderer-neutral fallback, positioning and paired-control disposal.
+- components/FlowingProgress: independently reusable WPF glossy progress bar with caller-provided colors and state; CodexFlowingBar is only a theme adapter.
 - components/GitRepository: independent read-only Git root and branch checks.
 - components/JobOutcomes: durable state distinction between completed, deferred, blocked, failed and cancelled, built on SettingsStore.
 

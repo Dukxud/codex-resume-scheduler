@@ -218,12 +218,21 @@ function New-SchedulerBarGallery {
     $slider.Location = [System.Drawing.Point]::new(278,559)
     $slider.Size = [System.Drawing.Size]::new(510,45)
     $gallery.Controls.Add($slider)
+    # WinForms events outlive this function's lexical locals. Own all UI state on
+    # the parent Form rather than relying on a PowerShell event script closure.
+    $gallery.Tag = [pscustomobject]@{
+        Bars = $bars
+        ValueLabels = $valueLabels
+        SliderLabel = $sliderLabel
+    }
     $slider.Add_ValueChanged({
-        $value = $slider.Value
-        $sliderLabel.Text = "PROGRESS  |  $value% (sample)"
-        for ($i=0; $i -lt $bars.Count; $i++) {
-            $bars[$i].Child.Value = [double]$value
-            $valueLabels[$i].Text = "$value% — sample data"
+        param($sender,$eventArgs)
+        $state = $sender.FindForm().Tag
+        $value = $sender.Value
+        $state.SliderLabel.Text = "PROGRESS  |  $value% (sample)"
+        for ($i=0; $i -lt $state.Bars.Count; $i++) {
+            $state.Bars[$i].Child.Value = [double]$value
+            $state.ValueLabels[$i].Text = "$value% — sample data"
         }
     })
     $footer = [System.Windows.Forms.Label]::new()

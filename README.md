@@ -48,7 +48,7 @@ Use **Save and close** to apply to all visible bars and persist the choices loca
 
 The Aero progress-bar renderer has been separated into an independently importable **[AeroProgress PowerShell module](components/AeroProgress/README.md)**. Windows CI packages it separately as `AeroProgress-Component-v1.13.0-Preview.zip`; other WinForms apps can use its API without importing the scheduler or Task Scheduler. The existing scheduler adapter retains WPF fallback.
 
-See [security review, risks and signing workflow](docs/SECURITY-REVIEW.md). A read-only security diagnostics script is available in the repo's `scripts` directory. It does not change Bitdefender settings.
+See [security review, risks and signing workflow](docs/SECURITY-REVIEW.md). A read-only security diagnostics script is included at `tools/Get-SchedulerSecurityDiagnostics.ps1` in the packaged app (or in the repository `scripts` directory). It does not change Bitdefender settings.
 
 ## Requirements
 

@@ -15,11 +15,14 @@ if(-not $Preview -and (-not $CertificateThumbprint -or -not $TimestampServer)){
     throw 'Production releases require trusted -CertificateThumbprint and -TimestampServer. Refusing unsigned publication.'
 }
 $name="CodexResumeScheduler-v$version" + $(if($Preview){'-Preview'}else{''})
-$folder=Join-Path $env:RUNNER_TEMP $name
+$tempRoot=if($env:RUNNER_TEMP){$env:RUNNER_TEMP}else{[IO.Path]::GetTempPath()}
+$folder=Join-Path $tempRoot $name
 if(Test-Path $folder){Remove-Item -LiteralPath $folder -Recurse -Force}
 [void](New-Item -ItemType Directory -Path $folder -Force)
 $files=@(
- 'CodexResumeScheduler.ps1','CodexDashboard.ps1','CodexFlowingBar.ps1',
+ 'CodexResumeScheduler.ps1','CodexRunEngine.ps1','CodexUiForms.ps1',
+ 'CodexUiRefresh.ps1','CodexUiActions.ps1','CodexUiLifecycle.ps1',
+ 'CodexDashboard.ps1','CodexFlowingBar.ps1',
  'CodexAeroBar.ps1','CodexBarAppearance.ps1','CodexData.ps1',
  'CodexUsage.js','CodexRetry.js','Start-Codex-Scheduler.vbs',
  'Start-Codex-Scheduler.cmd','CodexRunJob.vbs','README.md','LICENSE','VERSION'

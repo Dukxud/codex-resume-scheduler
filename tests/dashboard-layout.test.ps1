@@ -2,6 +2,8 @@
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexUiState.ps1')
+$script:ui = New-CodexUiState
 $env:CODEX_BAR_RENDERER = 'wpf'
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexFlowingBar.ps1')
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexAeroBar.ps1')
@@ -46,39 +48,39 @@ try {
     $cancelRun = New-TestControl panel 185 774 154 31
     $openFolder = New-TestControl panel 352 774 154 31
     $status = New-TestControl label 18 823 880 25
-    $script:uiSettings = $null
-    $script:pendingSnapshot = @()
-    $script:usageSnapshot = $null
-    $script:usageReadFailed = $false
-    $script:usageRequestedModel = ''
-    $script:usageSnapshotRequestedModel = ''
+    $script:ui.Preferences.uiSettings = $null
+    $script:ui.Dashboard.pendingSnapshot = @()
+    $script:ui.Usage.usageSnapshot = $null
+    $script:ui.Usage.usageReadFailed = $false
+    $script:ui.Usage.usageRequestedModel = ''
+    $script:ui.Usage.usageSnapshotRequestedModel = ''
     # Child Visible is false until its parent Form is shown; show it for this smoke test.
     $form.Show()
     Initialize-Dashboard
     Update-DashboardLayout
 
-    Require ($script:compactToggle.Visible) 'The compact toggle must be visible in full view.'
-    Require ($script:compactToggle.Left -gt $heading.Right) 'The full-mode toggle must not overlap the heading.'
+    Require ($script:ui.Dashboard.compactToggle.Visible) 'The compact toggle must be visible in full view.'
+    Require ($script:ui.Dashboard.compactToggle.Left -gt $heading.Right) 'The full-mode toggle must not overlap the heading.'
     Require (-not $subtitle.Visible) 'The retired subtitle must not overlap the switch.'
-    Require ($script:compactToggle.Right -le $form.ClientSize.Width) 'The full-mode toggle must be inside the window.'
-    Require ($script:compactToggle.Text -eq 'Compact mode: OFF') 'Full mode should clearly offer the compact switch.'
+    Require ($script:ui.Dashboard.compactToggle.Right -le $form.ClientSize.Width) 'The full-mode toggle must be inside the window.'
+    Require ($script:ui.Dashboard.compactToggle.Text -eq 'Compact mode: OFF') 'Full mode should clearly offer the compact switch.'
 
-    $script:compactToggle.Checked = $true
-    Require ($script:compactToggle.Visible) 'The compact switch must remain visible in compact mode.'
-    Require ($script:compactToggle.Text -eq 'Compact mode: ON') 'Compact mode should clearly show its state.'
-    Require ($script:compactToggle.Left -gt $heading.Right) 'The compact-mode switch must not overlap the heading.'
-    Require ($script:compactToggle.Right -le $form.ClientSize.Width) 'Compact-mode switch must not be clipped.'
-    Require (-not $script:compactRunPanel.Visible) 'An empty queue must not render a run placeholder.'
+    $script:ui.Dashboard.compactToggle.Checked = $true
+    Require ($script:ui.Dashboard.compactToggle.Visible) 'The compact switch must remain visible in compact mode.'
+    Require ($script:ui.Dashboard.compactToggle.Text -eq 'Compact mode: ON') 'Compact mode should clearly show its state.'
+    Require ($script:ui.Dashboard.compactToggle.Left -gt $heading.Right) 'The compact-mode switch must not overlap the heading.'
+    Require ($script:ui.Dashboard.compactToggle.Right -le $form.ClientSize.Width) 'Compact-mode switch must not be clipped.'
+    Require (-not $script:ui.Dashboard.compactRunPanel.Visible) 'An empty queue must not render a run placeholder.'
 
-    $script:pendingSnapshot = @([pscustomobject]@{
+    $script:ui.Dashboard.pendingSnapshot = @([pscustomobject]@{
         Model='test-model'; Name='pending-1'; Repo='C:\work\demo'; Description='test instruction'
         When=(Get-Date).AddHours(2); CreatedAt=$null
     })
     Update-DashboardLayout
-    Require ($script:compactRunPanel.Visible) 'The upcoming-run card must appear when there is a run.'
-    Require ($script:compactRunTrack.Visible) 'The blue countdown bar must remain visible.'
-    $script:compactToggle.Checked = $false
-    Require ($script:compactToggle.Visible) 'The switch must remain visible when returning to full mode.'
+    Require ($script:ui.Dashboard.compactRunPanel.Visible) 'The upcoming-run card must appear when there is a run.'
+    Require ($script:ui.Dashboard.compactRunTrack.Visible) 'The blue countdown bar must remain visible.'
+    $script:ui.Dashboard.compactToggle.Checked = $false
+    Require ($script:ui.Dashboard.compactToggle.Visible) 'The switch must remain visible when returning to full mode.'
     Require ($grid.Visible) 'The full run list should be restored.'
     [void]$grid.Rows.Add('Time','5m','Demo 1')
     [void]$grid.Rows.Add('Time','7m','Demo 2')
@@ -87,16 +89,16 @@ try {
     $grid.Rows[1].Cells[1].Tag = 75
     $grid.Rows[2].Cells[1].Tag = $null
     Sync-DashboardRunBars
-    Require ($script:runBarHosts.Count -eq 3) 'Every queued run must have an independent WPF progress bar.'
-    Require ($script:runBarHosts[0].Child.Value -eq 25) 'First run shows its own percentage.'
-    Require ($script:runBarHosts[1].Child.Value -eq 75) 'Second run shows its own percentage.'
-    Require ($script:runBarHosts[2].Child.Value -eq 0) 'Legacy run keeps an empty track.'
-    Require ($script:runBarHosts[0].Child -is [System.Windows.Controls.ProgressBar]) 'Runs must use real WPF controls.'
+    Require ($script:ui.Dashboard.runBarHosts.Count -eq 3) 'Every queued run must have an independent WPF progress bar.'
+    Require ($script:ui.Dashboard.runBarHosts[0].Child.Value -eq 25) 'First run shows its own percentage.'
+    Require ($script:ui.Dashboard.runBarHosts[1].Child.Value -eq 75) 'Second run shows its own percentage.'
+    Require ($script:ui.Dashboard.runBarHosts[2].Child.Value -eq 0) 'Legacy run keeps an empty track.'
+    Require ($script:ui.Dashboard.runBarHosts[0].Child -is [System.Windows.Controls.ProgressBar]) 'Runs must use real WPF controls.'
     $grid.Rows.Clear()
     Sync-DashboardRunBars
-    Require ($script:runBarHosts.Count -eq 0) 'Empty queue must release all run bars and their WPF hosts.'
+    Require ($script:ui.Dashboard.runBarHosts.Count -eq 0) 'Empty queue must release all run bars and their WPF hosts.'
     Write-Host 'Visible switch, empty state, and per-run WPF bar lifecycle passed.'
 } finally {
-    if ($script:countdownTimer) { $script:countdownTimer.Dispose() }
+    if ($script:ui.Dashboard.countdownTimer) { $script:ui.Dashboard.countdownTimer.Dispose() }
     $form.Dispose()
 }

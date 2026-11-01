@@ -20,6 +20,9 @@ jobs:
       - name: Standalone AeroProgress API and signed-release gate
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/aero-component-contract.test.ps1
+      - name: Verify both release ZIP inventories
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/release-bundle-integrity.test.ps1
       - name: Codex usage tests
         run: node --test tests/*.test.js
       - name: Appearance dialog and saved preferences

@@ -27,7 +27,7 @@ trap {
 $appDir = Join-Path $env:LOCALAPPDATA 'CodexResumeScheduler'
 $sessionIdPattern = '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
 $script:appSourcePath = $PSCommandPath
-. (Join-Path $PSScriptRoot 'CodexData.ps1')
+
 
 
 
@@ -35,6 +35,7 @@ $script:appSourcePath = $PSCommandPath
 if ($RunJob) {
     exit (Invoke-CodexScheduledJob -JobFile $JobFile -AppDirectory $appDir -RuntimeDirectory $PSScriptRoot)
 }
+. (Join-Path $PSScriptRoot 'CodexData.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiForms.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiRefresh.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiActions.ps1')

@@ -1,4 +1,6 @@
 # Generic WinForms failure recovery, layout and ownership of paired controls.
+Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+Add-Type -AssemblyName System.Drawing -ErrorAction Stop
 # The caller supplies its own primary view, fallback factory and state updater.
 function Get-ProgressHostSurface {
     [CmdletBinding()]

@@ -8,7 +8,20 @@ These PowerShell modules can be imported independently. None needs Codex, the sc
 | Countdown | Pure elapsed percentage and time-to-run text | PowerShell 7 | Get-CountdownText, Get-CountdownElapsedPercent |
 | SettingsStore | Atomic local JSON settings, schema defined by the host | PowerShell 7 | Read-JsonSettings, Write-JsonSettings |
 | RuntimeBundle | Fingerprinted, content-addressed runtime snapshots | PowerShell 7 | Get-RuntimeFingerprint, Assert-RuntimeFingerprint, Publish-ImmutableRuntime |
-| OneTimeTasks | One-time Windows Task Scheduler registration and validation | Windows | Register-OneTimeTask, Disable-OneTimeTask |
+| OneTimeTasks | One-time Windows Task Scheduler registration, validation and cancellation | Windows | Register-OneTimeTask, Disable-OneTimeTask, Remove-OneTimeTask |
+
+## Additional independently reusable modules
+
+| Module | Purpose | Platform |
+|---|---|---|
+| GitRepository | Read-only Git root and current-branch inspection | PowerShell 7 + Git |
+| JobOutcomes | Atomic and validated completed/failed/deferred/blocked/cancelled outcome records | PowerShell 7 |
+| WindowShell | Native Windows Forms windows and standard controls | Windows |
+| ProgressHost | Renderer-neutral primary/fallback control ownership, layout, and disposal | Windows |
+
+The reusable kit has **nine** modules. Each may be copied alone, except JobOutcomes requires the small SettingsStore dependency (copy both folders together). AeroProgress requires its local HTML shader and WebView2 SDK files.
+
+The independent consumer test under tests/second-application-reuse.test.ps1 copies only components/ into an unrelated application and exercises the APIs without importing Codex.
 
 ## Using any component
 

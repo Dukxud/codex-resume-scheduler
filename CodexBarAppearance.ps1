@@ -245,8 +245,7 @@ function Show-AeroAppearanceDialog {
         if (-not $accepted) { Update-AeroAppearance $previous }
         foreach ($bar in @($previewQuota,$previewTime)) {
             if ($bar) {
-                [void]$script:aeroBars.Remove($bar)
-                $bar.Dispose()
+                Remove-AeroProgressBar $bar
             }
         }
         $dialog.Dispose()

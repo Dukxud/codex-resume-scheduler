@@ -6,7 +6,7 @@ A small Windows desktop GUI for scheduling continuations of saved **Codex CLI** 
 
 **Latest versioned release: [GitHub Releases](https://github.com/Dukxud/codex-resume-scheduler/releases/latest)**
 
-Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The package contains PowerShell/JavaScript files plus Microsoft-signed WebView2 SDK libraries; no custom or unsigned executable.
+Download the versioned ZIP from **Releases**, not GitHub's generic `main.zip`. The review package contains PowerShell/JavaScript, a reusable AeroProgress module and Microsoft WebView2 SDK libraries. First-party preview scripts are **unsigned**, and no executable is supplied.
 
 ## What it does
 
@@ -41,6 +41,14 @@ The dialog controls:
 - **Aero Liquid ON/OFF:** turn the shader off to keep the original v1.8-style Windows-color bar. The underlying percentages never change.
 
 Use **Save and close** to apply to all visible bars and persist the choices locally with other scheduler preferences; **Cancel** discards edits, and **Defaults** restores the approved baseline. The moving light is now a wider, curved, view-dependent pool of reflection instead of the previous narrow zebra-stripe sweep. Its motion remains visible at the actual 400×17 usage-bar scale. This is an Aero/WebGL2 visual effect; machines without WebView2 continue using the prior WPF fallback instead.
+
+## Security and reusable components (v1.13.0 review)
+
+**Current preview builds remain unsigned.** The previous hidden Windows Script Host/PowerShell launcher may still be flagged by antivirus. This preview does **not** disable antivirus or ask for exclusions. A production build now fails unless it has a real publisher code-signing certificate and timestamp; signed launcher scripts no longer request `-ExecutionPolicy Bypass`. Signing does not guarantee immediate SmartScreen reputation.
+
+The Aero progress-bar renderer has been separated into an independently importable **[AeroProgress PowerShell module](components/AeroProgress/README.md)**. Windows CI packages it separately as `AeroProgress-Component-v1.13.0-Preview.zip`; other WinForms apps can use its API without importing the scheduler or Task Scheduler. The existing scheduler adapter retains WPF fallback.
+
+See [security review, risks and signing workflow](docs/SECURITY-REVIEW.md). A read-only security diagnostics script is available in the repo's `scripts` directory. It does not change Bitdefender settings.
 
 ## Requirements
 

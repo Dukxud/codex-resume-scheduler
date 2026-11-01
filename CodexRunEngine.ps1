@@ -52,7 +52,7 @@ function Read-CodexModelCatalog {
 
 function Get-CodexRuntimeFiles {
     return @(
-        'CodexResumeScheduler.ps1','CodexRunEngine.ps1','CodexData.ps1',
+        'CodexResumeScheduler.ps1','CodexRunEngine.ps1',
         'CodexUsage.js','CodexRetry.js','CodexRunJob.vbs',
         'components/RuntimeBundle/RuntimeBundle.psm1',
         'components/OneTimeTasks/OneTimeTasks.psm1',

@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # WinForms UI, Microsoft WPF progress effects, and Windows scheduled-task runner.
-# v1.11.0: WPF compositor-driven moving shine on all usage and countdown bars.
+# Preview: interactive WPF 3D material bar comparison; production rendering unchanged.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -403,8 +403,13 @@ $usageHeading.Height = 30
 $refreshUsage = Add-Button 'Refresh now' 605 320 139
 $useReset = Add-Button 'Use reset +2 min' 755 320 143
 $useReset.Enabled = $false
+# Preview is deliberately isolated: it shows four working progress controls
+# without changing production progress bars, scheduling or saved preferences.
+$compareBars = Add-Button 'Compare 3D bars' 335 320 170
 
 . (Join-Path $PSScriptRoot 'CodexFlowingBar.ps1')
+. (Join-Path $PSScriptRoot 'CodexBarGallery.ps1')
+$compareBars.Add_Click({ Show-SchedulerBarGallery $form })
 . (Join-Path $PSScriptRoot 'CodexDashboard.ps1')
 
 function New-UsageCard {

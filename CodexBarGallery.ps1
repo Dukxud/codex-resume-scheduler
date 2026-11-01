@@ -8,6 +8,10 @@ function Start-MaterialGlint {
     $glint = @($Indicator.Child.Children | Where-Object { $_.Name -eq 'FlowGlint' } | Select-Object -First 1)
     if ($glint.Count -ne 1 -or $Indicator.ActualWidth -le 1) { return }
     $transform = [System.Windows.Media.TranslateTransform]$glint[0].RenderTransform
+    if ($transform.IsFrozen) {
+        $transform = [System.Windows.Media.TranslateTransform]$transform.Clone()
+        $glint[0].RenderTransform = $transform
+    }
     $animation = [System.Windows.Media.Animation.DoubleAnimation]::new()
     $animation.From = -86.0
     $animation.To = [double]$Indicator.ActualWidth + 86.0

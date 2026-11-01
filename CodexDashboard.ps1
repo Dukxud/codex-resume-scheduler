@@ -12,8 +12,8 @@ function Get-RunCountdownPercent {
 }
 
 function Get-DashboardUsageModel {
-    if ($script:compactToggle -and $script:compactToggle.Checked -and $script:pendingSnapshot.Count -gt 0) {
-        $nextModel = [string]$script:pendingSnapshot[0].Model
+    if ($script:ui.Dashboard.compactToggle -and $script:ui.Dashboard.compactToggle.Checked -and $script:ui.Dashboard.pendingSnapshot.Count -gt 0) {
+        $nextModel = [string]$script:ui.Dashboard.pendingSnapshot[0].Model
         if ($nextModel -match '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$') { return $nextModel }
     }
     return Get-SelectedModel
@@ -33,70 +33,70 @@ function New-DashboardLabel {
 function Initialize-Dashboard {
     # Capture the old full-view controls before adding the compact-only controls.
     $shared = @($heading,$usageHeading,$usageNotice,$usageCards[0].Panel,$usageCards[1].Panel)
-    $script:dashboardStandardOnly = @($form.Controls | Where-Object { $shared -notcontains $_ })
-    $script:fullTitleFont = $heading.Font
-    $script:compactTitleFont = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
-    $script:countdownBlue = [System.Drawing.Color]::FromArgb(49,95,167)
+    $script:ui.Dashboard.dashboardStandardOnly = @($form.Controls | Where-Object { $shared -notcontains $_ })
+    $script:ui.Dashboard.fullTitleFont = $heading.Font
+    $script:ui.Dashboard.compactTitleFont = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
+    $script:ui.Dashboard.countdownBlue = [System.Drawing.Color]::FromArgb(49,95,167)
 
     # A high-contrast, button-style toggle in a reserved header location.
     # The former small checkbox overlapped the subtitle and compact title.
-    $script:compactToggle = [System.Windows.Forms.CheckBox]::new()
-    $script:compactToggle.Appearance = [System.Windows.Forms.Appearance]::Button
-    $script:compactToggle.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $script:compactToggle.FlatAppearance.BorderSize = 1
-    $script:compactToggle.Font = [System.Drawing.Font]::new('Segoe UI',10,[System.Drawing.FontStyle]::Bold)
-    $script:compactToggle.TextAlign = 'MiddleCenter'
-    $script:compactToggle.Location = [System.Drawing.Point]::new(728,13)
-    $script:compactToggle.Size = [System.Drawing.Size]::new(170,38)
-    $script:compactToggle.AccessibleName = 'Toggle compact mode'
-    $script:compactToggle.Checked = ($script:uiSettings -and $script:uiSettings.compactMode -eq $true)
-    $form.Controls.Add($script:compactToggle)
-    $script:compactToggle.BringToFront()
+    $script:ui.Dashboard.compactToggle = [System.Windows.Forms.CheckBox]::new()
+    $script:ui.Dashboard.compactToggle.Appearance = [System.Windows.Forms.Appearance]::Button
+    $script:ui.Dashboard.compactToggle.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $script:ui.Dashboard.compactToggle.FlatAppearance.BorderSize = 1
+    $script:ui.Dashboard.compactToggle.Font = [System.Drawing.Font]::new('Segoe UI',10,[System.Drawing.FontStyle]::Bold)
+    $script:ui.Dashboard.compactToggle.TextAlign = 'MiddleCenter'
+    $script:ui.Dashboard.compactToggle.Location = [System.Drawing.Point]::new(728,13)
+    $script:ui.Dashboard.compactToggle.Size = [System.Drawing.Size]::new(170,38)
+    $script:ui.Dashboard.compactToggle.AccessibleName = 'Toggle compact mode'
+    $script:ui.Dashboard.compactToggle.Checked = ($script:ui.Preferences.uiSettings -and $script:ui.Preferences.uiSettings.compactMode -eq $true)
+    $form.Controls.Add($script:ui.Dashboard.compactToggle)
+    $script:ui.Dashboard.compactToggle.BringToFront()
 
     # Appearance controls remain accessible in both standard and compact layouts.
-    $script:appearanceButton = [System.Windows.Forms.Button]::new()
-    $script:appearanceButton.Text = 'Appearance...'
-    $script:appearanceButton.AccessibleName = 'Customize progress bar appearance'
-    $script:appearanceButton.Size = [System.Drawing.Size]::new(140,32)
-    $form.Controls.Add($script:appearanceButton)
-    $script:appearanceButton.Add_Click({ Show-AeroAppearanceDialog $form })
+    $script:ui.Dashboard.appearanceButton = [System.Windows.Forms.Button]::new()
+    $script:ui.Dashboard.appearanceButton.Text = 'Appearance...'
+    $script:ui.Dashboard.appearanceButton.AccessibleName = 'Customize progress bar appearance'
+    $script:ui.Dashboard.appearanceButton.Size = [System.Drawing.Size]::new(140,32)
+    $form.Controls.Add($script:ui.Dashboard.appearanceButton)
+    $script:ui.Dashboard.appearanceButton.Add_Click({ Show-AeroAppearanceDialog $form })
 
-    $script:compactRunHeading = New-DashboardLabel $form 'Next run' 18 61 425 26
-    $script:compactRunHeading.Font = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
-    $script:compactRunPanel = [System.Windows.Forms.Panel]::new()
-    $script:compactRunPanel.Location = [System.Drawing.Point]::new(18,91)
-    $script:compactRunPanel.Size = [System.Drawing.Size]::new(428,129)
-    $script:compactRunPanel.BackColor = [System.Drawing.Color]::FromArgb(246,249,253)
-    $script:compactRunPanel.BorderStyle = 'FixedSingle'
-    $form.Controls.Add($script:compactRunPanel)
+    $script:ui.Dashboard.compactRunHeading = New-DashboardLabel $form 'Next run' 18 61 425 26
+    $script:ui.Dashboard.compactRunHeading.Font = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
+    $script:ui.Dashboard.compactRunPanel = [System.Windows.Forms.Panel]::new()
+    $script:ui.Dashboard.compactRunPanel.Location = [System.Drawing.Point]::new(18,91)
+    $script:ui.Dashboard.compactRunPanel.Size = [System.Drawing.Size]::new(428,129)
+    $script:ui.Dashboard.compactRunPanel.BackColor = [System.Drawing.Color]::FromArgb(246,249,253)
+    $script:ui.Dashboard.compactRunPanel.BorderStyle = 'FixedSingle'
+    $form.Controls.Add($script:ui.Dashboard.compactRunPanel)
 
-    $script:compactRunName = New-DashboardLabel $script:compactRunPanel '' 14 12 240 27
-    $script:compactRunName.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
-    $script:compactRunEta = New-DashboardLabel $script:compactRunPanel '' 251 12 160 27
-    $script:compactRunEta.TextAlign = 'MiddleRight'
-    $script:compactRunEta.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
-    $script:compactRunEta.ForeColor = $script:countdownBlue
-    $script:compactRunDetails = New-DashboardLabel $script:compactRunPanel '' 14 42 395 24
-    $script:compactRunDetails.ForeColor = [System.Drawing.Color]::DimGray
-    $script:compactRunDate = New-DashboardLabel $script:compactRunPanel '' 14 70 395 23
-    $script:compactRunDate.ForeColor = [System.Drawing.Color]::DimGray
+    $script:ui.Dashboard.compactRunName = New-DashboardLabel $script:ui.Dashboard.compactRunPanel '' 14 12 240 27
+    $script:ui.Dashboard.compactRunName.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
+    $script:ui.Dashboard.compactRunEta = New-DashboardLabel $script:ui.Dashboard.compactRunPanel '' 251 12 160 27
+    $script:ui.Dashboard.compactRunEta.TextAlign = 'MiddleRight'
+    $script:ui.Dashboard.compactRunEta.Font = [System.Drawing.Font]::new('Segoe UI',12,[System.Drawing.FontStyle]::Bold)
+    $script:ui.Dashboard.compactRunEta.ForeColor = $script:ui.Dashboard.countdownBlue
+    $script:ui.Dashboard.compactRunDetails = New-DashboardLabel $script:ui.Dashboard.compactRunPanel '' 14 42 395 24
+    $script:ui.Dashboard.compactRunDetails.ForeColor = [System.Drawing.Color]::DimGray
+    $script:ui.Dashboard.compactRunDate = New-DashboardLabel $script:ui.Dashboard.compactRunPanel '' 14 70 395 23
+    $script:ui.Dashboard.compactRunDate.ForeColor = [System.Drawing.Color]::DimGray
 
-    $script:compactRunTrack = New-AeroProgressBar $script:compactRunPanel 14 101 396 17 'time'
+    $script:ui.Dashboard.compactRunTrack = New-AeroProgressBar $script:ui.Dashboard.compactRunPanel 14 101 396 17 'time'
 
-    $script:compactUsageModel = New-DashboardLabel $form '' 232 240 210 26
-    $script:compactUsageModel.ForeColor = [System.Drawing.Color]::DimGray
-    $script:compactUsageModel.TextAlign = 'MiddleRight'
-    $script:compactUsageStatus = New-DashboardLabel $form 'Reading usage limits...' 18 85 426 32
-    $script:compactUsageStatus.ForeColor = [System.Drawing.Color]::DimGray
+    $script:ui.Dashboard.compactUsageModel = New-DashboardLabel $form '' 232 240 210 26
+    $script:ui.Dashboard.compactUsageModel.ForeColor = [System.Drawing.Color]::DimGray
+    $script:ui.Dashboard.compactUsageModel.TextAlign = 'MiddleRight'
+    $script:ui.Dashboard.compactUsageStatus = New-DashboardLabel $form 'Reading usage limits...' 18 85 426 32
+    $script:ui.Dashboard.compactUsageStatus.ForeColor = [System.Drawing.Color]::DimGray
 
     # A separate, non-networked timer updates only displayed countdowns.
-    $script:countdownTimer = [System.Windows.Forms.Timer]::new()
-    $script:countdownTimer.Interval = 1000
-    $script:countdownTimer.Add_Tick({ Update-DashboardCountdowns })
+    $script:ui.Dashboard.countdownTimer = [System.Windows.Forms.Timer]::new()
+    $script:ui.Dashboard.countdownTimer.Interval = 1000
+    $script:ui.Dashboard.countdownTimer.Add_Tick({ Update-DashboardCountdowns })
 
     # Standard view displays the time label in the native grid, with a real
     # WPF progress control below it. The WPF compositor animates without timers.
-    $script:runBarHosts = [System.Collections.Generic.List[System.Windows.Forms.Control]]::new()
+    $script:ui.Dashboard.runBarHosts = [System.Collections.Generic.List[System.Windows.Forms.Control]]::new()
     $grid.Add_CellPainting({
         param($sender,$e)
         if ($e.RowIndex -lt 0 -or $e.ColumnIndex -ne 1) { return }
@@ -118,30 +118,30 @@ function Initialize-Dashboard {
     $grid.Add_SizeChanged({ Sync-DashboardRunBars })
     $grid.Add_VisibleChanged({ Sync-DashboardRunBars })
 
-    $script:compactToggle.Add_CheckedChanged({
+    $script:ui.Dashboard.compactToggle.Add_CheckedChanged({
         Update-DashboardLayout
         Queue-FormStateSave
-        if ((Get-DashboardUsageModel) -ne [string]$script:usageRequestedModel) { Request-UsageRefresh }
+        if ((Get-DashboardUsageModel) -ne [string]$script:ui.Usage.usageRequestedModel) { Request-UsageRefresh }
     })
 }
 
 function Sync-DashboardRunBars {
     # The DataGridView remains responsible for text, scrolling, selection and
     # task identity. One WPF ElementHost is positioned in each visible time cell.
-    if ($null -eq $script:runBarHosts -or $grid.Columns.Count -lt 2) { return }
+    if ($null -eq $script:ui.Dashboard.runBarHosts -or $grid.Columns.Count -lt 2) { return }
     $count = $grid.Rows.Count
-    while ($script:runBarHosts.Count -gt $count) {
-        $last = $script:runBarHosts.Count - 1
-        $obsolete = $script:runBarHosts[$last]
+    while ($script:ui.Dashboard.runBarHosts.Count -gt $count) {
+        $last = $script:ui.Dashboard.runBarHosts.Count - 1
+        $obsolete = $script:ui.Dashboard.runBarHosts[$last]
         Remove-AeroProgressBar $obsolete
-        $script:runBarHosts.RemoveAt($last)
+        $script:ui.Dashboard.runBarHosts.RemoveAt($last)
     }
-    while ($script:runBarHosts.Count -lt $count) {
+    while ($script:ui.Dashboard.runBarHosts.Count -lt $count) {
         $new = New-AeroProgressBar $grid 0 0 100 15 'time'
-        $script:runBarHosts.Add($new)
+        $script:ui.Dashboard.runBarHosts.Add($new)
     }
     for ($i=0; $i -lt $count; $i++) {
-        $bar = $script:runBarHosts[$i]
+        $bar = $script:ui.Dashboard.runBarHosts[$i]
         $cell = $grid.GetCellDisplayRectangle(1,$i,$true)
         $inside = $grid.Visible -and $grid.Rows[$i].Visible -and
             $cell.Width -gt 32 -and $cell.Height -ge 22
@@ -162,7 +162,7 @@ function Sync-DashboardRunBars {
 function Update-DashboardCountdowns {
     $now = Get-Date
     foreach ($row in @($grid.Rows)) {
-        $item = @($script:pendingSnapshot | Where-Object { $_.Name -eq [string]$row.Tag } | Select-Object -First 1)
+        $item = @($script:ui.Dashboard.pendingSnapshot | Where-Object { $_.Name -eq [string]$row.Tag } | Select-Object -First 1)
         if ($item.Count -eq 0) { continue }
         $cell = $row.Cells[1]
         $label = Get-RunCountdownText $item[0].When $now
@@ -174,36 +174,36 @@ function Update-DashboardCountdowns {
         }
     }
     Sync-DashboardRunBars
-    if (-not $script:compactToggle.Checked -or $script:pendingSnapshot.Count -eq 0) { return }
-    $next = $script:pendingSnapshot[0]
+    if (-not $script:ui.Dashboard.compactToggle.Checked -or $script:ui.Dashboard.pendingSnapshot.Count -eq 0) { return }
+    $next = $script:ui.Dashboard.pendingSnapshot[0]
     $root = ([string]$next.Repo).TrimEnd([char[]]@('/','\'))
-    $script:compactRunName.Text = if ($root -and $root -ne '-') { [IO.Path]::GetFileName($root) } else { 'Scheduled Codex run' }
-    $script:compactRunEta.Text = Get-RunCountdownText $next.When $now
-    $script:compactRunDetails.Text = [string]$next.Description
-    $script:compactRunDate.Text = 'Scheduled ' + $next.When.ToString('ddd MMM d, h:mm tt')
+    $script:ui.Dashboard.compactRunName.Text = if ($root -and $root -ne '-') { [IO.Path]::GetFileName($root) } else { 'Scheduled Codex run' }
+    $script:ui.Dashboard.compactRunEta.Text = Get-RunCountdownText $next.When $now
+    $script:ui.Dashboard.compactRunDetails.Text = [string]$next.Description
+    $script:ui.Dashboard.compactRunDate.Text = 'Scheduled ' + $next.When.ToString('ddd MMM d, h:mm tt')
     $percent = Get-RunCountdownPercent $next.When $next.CreatedAt $now
-    Set-AeroProgress $script:compactRunTrack $percent
-    $script:compactRunTrack.AccessibleName = $script:compactRunEta.Text + $(if ($null -ne $percent) { ", $percent% elapsed since scheduled" } else { ', schedule creation time unavailable' })
+    Set-AeroProgress $script:ui.Dashboard.compactRunTrack $percent
+    $script:ui.Dashboard.compactRunTrack.AccessibleName = $script:ui.Dashboard.compactRunEta.Text + $(if ($null -ne $percent) { ", $percent% elapsed since scheduled" } else { ', schedule creation time unavailable' })
 }
 
 function Update-DashboardLayout {
-    $compact = $script:compactToggle.Checked
-    foreach ($control in $script:dashboardStandardOnly) { $control.Visible = -not $compact }
-    $script:compactRunHeading.Visible = $compact -and $script:pendingSnapshot.Count -gt 0
-    $script:compactRunPanel.Visible = $script:compactRunHeading.Visible
-    $script:compactUsageModel.Visible = $false
-    $script:compactUsageStatus.Visible = $false
+    $compact = $script:ui.Dashboard.compactToggle.Checked
+    foreach ($control in $script:ui.Dashboard.dashboardStandardOnly) { $control.Visible = -not $compact }
+    $script:ui.Dashboard.compactRunHeading.Visible = $compact -and $script:ui.Dashboard.pendingSnapshot.Count -gt 0
+    $script:ui.Dashboard.compactRunPanel.Visible = $script:ui.Dashboard.compactRunHeading.Visible
+    $script:ui.Dashboard.compactUsageModel.Visible = $false
+    $script:ui.Dashboard.compactUsageStatus.Visible = $false
     if (-not $compact) {
         $heading.Text = 'Schedule a continuation'
-        $heading.Font = $script:fullTitleFont
+        $heading.Font = $script:ui.Dashboard.fullTitleFont
         $heading.Width = 500
-        $script:appearanceButton.Location = [System.Drawing.Point]::new(574,15)
-        $script:compactToggle.Location = [System.Drawing.Point]::new(728,13)
-        $script:compactToggle.Size = [System.Drawing.Size]::new(170,38)
-        $script:compactToggle.Text = 'Compact mode: OFF'
-        $script:compactToggle.BackColor = [System.Drawing.Color]::FromArgb(236,242,250)
-        $script:compactToggle.ForeColor = [System.Drawing.Color]::FromArgb(40,76,128)
-        $script:compactToggle.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(163,189,219)
+        $script:ui.Dashboard.appearanceButton.Location = [System.Drawing.Point]::new(574,15)
+        $script:ui.Dashboard.compactToggle.Location = [System.Drawing.Point]::new(728,13)
+        $script:ui.Dashboard.compactToggle.Size = [System.Drawing.Size]::new(170,38)
+        $script:ui.Dashboard.compactToggle.Text = 'Compact mode: OFF'
+        $script:ui.Dashboard.compactToggle.BackColor = [System.Drawing.Color]::FromArgb(236,242,250)
+        $script:ui.Dashboard.compactToggle.ForeColor = [System.Drawing.Color]::FromArgb(40,76,128)
+        $script:ui.Dashboard.compactToggle.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(163,189,219)
         $subtitle.Visible = $false
         $usageHeading.Text = 'Usage remaining'
         $usageHeading.Location = [System.Drawing.Point]::new(18,322)
@@ -213,7 +213,7 @@ function Update-DashboardLayout {
             $usageCards[$i].Panel.Visible = $true
             $usageCards[$i].Panel.Location = [System.Drawing.Point]::new($(if ($i -eq 0) { 18 } else { 470 }),358)
         }
-        $hasRuns = $script:pendingSnapshot.Count -gt 0
+        $hasRuns = $script:ui.Dashboard.pendingSnapshot.Count -gt 0
         foreach ($control in @($separator2,$pending,$grid,$refreshRuns,$cancelRun)) { $control.Visible = $hasRuns }
         $openFolder.Location = [System.Drawing.Point]::new($(if ($hasRuns) { 352 } else { 18 }),$(if ($hasRuns) { 774 } else { 523 }))
         $status.Location = [System.Drawing.Point]::new(18,$(if ($hasRuns) { 823 } else { 575 }))
@@ -224,36 +224,36 @@ function Update-DashboardLayout {
     }
 
     $heading.Text = 'Codex Scheduler'
-    $heading.Font = $script:compactTitleFont
+    $heading.Font = $script:ui.Dashboard.compactTitleFont
     $heading.Width = 270
-    $script:compactToggle.Location = [System.Drawing.Point]::new(298,13)
-    $script:compactToggle.Size = [System.Drawing.Size]::new(148,38)
-    $script:compactToggle.Text = 'Compact mode: ON'
-    $script:compactToggle.BackColor = [System.Drawing.Color]::FromArgb(49,95,167)
-    $script:compactToggle.ForeColor = [System.Drawing.Color]::White
-    $script:compactToggle.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(36,73,130)
+    $script:ui.Dashboard.compactToggle.Location = [System.Drawing.Point]::new(298,13)
+    $script:ui.Dashboard.compactToggle.Size = [System.Drawing.Size]::new(148,38)
+    $script:ui.Dashboard.compactToggle.Text = 'Compact mode: ON'
+    $script:ui.Dashboard.compactToggle.BackColor = [System.Drawing.Color]::FromArgb(49,95,167)
+    $script:ui.Dashboard.compactToggle.ForeColor = [System.Drawing.Color]::White
+    $script:ui.Dashboard.compactToggle.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(36,73,130)
     $usageNotice.Visible = $false
-    $top = if ($script:pendingSnapshot.Count -gt 0) { 246 } else { 65 }
+    $top = if ($script:ui.Dashboard.pendingSnapshot.Count -gt 0) { 246 } else { 65 }
     $visibleWindows = @()
     $targetModel = Get-DashboardUsageModel
-    $currentSnapshot = $script:usageSnapshot -and (-not $targetModel -or $script:usageSnapshotRequestedModel -ceq $targetModel)
-    if ($currentSnapshot -and -not $script:usageReadFailed) {
-        $visibleWindows = @($script:usageSnapshot.windows | Where-Object { $null -ne $_ })
+    $currentSnapshot = $script:ui.Usage.usageSnapshot -and (-not $targetModel -or $script:ui.Usage.usageSnapshotRequestedModel -ceq $targetModel)
+    if ($currentSnapshot -and -not $script:ui.Usage.usageReadFailed) {
+        $visibleWindows = @($script:ui.Usage.usageSnapshot.windows | Where-Object { $null -ne $_ })
     }
     if ($visibleWindows.Count -eq 0) {
         $usageHeading.Visible = $false
-        $script:compactUsageStatus.Text = if ($script:usageReadFailed -or $currentSnapshot) { 'Usage limits unavailable' } else { 'Reading usage limits...' }
-        $script:compactUsageStatus.Location = [System.Drawing.Point]::new(18,$top)
-        $script:compactUsageStatus.Visible = $true
+        $script:ui.Dashboard.compactUsageStatus.Text = if ($script:ui.Usage.usageReadFailed -or $currentSnapshot) { 'Usage limits unavailable' } else { 'Reading usage limits...' }
+        $script:ui.Dashboard.compactUsageStatus.Location = [System.Drawing.Point]::new(18,$top)
+        $script:ui.Dashboard.compactUsageStatus.Visible = $true
         foreach ($card in $usageCards) { $card.Panel.Visible = $false }
         $height = $top + 52
     } else {
         $usageHeading.Text = 'Usage limits'
         $usageHeading.Location = [System.Drawing.Point]::new(18,$top)
         $usageHeading.Visible = $true
-        $script:compactUsageModel.Location = [System.Drawing.Point]::new(225,$top)
-        $script:compactUsageModel.Text = [string]$script:usageSnapshot.model
-        $script:compactUsageModel.Visible = $true
+        $script:ui.Dashboard.compactUsageModel.Location = [System.Drawing.Point]::new(225,$top)
+        $script:ui.Dashboard.compactUsageModel.Text = [string]$script:ui.Usage.usageSnapshot.model
+        $script:ui.Dashboard.compactUsageModel.Visible = $true
         $cardTop = $top + 34
         foreach ($i in 0..1) {
             $visible = $i -lt $visibleWindows.Count
@@ -268,8 +268,8 @@ function Update-DashboardLayout {
     $form.MinimumSize = [System.Drawing.Size]::new(480,150)
     # Reserve space below the final card for appearance customization.
     $form.ClientSize = [System.Drawing.Size]::new(464,[math]::Max(166,$height+40))
-    $script:appearanceButton.Location = [System.Drawing.Point]::new(306,$form.ClientSize.Height-37)
-    $script:appearanceButton.Size = [System.Drawing.Size]::new(140,32)
+    $script:ui.Dashboard.appearanceButton.Location = [System.Drawing.Point]::new(306,$form.ClientSize.Height-37)
+    $script:ui.Dashboard.appearanceButton.Size = [System.Drawing.Size]::new(140,32)
     Update-DashboardCountdowns
     Sync-DashboardRunBars
 }

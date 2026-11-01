@@ -1,6 +1,6 @@
 function Start-DataRead {
     param([ValidateSet('sessions','pending','selection')][string]$Kind, $Session = $null)
-    if ($script:dataJobs[$Kind]) { $script:dataQueued[$Kind] = $true; return }
+    if ($script:ui.Selection.dataJobs[$Kind]) { $script:ui.Selection.dataQueued[$Kind] = $true; return }
     try {
         $sourceFolder = $PSScriptRoot
         $localAppDir = $appDir
@@ -21,8 +21,8 @@ function Start-DataRead {
                 }
             }
         }
-        $script:dataJobs[$Kind] = $job
-        if ($Kind -eq 'selection') { $script:selectionJobGeneration = $script:selectionGeneration }
+        $script:ui.Selection.dataJobs[$Kind] = $job
+        if ($Kind -eq 'selection') { $script:ui.Selection.selectionJobGeneration = $script:ui.Selection.selectionGeneration }
     } catch { Update-Status "$Kind refresh failed to start: $($_.Exception.Message)" }
 }
 
@@ -30,25 +30,25 @@ function Refresh-SessionList { Start-DataRead 'sessions' }
 function Refresh-PendingList { Start-DataRead 'pending' }
 
 function Request-SelectionLookup {
-    if ($script:loadingSessions) { return }
-    $script:selectionGeneration++
+    if ($script:ui.Selection.loadingSessions) { return }
+    $script:ui.Selection.selectionGeneration++
     $selected = $sessionBox.SelectedItem
     $selectedId = if ($selected) { [string]$selected.Id } else { '' }
-    if ($selectedId -ne $script:repoSelectionSessionId) {
-        $script:repoSelectionSessionId = $selectedId
+    if ($selectedId -ne $script:ui.Selection.repoSelectionSessionId) {
+        $script:ui.Selection.repoSelectionSessionId = $selectedId
         $repoBox.Clear()
         $repoHints.SetToolTip($repoBox, '')
     }
     if (-not $selected) { return }
-    $script:selectionOriginalModel = Get-SelectedModel
+    $script:ui.Selection.selectionOriginalModel = Get-SelectedModel
     Update-Status 'Locating conversation repository in background...'
     Start-DataRead 'selection' $selected
 }
 
 function Apply-SessionList {
     param([object[]]$Sessions)
-    $selectedId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } elseif ($script:preferredSessionId) { $script:preferredSessionId } else { $null }
-    $script:loadingSessions = $true
+    $selectedId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } elseif ($script:ui.Selection.preferredSessionId) { $script:ui.Selection.preferredSessionId } else { $null }
+    $script:ui.Selection.loadingSessions = $true
     try {
         $sessionBox.BeginUpdate()
         $sessionBox.Items.Clear()
@@ -58,12 +58,12 @@ function Apply-SessionList {
         if ($selectedId) { $chosen = @($sessionBox.Items | Where-Object { $_.Id -eq $selectedId }) | Select-Object -First 1 }
         if ($chosen) { $sessionBox.SelectedItem = $chosen }
         elseif ($sessionBox.Items.Count -gt 0) { $sessionBox.SelectedIndex = 0 }
-    } finally { $script:loadingSessions = $false }
-    if ($sessionBox.SelectedItem -and [string]$sessionBox.SelectedItem.Id -eq $script:preferredSessionId -and
-        $script:savedDraft -and [string]::IsNullOrWhiteSpace($repoBox.Text) -and
-        -not [string]::IsNullOrWhiteSpace([string]$script:savedDraft.repo)) {
-        $script:repoSelectionSessionId = [string]$sessionBox.SelectedItem.Id
-        $repoBox.Text = [string]$script:savedDraft.repo
+    } finally { $script:ui.Selection.loadingSessions = $false }
+    if ($sessionBox.SelectedItem -and [string]$sessionBox.SelectedItem.Id -eq $script:ui.Selection.preferredSessionId -and
+        $script:ui.Preferences.savedDraft -and [string]::IsNullOrWhiteSpace($repoBox.Text) -and
+        -not [string]::IsNullOrWhiteSpace([string]$script:ui.Preferences.savedDraft.repo)) {
+        $script:ui.Selection.repoSelectionSessionId = [string]$sessionBox.SelectedItem.Id
+        $repoBox.Text = [string]$script:ui.Preferences.savedDraft.repo
     }
     if ($selectedId -and $chosen -and -not [string]::IsNullOrWhiteSpace($repoBox.Text)) {
         # Refreshing the conversation list must not discard a manually selected root.
@@ -75,7 +75,7 @@ function Apply-SessionList {
 
 function Apply-PendingList {
     param([object[]]$Items)
-    $script:pendingSnapshot = @($Items)
+    $script:ui.Dashboard.pendingSnapshot = @($Items)
     $grid.Rows.Clear()
     foreach ($item in $Items) {
         $path = ([string]$item.Repo).TrimEnd([char[]]@('/','\'))
@@ -94,28 +94,28 @@ function Apply-PendingList {
     $emptyRuns.Visible = $false
     Update-DashboardLayout
     Update-DashboardCountdowns
-    if ($script:compactToggle.Checked -and (Get-DashboardUsageModel) -ne [string]$script:usageRequestedModel) { Request-UsageRefresh }
+    if ($script:ui.Dashboard.compactToggle.Checked -and (Get-DashboardUsageModel) -ne [string]$script:ui.Usage.usageRequestedModel) { Request-UsageRefresh }
 }
 
 $dataPoll = New-Object System.Windows.Forms.Timer
 $dataPoll.Interval = 250
 $dataPoll.Add_Tick({
     foreach ($kind in @('sessions','pending','selection')) {
-        $job = $script:dataJobs[$kind]
+        $job = $script:ui.Selection.dataJobs[$kind]
         if (-not $job -or $job.State -notin @('Completed','Failed','Stopped')) { continue }
-        $script:dataJobs.Remove($kind)
+        $script:ui.Selection.dataJobs.Remove($kind)
         try {
             $result = @(Receive-Job -Job $job -ErrorAction Stop)
             switch ($kind) {
                 'sessions' { Apply-SessionList $result }
                 'pending' { Apply-PendingList $result }
                 'selection' {
-                    if ($script:selectionJobGeneration -ne $script:selectionGeneration) { break }
+                    if ($script:ui.Selection.selectionJobGeneration -ne $script:ui.Selection.selectionGeneration) { break }
                     $info = $result | Select-Object -First 1
                     if (-not $info -or -not $sessionBox.SelectedItem -or $info.Id -ne $sessionBox.SelectedItem.Id) { break }
-                    if ($info.Model -and (Get-SelectedModel) -eq $script:selectionOriginalModel -and
-                        -not ($script:startupSavedModelId -and $script:startupSavedSessionId -eq [string]$sessionBox.SelectedItem.Id)) {
-                        $script:preferredSessionModel = [string]$info.Model
+                    if ($info.Model -and (Get-SelectedModel) -eq $script:ui.Selection.selectionOriginalModel -and
+                        -not ($script:ui.Selection.startupSavedModelId -and $script:ui.Selection.startupSavedSessionId -eq [string]$sessionBox.SelectedItem.Id)) {
+                        $script:ui.Selection.preferredSessionModel = [string]$info.Model
                         $chosen = @($modelBox.Items | Where-Object { $_.Id -eq $info.Model }) | Select-Object -First 1
                         if ($chosen) { $modelBox.SelectedItem = $chosen; Select-AvailableEfforts }
                     }
@@ -143,8 +143,8 @@ $dataPoll.Add_Tick({
             }
         } catch { Update-Status "$kind refresh failed: $($_.Exception.Message)" }
         finally { Remove-Job -Job $job -Force -ErrorAction SilentlyContinue }
-        if ($script:dataQueued[$kind]) {
-            $script:dataQueued[$kind] = $false
+        if ($script:ui.Selection.dataQueued[$kind]) {
+            $script:ui.Selection.dataQueued[$kind] = $false
             if ($kind -eq 'selection') {
                 if ($sessionBox.SelectedItem) { Start-DataRead 'selection' $sessionBox.SelectedItem }
             } else { Start-DataRead $kind }
@@ -152,14 +152,14 @@ $dataPoll.Add_Tick({
     }
 })
 
-$script:usageSnapshot = $null
-$script:usageRequestedModel = ''
-$script:usageSnapshotRequestedModel = ''
-$script:usageReadFailed = $false
-$script:usageProcess = $null
-$script:usageStarted = [datetime]::MinValue
-$script:usageRefreshQueued = $false
-$script:usageChecked = [datetime]::MinValue
+$script:ui.Usage.usageSnapshot = $null
+$script:ui.Usage.usageRequestedModel = ''
+$script:ui.Usage.usageSnapshotRequestedModel = ''
+$script:ui.Usage.usageReadFailed = $false
+$script:ui.Usage.usageProcess = $null
+$script:ui.Usage.usageStarted = [datetime]::MinValue
+$script:ui.Usage.usageRefreshQueued = $false
+$script:ui.Usage.usageChecked = [datetime]::MinValue
 $usagePoll = New-Object System.Windows.Forms.Timer
 $usagePoll.Interval = 300
 
@@ -186,24 +186,24 @@ function Render-UsageCard {
 
 function Apply-UsageSnapshot {
     param($Snapshot)
-    $script:usageSnapshot = $Snapshot
-    $script:usageSnapshotRequestedModel = $script:usageRequestedModel
-    $script:usageReadFailed = $false
-    $script:usageChecked = Get-Date
-    $script:models = @($Snapshot.models | Where-Object { $_ })
-    $previous = if ($script:preferredModelId) { [string]$script:preferredModelId } elseif ($script:preferredSessionModel) { [string]$script:preferredSessionModel } else { Get-SelectedModel }
-    $script:preferredSessionModel = $null # Do not override a subsequent manual model choice.
-    $script:updatingModels = $true
-    if ($script:models.Count -gt 0) {
+    $script:ui.Usage.usageSnapshot = $Snapshot
+    $script:ui.Usage.usageSnapshotRequestedModel = $script:ui.Usage.usageRequestedModel
+    $script:ui.Usage.usageReadFailed = $false
+    $script:ui.Usage.usageChecked = Get-Date
+    $script:ui.Selection.models = @($Snapshot.models | Where-Object { $_ })
+    $previous = if ($script:ui.Selection.preferredModelId) { [string]$script:ui.Selection.preferredModelId } elseif ($script:ui.Selection.preferredSessionModel) { [string]$script:ui.Selection.preferredSessionModel } else { Get-SelectedModel }
+    $script:ui.Selection.preferredSessionModel = $null # Do not override a subsequent manual model choice.
+    $script:ui.Selection.updatingModels = $true
+    if ($script:ui.Selection.models.Count -gt 0) {
         $modelBox.BeginUpdate()
         $modelBox.Items.Clear()
-        foreach ($m in $script:models) {
+        foreach ($m in $script:ui.Selection.models) {
             [void]$modelBox.Items.Add([pscustomobject]@{ Id = $m.id; Display = $m.name; Efforts = $m.efforts; DefaultEffort = $m.defaultEffort })
         }
         $modelBox.EndUpdate()
-        $selected = @($script:models | Where-Object { $_.id -eq $previous }) | Select-Object -First 1
-        if (-not $selected -and -not $previous) { $selected = @($script:models | Where-Object { $_.isDefault }) | Select-Object -First 1 }
-        if (-not $selected -and -not $previous) { $selected = @($script:models) | Select-Object -First 1 }
+        $selected = @($script:ui.Selection.models | Where-Object { $_.id -eq $previous }) | Select-Object -First 1
+        if (-not $selected -and -not $previous) { $selected = @($script:ui.Selection.models | Where-Object { $_.isDefault }) | Select-Object -First 1 }
+        if (-not $selected -and -not $previous) { $selected = @($script:ui.Selection.models) | Select-Object -First 1 }
         if ($selected) {
             $found = $false
             foreach ($item in $modelBox.Items) { if ($item.Id -eq $selected.id) { $modelBox.SelectedItem = $item; $found = $true; break } }
@@ -211,11 +211,11 @@ function Apply-UsageSnapshot {
         }
         Select-AvailableEfforts
         if ($selected) {
-            $script:preferredModelId = '' # Later catalog refresh preserves the live selection.
-            $script:preferredEffort = ''
+            $script:ui.Selection.preferredModelId = '' # Later catalog refresh preserves the live selection.
+            $script:ui.Selection.preferredEffort = ''
         }
     }
-    $script:updatingModels = $false
+    $script:ui.Selection.updatingModels = $false
     $windows = @($Snapshot.windows | Where-Object { $null -ne $_ })
     Render-UsageCard $usageCards[0] $(if ($windows.Count -ge 1) { $windows[0] } else { $null }) 'Primary window'
     Render-UsageCard $usageCards[1] $(if ($windows.Count -ge 2) { $windows[1] } else { $null }) 'Secondary window'
@@ -231,7 +231,7 @@ function Apply-UsageSnapshot {
         'False' { 'Usage restricted' }
         default { 'Availability not reported' }
     }
-    $usageNotice.Text = "$stateLabel  ·  Updated $($script:usageChecked.ToString('h:mm tt'))  ·  Refreshes every 60 seconds"
+    $usageNotice.Text = "$stateLabel  ·  Updated $($script:ui.Usage.usageChecked.ToString('h:mm tt'))  ·  Refreshes every 60 seconds"
     if ($Snapshot.recommendationKind -eq 'next-window') {
         $usageNotice.Text += '  ·  Next reset is informational'
     }
@@ -245,20 +245,20 @@ function Apply-UsageSnapshot {
 }
 
 function Request-UsageRefresh {
-    if ($script:usageProcess) {
-        $script:usageRefreshQueued = $true
+    if ($script:ui.Usage.usageProcess) {
+        $script:ui.Usage.usageRefreshQueued = $true
         return
     }
     try {
-        $script:usageProcess = Start-UsageRead
-        $script:usageStarted = Get-Date
+        $script:ui.Usage.usageProcess = Start-UsageRead
+        $script:ui.Usage.usageStarted = Get-Date
         $usageNotice.Text = 'Refreshing Codex usage...'
         $refreshUsage.Enabled = $false
         $usagePoll.Start()
     } catch {
         $usageNotice.Text = 'Usage refresh failed; try again.'
         $usageHints.SetToolTip($usageNotice, $_.Exception.Message)
-        $script:usageReadFailed = $true
+        $script:ui.Usage.usageReadFailed = $true
         $refreshUsage.Enabled = $true
         $useReset.Enabled = $false
         Update-DashboardLayout
@@ -266,11 +266,11 @@ function Request-UsageRefresh {
 }
 
 $usagePoll.Add_Tick({
-    if (-not $script:usageProcess) { $usagePoll.Stop(); return }
-    $process = $script:usageProcess
-    if (-not $process.HasExited -and ((Get-Date) - $script:usageStarted).TotalSeconds -lt 22) { return }
+    if (-not $script:ui.Usage.usageProcess) { $usagePoll.Stop(); return }
+    $process = $script:ui.Usage.usageProcess
+    if (-not $process.HasExited -and ((Get-Date) - $script:ui.Usage.usageStarted).TotalSeconds -lt 22) { return }
     $usagePoll.Stop()
-    $script:usageProcess = $null
+    $script:ui.Usage.usageProcess = $null
     $refreshUsage.Enabled = $true
     try {
         if (-not $process.HasExited) {
@@ -287,14 +287,14 @@ $usagePoll.Add_Tick({
     } catch {
         $usageNotice.Text = 'Usage refresh failed; last displayed values may be stale.'
         $usageHints.SetToolTip($usageNotice, $_.Exception.Message)
-        $script:usageReadFailed = $true
+        $script:ui.Usage.usageReadFailed = $true
         Update-DashboardLayout
         $useReset.Enabled = $false
         $schedule.Enabled = $false # Cannot verify current model/effort without the catalog.
     } finally {
         $process.Dispose()
-        if ($script:usageRefreshQueued) {
-            $script:usageRefreshQueued = $false
+        if ($script:ui.Usage.usageRefreshQueued) {
+            $script:ui.Usage.usageRefreshQueued = $false
             Request-UsageRefresh
         }
     }
@@ -302,8 +302,8 @@ $usagePoll.Add_Tick({
 $refreshUsage.Add_Click({ Request-UsageRefresh })
 
 $useReset.Add_Click({
-    if (-not $script:usageSnapshot -or -not $script:usageSnapshot.recommendedResetAt) { return }
-    $reset = [DateTimeOffset]::FromUnixTimeSeconds([long]$script:usageSnapshot.recommendedResetAt).LocalDateTime
+    if (-not $script:ui.Usage.usageSnapshot -or -not $script:ui.Usage.usageSnapshot.recommendedResetAt) { return }
+    $reset = [DateTimeOffset]::FromUnixTimeSeconds([long]$script:ui.Usage.usageSnapshot.recommendedResetAt).LocalDateTime
     $after = $reset.AddMinutes(2)
     $rounded = [datetime]::new($after.Year,$after.Month,$after.Day,$after.Hour,$after.Minute,0)
     if ($after -gt $rounded) { $rounded = $rounded.AddMinutes(1) }

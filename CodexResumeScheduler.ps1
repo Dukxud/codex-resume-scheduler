@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # WinForms UI, owner-approved Aero v3 progress bars with WPF fallback, and scheduled runner.
-# v1.12.0: Windows v1.8 colors with approved Aero Liquid v3 and rounded-tip fix.
+# v1.12.1: Visible animated Aero reflections and saved appearance customization.
 [CmdletBinding()]
 param(
     [switch]$RunJob,
@@ -228,7 +228,7 @@ public static extern bool ShowWindow(System.IntPtr handle, int command);
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.12.0'
+$form.Text = 'Codex Resume Scheduler v1.12.1'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'

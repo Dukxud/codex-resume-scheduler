@@ -249,12 +249,48 @@ if (-not $TestDir) {
         [System.Windows.Forms.Application]::DoEvents()
         Update-NativeFrame
         foreach($c in $colors) {
-            Save-TintedFrame $c (Join-Path $TestDir "$($c.Replace(' ','-')).png")
+            Save-TintedFrame $c (Join-Path $TestDir "$($c.Replace(' ','-'))-native.png")
+            Save-TintedFrame $c (Join-Path $TestDir "$($c.Replace(' ','-'))-aero.png") $true
         }
-        $frame = [System.Drawing.Bitmap]::new(620,475)
-        $form.DrawToBitmap($frame,[System.Drawing.Rectangle]::new(0,0,620,475))
-        $frame.Save((Join-Path $TestDir 'native-windows-color-comparison.png'),[System.Drawing.Imaging.ImageFormat]::Png)
+        $state.AeroEnabled = $false
+        [System.Windows.Forms.Application]::DoEvents()
+        $unmodified = [System.Drawing.Bitmap]::new(620,580)
+        $form.DrawToBitmap($unmodified,[System.Drawing.Rectangle]::new(0,0,620,580))
+        $unmodified.Save((Join-Path $TestDir 'approved-v18-no-aero.png'),[System.Drawing.Imaging.ImageFormat]::Png)
+        $unmodified.Dispose()
+
+        $state.AeroEnabled = $true
+        $state.Phase = 0
+        [System.Windows.Forms.Application]::DoEvents()
+        $frame = [System.Drawing.Bitmap]::new(620,580)
+        $form.DrawToBitmap($frame,[System.Drawing.Rectangle]::new(0,0,620,580))
+        $frame.Save((Join-Path $TestDir 'native-plus-aero.png'),[System.Drawing.Imaging.ImageFormat]::Png)
         $frame.Dispose()
+
+        $state.Phase = 2.7
+        [System.Windows.Forms.Application]::DoEvents()
+        $movingFrame = [System.Drawing.Bitmap]::new(620,580)
+        $form.DrawToBitmap($movingFrame,[System.Drawing.Rectangle]::new(0,0,620,580))
+        $movingFrame.Save((Join-Path $TestDir 'native-plus-aero-motion.png'),[System.Drawing.Imaging.ImageFormat]::Png)
+        $movingFrame.Dispose()
+
+        $before = (Get-FileHash (Join-Path $TestDir 'native-plus-aero.png') -Algorithm SHA256).Hash
+        $after = (Get-FileHash (Join-Path $TestDir 'native-plus-aero-motion.png') -Algorithm SHA256).Hash
+        if ($before -eq $after) { throw 'The Aero liquid is not animated at a constant percentage.' }
+        $native = (Get-FileHash (Join-Path $TestDir 'Blue-native.png') -Algorithm SHA256).Hash
+        $aero = (Get-FileHash (Join-Path $TestDir 'Blue-aero.png') -Algorithm SHA256).Hash
+        if ($native -eq $aero) { throw 'Blue Aero hybrid must visibly differ from the unmodified Windows bar.' }
+
+        $zeroImage = [System.Drawing.Bitmap]::new(400,13)
+        $zeroGraphics = [System.Drawing.Graphics]::FromImage($zeroImage)
+        try {
+            $zeroGraphics.Clear([System.Drawing.Color]::White)
+            $initial = $zeroImage.GetPixel(15,6).ToArgb()
+            Draw-AeroLiquidOverlay -Graphics $zeroGraphics -Width 400 -Height 13 -Percent 0 -Phase 4 -Strength 100 -ColorName 'Blue'
+            if ($zeroImage.GetPixel(15,6).ToArgb() -ne $initial) {
+                throw 'Zero-percent fill must remain empty.'
+            }
+        } finally { $zeroGraphics.Dispose(); $zeroImage.Dispose() }
         $baseline.Dispose()
         if ($state.Errors -ne 0) { throw "Native snapshot errors: $($state.Errors)" }
         Write-Host "Approved v1.8 colors retained; the Aero layer is optional. Captures: $($state.Captures)."

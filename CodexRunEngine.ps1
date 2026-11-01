@@ -1,12 +1,11 @@
 # Codex-specific worker and CLI adapter. No GUI dependencies.
 Import-Module (Join-Path $PSScriptRoot 'components/RuntimeBundle/RuntimeBundle.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'components/OneTimeTasks/OneTimeTasks.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'components/GitRepository/GitRepository.psm1') -Force -ErrorAction Stop
 
 function Get-RepositoryBranch {
     param([string]$Path)
-    $branch = & git -C $Path branch --show-current 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $branch) { throw 'Unable to identify a Git branch (detached HEAD is not supported).' }
-    return ([string]($branch | Select-Object -First 1)).Trim()
+    return Get-GitCurrentBranch -Path $Path
 }
 
 function Get-CodexCliJs {
@@ -56,7 +55,7 @@ function Get-CodexRuntimeFiles {
         'CodexUsage.js','CodexRetry.js','CodexRunJob.vbs',
         'components/RuntimeBundle/RuntimeBundle.psm1',
         'components/OneTimeTasks/OneTimeTasks.psm1',
-        'components/SettingsStore/SettingsStore.psm1'
+        'components/GitRepository/GitRepository.psm1'
     )
 }
 function Get-CodexTaskArguments {
@@ -110,7 +109,84 @@ function Invoke-CodexScheduledJob {
         $job = Get-Content -LiteralPath $JobFile -Raw | ConvertFrom-Json
         if (-not $job.runtimeFingerprint) { throw 'Legacy task has no pinned runtime. Cancel and reschedule.' }
         Assert-RuntimeFingerprint -Directory $RuntimeDirectory -RelativeFiles (Get-CodexRuntimeFiles) -ExpectedFingerprint ([string]$job.runtimeFingerprint)
-        if ($job.sessionId -notmatch $sessionIdPattern) { throw 'Invalid saved session ID.' }
+        if ([string]$job.sessionId -notmatch '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12} { throw 'Invalid saved session ID.' }
+        if ($job.effort -notmatch '^[a-zA-Z][a-zA-Z0-9_-]{0,40}$') { throw 'Invalid reasoning effort.' }
+        if ($job.model -and $job.model -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$') { throw 'Invalid model identifier.' }
+        if ($job.access -notin @('read-only','workspace-write','yolo')) { throw 'Invalid saved access setting.' }
+        if (-not (Test-Path -LiteralPath $job.repo -PathType Container)) { throw 'Repository no longer exists.' }
+        $root = Get-GitRepositoryRoot -Path $job.repo
+        if (-not $root -or ($root.TrimEnd([char[]]@('/','\')) -ine ([string]$job.repo).TrimEnd([char[]]@('/','\')))) { throw 'Saved directory is no longer the repository root.' }
+        $branch = Get-RepositoryBranch $root
+        if ($branch -cne $job.branch) { throw "Branch changed from '$($job.branch)' to '$branch'. Refusing to run." }
+        $logFolder = Split-Path -Parent ([string]$job.log)
+        [void](New-Item -ItemType Directory -Path $logFolder -Force)
+        Start-Transcript -LiteralPath $job.log -Force | Out-Null
+        $transcribing = $true
+        Set-Location -LiteralPath $root
+        Write-Host "Codex scheduled continuation | $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Cyan
+        Write-Host "Session: $($job.sessionId) | Repository: $root | Branch: $branch"
+        Write-Host "Model: $($job.model) | Reasoning: $($job.effort) | Access: $($job.access) | Message: $($job.message)"
+        $model = [string]$job.model
+        Assert-ModelEffortSupported (Read-CodexModelCatalog) $model ([string]$job.effort)
+        $auto = $job.autoResume -eq $true
+        if ($auto -and -not $job.accountId) { throw 'Automatic retry requires a verified saved account identity. Reschedule after refreshing usage.' }
+        if ($auto) {
+            $state = Read-UsageState $model
+            if (-not $state.accountId -or $job.accountId -cne $state.accountId) { throw 'Codex account identity unavailable or changed; refusing automated continuation.' }
+        }
+        if ($auto -and [int]$job.retryAttempt -gt 0) {
+            if (-not $state.canAttempt) {
+                if ($state.recommendationKind -eq 'exhausted-window' -and $state.recommendedResetAt -and [int]$job.retryAttempt -lt 4) {
+                    if (Schedule-LimitRetry $job ([long]$state.recommendedResetAt) ([long]$state.recommendedResetAt + 120) ([string]$state.bucketId) $AppDirectory $RuntimeDirectory) { return 0 }
+                } else { Write-Host "Usage still unavailable; no reliable future retry: $($state.blockedReason)" -ForegroundColor Yellow }
+                return 1
+            }
+        }
+        $argsList = @('exec','--json','-m',$model,'-c',"model_reasoning_effort=$($job.effort)",'-C',$root)
+        if (-not $model) { $argsList = @('exec','--json','-c',"model_reasoning_effort=$($job.effort)",'-C',$root) }
+        switch ($job.access) {
+            'yolo'            { $argsList += '--dangerously-bypass-approvals-and-sandbox' }
+            'workspace-write' { $argsList += @('--sandbox','workspace-write') }
+            'read-only'       { $argsList += @('--sandbox','read-only') }
+        }
+        $argsList += @('resume', [string]$job.sessionId, [string]$job.message)
+        $codex = (Get-Command codex.cmd -ErrorAction Stop).Source
+        [void](New-Item -Path $AppDirectory -ItemType Directory -Force -ErrorAction Stop)
+        $events = Join-Path $appDir (([IO.Path]::GetFileNameWithoutExtension($JobFile)) + '.jsonl')
+        # Preserve the native process exit code rather than promoting a nonzero exit to an unrelated PowerShell exception.
+        $PSNativeCommandUseErrorActionPreference = $false
+        & $codex @argsList 2>&1 | Tee-Object -FilePath $events | Out-Host
+        $result = $LASTEXITCODE
+        Write-Host "Codex exit code: $result" -ForegroundColor $(if ($result -eq 0) { 'Green' } else { 'Yellow' })
+        if ($auto -and $result -ne 0) {
+            $retryHelper = Join-Path $PSScriptRoot 'CodexRetry.js'
+            $cli = Get-CodexCliJs
+            $assessment = & node $retryHelper --events $events --cli-js $cli --model $model --exit-code $result | Select-Object -Last 1 | ConvertFrom-Json
+            if ($assessment.kind -eq 'retry') {
+                if (-not $assessment.accountId -or $assessment.accountId -cne $job.accountId) { throw 'Codex account changed or identity unavailable; refusing retry.' }
+                [void](Schedule-LimitRetry $job ([long]$assessment.resetAt) ([long]$assessment.runAt) ([string]$assessment.bucketId) $AppDirectory $RuntimeDirectory)
+            } elseif ($assessment.kind -eq 'unknown') {
+                Write-Host "Not auto-resuming: $($assessment.reason)" -ForegroundColor Yellow
+            }
+        }
+        return $(if ([int]$result -eq 0) { 0 } else { [int]$result })
+    } catch {
+        $failure = "Scheduled run failed: $($_.Exception.Message)"
+        Write-Host $failure -ForegroundColor Red
+        if (-not $transcribing) {
+            $target = if ($job -and $job.log) { [string]$job.log } else { Join-Path $appDir 'scheduler-errors.log' }
+            try {
+                [void](New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force)
+                Add-Content -LiteralPath $target -Value "$(Get-Date -Format o) $failure" -ErrorAction Stop
+            } catch { }
+        }
+        return 1
+    } finally {
+        if ($transcribing) { Stop-Transcript | Out-Null }
+        Write-Host 'Run finished. Check the logs folder for the transcript.' -ForegroundColor Cyan
+    }
+}
+) { throw 'Invalid saved session ID.' }
         if ($job.effort -notmatch '^[a-zA-Z][a-zA-Z0-9_-]{0,40}$') { throw 'Invalid reasoning effort.' }
         if ($job.model -and $job.model -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$') { throw 'Invalid model identifier.' }
         if ($job.access -notin @('read-only','workspace-write','yolo')) { throw 'Invalid saved access setting.' }

@@ -14,6 +14,11 @@ test('launchers rely only on the Windows provided script host', () => {
   assert.match(gui, /shell\.Run\(command,\s*0,\s*False\)/);
   assert.match(runner, /shell\.Run\(command,\s*0,\s*True\)/);
   assert.match(runner, /WScript\.Quit status/);
+  for(const launcher of [gui,runner]) {
+    assert.match(launcher,/pwsh = files\.BuildPath\(shell\.ExpandEnvironmentStrings\("%ProgramFiles%"\), "PowerShell\\7\\pwsh\.exe"\)/);
+    assert.match(launcher,/command = Chr\(34\) & pwsh & Chr\(34\)/);
+    assert.doesNotMatch(launcher,/command\s*=\s*"pwsh\.exe/i);
+  }
   assert.match(runner, /-RunJob -JobFile/);
   assert.doesNotMatch(gui + runner + cmd, /CodexScheduler\.exe|CodexLauncher\.cs/);
   assert.equal(fs.existsSync(path.join(root, 'CodexLauncher.cs')), false);

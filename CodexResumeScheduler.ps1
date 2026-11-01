@@ -228,7 +228,7 @@ public static extern bool ShowWindow(System.IntPtr handle, int command);
 
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.11.0'
+$form.Text = 'Codex Resume Scheduler v1.12.0'
 $form.ClientSize = [System.Drawing.Size]::new(920,865)
 $form.MinimumSize = [System.Drawing.Size]::new(940,875)
 $form.StartPosition = 'CenterScreen'

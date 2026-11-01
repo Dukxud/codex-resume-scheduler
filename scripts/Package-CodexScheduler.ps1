@@ -14,7 +14,7 @@ if (Test-Path $folder) { Remove-Item -LiteralPath $folder -Recurse -Force }
 [void](New-Item -ItemType Directory -Path $folder -Force)
 $files = @(
     'CodexResumeScheduler.ps1','CodexDashboard.ps1','CodexFlowingBar.ps1',
-    'CodexAeroBar.ps1','CodexData.ps1','CodexUsage.js','CodexRetry.js',
+    'CodexAeroBar.ps1','CodexBarAppearance.ps1','CodexData.ps1','CodexUsage.js','CodexRetry.js',
     'Start-Codex-Scheduler.vbs','Start-Codex-Scheduler.cmd',
     'CodexRunJob.vbs','README.md','LICENSE','VERSION'
 )

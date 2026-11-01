@@ -51,6 +51,33 @@ jobs:
       - name: Shipped launcher GUI visibility
         shell: pwsh
         run: ./tests/real-vbs-gui-visibility.test.ps1
+      - name: Actual Windows v1.8 native color rendering
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -STA -File ./NativeBarColorLab.ps1 -TestDir ./native-color-captures
+          if (-not (Test-Path native-color-captures/native-windows-color-comparison.png)) { throw 'Color render evidence missing.' }
+      - name: Package working standalone native-bar comparison
+        shell: pwsh
+        run: |
+          New-Item -Path preview-dist -ItemType Directory -Force | Out-Null
+          $dir = Join-Path $env:RUNNER_TEMP 'Native-v1.8-Color-Comparison'
+          New-Item -Path $dir -ItemType Directory -Force | Out-Null
+          foreach ($f in @('NativeBarColorLab.ps1','Start-Native-Bar-Color-Lab.vbs','NATIVE-BAR-COLOR-README.txt')) {
+            Copy-Item -LiteralPath $f -Destination $dir
+          }
+          Compress-Archive -Path $dir -DestinationPath preview-dist/Native-v1.8-Color-Comparison.zip -Force
+      - name: Upload standalone Windows lab
+        uses: actions/upload-artifact@v4
+        with:
+          name: Native-v1.8-Color-Comparison
+          path: preview-dist/*.zip
+          retention-days: 30
+      - name: Upload actual Windows native-bar rendering
+        uses: actions/upload-artifact@v4
+        with:
+          name: Native-v1.8-Color-Captures
+          path: native-color-captures/*.png
+          retention-days: 30
       - name: PowerShell 7 syntax
         shell: pwsh
         run: |

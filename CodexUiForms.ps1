@@ -1,6 +1,7 @@
 if (-not $IsWindows) { throw 'This application requires Windows and PowerShell 7.' }
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Import-Module (Join-Path $PSScriptRoot 'components/WindowShell/WindowShell.psm1') -Force -ErrorAction Stop
 [System.Windows.Forms.Application]::EnableVisualStyles()
 # WScript launches PowerShell with its console hidden. The first window show
 # request inherits that startup setting, so explicitly show the Forms window.
@@ -35,31 +36,14 @@ function Get-SavedAccessPreference {
     return 'workspace-write'
 }
 
-$form = New-Object System.Windows.Forms.Form
-$form.Text = 'Codex Resume Scheduler v1.14.0'
-$form.ClientSize = [System.Drawing.Size]::new(920,865)
-$form.MinimumSize = [System.Drawing.Size]::new(940,875)
-$form.StartPosition = 'CenterScreen'
-$form.BackColor = [System.Drawing.Color]::White
-$form.Font = [System.Drawing.Font]::new('Segoe UI',10)
-$form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
-
+$form = New-DesktopWindow -Title 'Codex Resume Scheduler v1.14.0' -Width 920 -Height 865 -MinimumWidth 940 -MinimumHeight 875
 function Add-Label {
-    param([string]$Text,[int]$X,[int]$Y,[int]$W = 130)
-    $label = New-Object System.Windows.Forms.Label
-    $label.Text = $Text; $label.Location = [System.Drawing.Point]::new($X,$Y)
-    $label.Size = [System.Drawing.Size]::new($W,25)
-    $form.Controls.Add($label)
-    return $label
+    param([string]$Text,[int]$X,[int]$Y,[int]$W=130)
+    return Add-DesktopLabel -Parent $form -Text $Text -X $X -Y $Y -Width $W
 }
 function Add-Button {
-    param([string]$Text,[int]$X,[int]$Y,[int]$W = 110)
-    $button = New-Object System.Windows.Forms.Button
-    $button.Text = $Text; $button.Location = [System.Drawing.Point]::new($X,$Y)
-    $button.Size = [System.Drawing.Size]::new($W,31)
-    $button.UseVisualStyleBackColor = $true
-    $form.Controls.Add($button)
-    return $button
+    param([string]$Text,[int]$X,[int]$Y,[int]$W=110)
+    return Add-DesktopButton -Parent $form -Text $Text -X $X -Y $Y -Width $W
 }
 
 $heading = Add-Label 'Schedule a continuation' 18 14 500

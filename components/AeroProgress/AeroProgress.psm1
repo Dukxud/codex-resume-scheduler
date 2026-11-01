@@ -72,6 +72,7 @@ function New-AeroProgressView {
     $expected = $support.AssetUri.AbsoluteUri
     $view.Add_CoreWebView2InitializationCompleted({
         param($control,$eventArgs)
+        Write-Host "AeroProgress Init completed: $($eventArgs.IsSuccess)"
         if (-not $eventArgs.IsSuccess) {
             $control.Tag.Failure = $eventArgs.InitializationException.Message
             return
@@ -83,7 +84,8 @@ function New-AeroProgressView {
         $settings.IsZoomControlEnabled = $false
         $control.CoreWebView2.Add_NavigationStarting({
             param($source,$event)
-            if ($event.Uri -cne $expected) { $event.Cancel = $true }
+            Write-Host "AeroProgress navigating: $($event.Uri) expected=$expected"
+            if ($event.Uri -ne $expected) { $event.Cancel = $true }
         }.GetNewClosure())
         $control.CoreWebView2.Add_NewWindowRequested({
             param($source,$event)
@@ -103,6 +105,7 @@ function New-AeroProgressView {
     }.GetNewClosure())
     $view.Add_NavigationCompleted({
         param($control,$eventArgs)
+        Write-Host "AeroProgress navigated: success=$($eventArgs.IsSuccess) status=$($eventArgs.WebErrorStatus)"
         if ($eventArgs.IsSuccess -and -not $control.IsDisposed) {
             $control.Tag.Ready = $true
             if ($null -ne $control.Tag.State) {

@@ -20,7 +20,10 @@ test('installing a job brings the usage and decision helpers',()=>{
 test('successful Codex executions never enter retry analysis and failures return nonzero',()=>{
  assert.match(ps,/if \(\$auto -and \$result -ne 0\)/);
  assert.match(ps,/--exit-code \$result/);
- assert.match(ps,/return \$\(if \(\[int\]\$result -eq 0\)/);
+ assert.match(ps,/Set-CodexRunOutcome/);
+ assert.match(ps,/Status 'completed'/);
+ assert.match(ps,/Status 'deferred'/);
+ assert.match(ps,/return \[int\]\$result/);
  assert.match(ps,/return 1\s+\} finally/);
 });
 

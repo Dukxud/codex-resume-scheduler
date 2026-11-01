@@ -1,15 +1,15 @@
 # Persist edited fields independently of scheduling. Debounce typing to avoid disk writes per keystroke.
-$script:settingsTimer = New-Object System.Windows.Forms.Timer
-$script:settingsTimer.Interval = 650
+$script:ui.Preferences.settingsTimer = New-Object System.Windows.Forms.Timer
+$script:ui.Preferences.settingsTimer.Interval = 650
 function Save-CurrentFormState {
-    if (-not $script:settingsReady) { return }
-    $sessionId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } else { $script:preferredSessionId }
+    if (-not $script:ui.Preferences.settingsReady) { return }
+    $sessionId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } else { $script:ui.Selection.preferredSessionId }
     $model = Get-SelectedModel
-    if (-not $model) { $model = $script:preferredModelId }
-    $effort = if ($effortBox.SelectedItem) { [string]$effortBox.SelectedItem } else { $script:preferredEffort }
+    if (-not $model) { $model = $script:ui.Selection.preferredModelId }
+    $effort = if ($effortBox.SelectedItem) { [string]$effortBox.SelectedItem } else { $script:ui.Selection.preferredEffort }
     $access = switch ($accessBox.SelectedIndex) { 1 { 'yolo' } 2 { 'read-only' } default { 'workspace-write' } }
     $savedRoot = [string]$repoBox.Text
-    if (-not $sessionBox.SelectedItem -and -not $savedRoot -and $script:savedDraft) { $savedRoot = [string]$script:savedDraft.repo }
+    if (-not $sessionBox.SelectedItem -and -not $savedRoot -and $script:ui.Preferences.savedDraft) { $savedRoot = [string]$script:ui.Preferences.savedDraft.repo }
     $draft = [pscustomobject]@{
         sessionId = $sessionId
         repo = $savedRoot
@@ -20,25 +20,25 @@ function Save-CurrentFormState {
         autoResume = [bool]$autoResumeCheck.Checked
         runAt = $whenBox.Value.ToString('yyyy-MM-ddTHH:mm:ss', [Globalization.CultureInfo]::InvariantCulture)
     }
-    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; compactMode = [bool]$script:compactToggle.Checked; barAppearance = $script:aeroAppearance; draft = $draft })
-    $script:savedDraft = $draft
-    $script:preferredSessionId = $sessionId
+    Write-CodexUiSettings $appDir ([pscustomobject]@{ version = 1; lastAccess = $access; compactMode = [bool]$script:ui.Dashboard.compactToggle.Checked; barAppearance = $script:aeroAppearance; draft = $draft })
+    $script:ui.Preferences.savedDraft = $draft
+    $script:ui.Selection.preferredSessionId = $sessionId
 }
 function Queue-FormStateSave {
-    if (-not $script:settingsReady -or $script:loadingSessions -or $script:updatingModels) { return }
-    $script:settingsTimer.Stop()
-    $script:settingsTimer.Start()
+    if (-not $script:ui.Preferences.settingsReady -or $script:ui.Selection.loadingSessions -or $script:ui.Selection.updatingModels) { return }
+    $script:ui.Preferences.settingsTimer.Stop()
+    $script:ui.Preferences.settingsTimer.Start()
 }
-$script:settingsTimer.Add_Tick({
-    $script:settingsTimer.Stop()
+$script:ui.Preferences.settingsTimer.Add_Tick({
+    $script:ui.Preferences.settingsTimer.Stop()
     try { Save-CurrentFormState } catch { Update-Status "Settings were not saved: $($_.Exception.Message)" }
 })
 $repoBox.Add_TextChanged({ Queue-FormStateSave })
 $whenBox.Add_ValueChanged({ Queue-FormStateSave })
 $accessBox.Add_SelectedIndexChanged({ Queue-FormStateSave })
 $effortBox.Add_SelectedIndexChanged({
-    if (-not $script:updatingModels) {
-        $script:preferredEffort = [string]$effortBox.SelectedItem
+    if (-not $script:ui.Selection.updatingModels) {
+        $script:ui.Selection.preferredEffort = [string]$effortBox.SelectedItem
         Queue-FormStateSave
     }
 })
@@ -46,16 +46,16 @@ $messageBox.Add_TextChanged({ Queue-FormStateSave })
 $autoResumeCheck.Add_CheckedChanged({ Queue-FormStateSave })
 
 $modelBox.Add_SelectedIndexChanged({
-    if (-not $script:updatingModels) { $script:preferredModelId = Get-SelectedModel }
+    if (-not $script:ui.Selection.updatingModels) { $script:ui.Selection.preferredModelId = Get-SelectedModel }
     Select-AvailableEfforts
-    if (-not $script:updatingModels) {
+    if (-not $script:ui.Selection.updatingModels) {
         $useReset.Enabled = $false
         Request-UsageRefresh
         Queue-FormStateSave
     }
 })
 $sessionBox.Add_SelectedIndexChanged({
-    if (-not $script:loadingSessions) { $script:preferredSessionId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } else { '' } }
+    if (-not $script:ui.Selection.loadingSessions) { $script:ui.Selection.preferredSessionId = if ($sessionBox.SelectedItem) { [string]$sessionBox.SelectedItem.Id } else { '' } }
     Request-SelectionLookup
     Queue-FormStateSave
 })
@@ -66,7 +66,7 @@ $browse.Add_Click({
     if (Test-Path -LiteralPath $repoBox.Text -PathType Container) { $dialog.SelectedPath = $repoBox.Text }
     if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $root = Get-RepositoryRoot $dialog.SelectedPath
-        if ($root) { $script:selectionGeneration++; $script:dataQueued['selection'] = $false; $repoBox.Text = $root }
+        if ($root) { $script:ui.Selection.selectionGeneration++; $script:ui.Selection.dataQueued['selection'] = $false; $repoBox.Text = $root }
         else { [System.Windows.Forms.MessageBox]::Show('Select a folder inside a Git repository.','Invalid folder') | Out-Null }
     }
     $dialog.Dispose()
@@ -111,14 +111,14 @@ $schedule.Add_Click({
         if ($model -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$') { throw 'Select a valid Codex model.' }
         $effort = [string]$effortBox.SelectedItem
         if ($effort -notmatch '^[a-zA-Z][a-zA-Z0-9_-]{0,40}$') { throw 'Select a valid reasoning effort.' }
-        Assert-ModelEffortSupported $script:models $model $effort
-        if ($autoResumeCheck.Checked -and (-not $script:usageSnapshot -or
-            [string]::IsNullOrWhiteSpace([string]$script:usageSnapshot.accountId))) {
+        Assert-ModelEffortSupported $script:ui.Selection.models $model $effort
+        if ($autoResumeCheck.Checked -and (-not $script:ui.Usage.usageSnapshot -or
+            [string]::IsNullOrWhiteSpace([string]$script:ui.Usage.usageSnapshot.accountId))) {
             throw 'Automatic resume requires verified account identity. Refresh usage, or turn off Auto-resume for manual scheduling.'
         }
         # A GUI catalog snapshot can age before the scheduled task starts;
         # the runner independently revalidates the model and effort.
-        $overlaps = @($script:pendingSnapshot | Where-Object { $_.Repo -ne '-' -and $_.Repo.TrimEnd([char[]]@('/','\')) -ieq $root.TrimEnd([char[]]@('/','\')) })
+        $overlaps = @($script:ui.Dashboard.pendingSnapshot | Where-Object { $_.Repo -ne '-' -and $_.Repo.TrimEnd([char[]]@('/','\')) -ieq $root.TrimEnd([char[]]@('/','\')) })
         if ($overlaps.Count -gt 0) {
             $answer = [System.Windows.Forms.MessageBox]::Show("There are already $($overlaps.Count) upcoming task(s) targeting this repository. Creating another may cause concurrent work if times overlap. Continue?",'Existing scheduled work','YesNo','Warning')
             if ($answer -ne 'Yes') { return }
@@ -135,7 +135,7 @@ $schedule.Add_Click({
             model=$model; effort=$effort; access=$access; message=$message
             autoResume=[bool]$autoResumeCheck.Checked; retryAttempt=0
             createdAt=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-            accountId=$script:usageSnapshot.accountId
+            accountId=$script:ui.Usage.usageSnapshot.accountId
             runtimeFingerprint=$runtime.Fingerprint; log=$log
         } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFilePath -Encoding utf8
         $installedRunner = Join-Path $runtime.Directory 'CodexRunJob.vbs'
@@ -149,7 +149,7 @@ $schedule.Add_Click({
             if (-not $existing) { Remove-Item -LiteralPath $jobFilePath -Force -ErrorAction SilentlyContinue }
             throw
         }
-        $script:settingsTimer.Stop()
+        $script:ui.Preferences.settingsTimer.Stop()
         Save-CurrentFormState
         Refresh-PendingList
         Request-UsageRefresh

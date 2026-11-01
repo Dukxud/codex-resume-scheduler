@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const source = fs.readFileSync(path.resolve(__dirname, '..', 'CodexResumeScheduler.ps1'), 'utf8');
+const source = ['CodexUiForms.ps1','CodexUiRefresh.ps1','CodexUiActions.ps1'].map(f=>fs.readFileSync(path.resolve(__dirname, '..', f),'utf8')).join('\n');
 function namedFunction(name) {
   const begin = source.indexOf(`function ${name} {`);
   assert.ok(begin >= 0, `${name} should exist`);

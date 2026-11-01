@@ -151,6 +151,7 @@ function Invoke-CodexScheduledJob {
         }
         $argsList += @('resume', [string]$job.sessionId, [string]$job.message)
         $codex = (Get-Command codex.cmd -ErrorAction Stop).Source
+        [void](New-Item -Path $AppDirectory -ItemType Directory -Force -ErrorAction Stop)
         $events = Join-Path $appDir (([IO.Path]::GetFileNameWithoutExtension($JobFile)) + '.jsonl')
         # Preserve the native process exit code rather than promoting a nonzero exit to an unrelated PowerShell exception.
         $PSNativeCommandUseErrorActionPreference = $false

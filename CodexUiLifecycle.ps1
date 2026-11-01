@@ -31,6 +31,7 @@ $form.Add_FormClosed({
     foreach ($job in @($script:dataJobs.Values)) {
         try { Stop-Job -Job $job -ErrorAction SilentlyContinue; Remove-Job -Job $job -Force -ErrorAction SilentlyContinue } catch { }
     }
+    if ($script:aeroHealthTimer) { $script:aeroHealthTimer.Stop(); $script:aeroHealthTimer.Dispose() }
     if ($script:usageProcess) {
         try { if (-not $script:usageProcess.HasExited) { $script:usageProcess.Kill($true) } } catch { }
         $script:usageProcess.Dispose()

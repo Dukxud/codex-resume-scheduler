@@ -10,6 +10,7 @@ if (-not $IsWindows) { throw 'This lab requires Windows and PowerShell 7.' }
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
+. (Join-Path $PSScriptRoot 'AeroLiquidOverlay.ps1')
 Add-Type -Namespace NativeBarLab -Name Window -MemberDefinition @'
 [System.Runtime.InteropServices.DllImport("user32.dll")]
 public static extern bool ShowWindow(System.IntPtr handle, int command);
@@ -49,9 +50,9 @@ function New-ColorTransform([string]$color) {
 }
 
 $form = [System.Windows.Forms.Form]::new()
-$form.Text = 'v1.8 Windows bar — same bar, different colors'
-$form.ClientSize = [System.Drawing.Size]::new(620,475)
-$form.MinimumSize = [System.Drawing.Size]::new(638,500)
+$form.Text = 'v1.8 Windows bar + Aero Liquid (live comparison)'
+$form.ClientSize = [System.Drawing.Size]::new(620,580)
+$form.MinimumSize = [System.Drawing.Size]::new(638,605)
 $form.BackColor = [System.Drawing.Color]::White
 $form.StartPosition = 'CenterScreen'
 $form.Font = [System.Drawing.Font]::new('Segoe UI',10)
@@ -62,6 +63,9 @@ $form.FormBorderStyle = 'FixedDialog'
 $state = [pscustomobject]@{
     Native=$null
     Frame=$null
+    AeroEnabled=$true
+    AeroStrength=70.0
+    Phase=0.0
     Timer=$null
     ValueLabel=$null
     Copies=@()
@@ -79,9 +83,9 @@ function Add-Text([string]$text,[int]$x,[int]$y,[int]$w=550,[int]$h=24) {
     $form.Controls.Add($lab)
     return $lab
 }
-$heading = Add-Text 'THE ORIGINAL v1.8 WINDOWS PROGRESS BAR — RECOLORED' 24 18 575 36
+$heading = Add-Text 'THE ORIGINAL v1.8 BAR + AERO LIQUID' 24 18 575 36
 $heading.Font = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontStyle]::Bold)
-$note = Add-Text 'No synthetic glass, no hand-drawn gradients. Same pixels, different hue.' 24 53 570 26
+$note = Add-Text 'Unchanged Windows bar and colors. Toggle liquid inside the fill.' 24 53 570 26
 $note.ForeColor = [System.Drawing.Color]::DimGray
 
 $colors = @('Original green','Blue','Cyan','Violet','Amber','Red')
@@ -112,6 +116,9 @@ foreach($i in 0..($colors.Count-1)) {
             $e.Graphics.DrawImage($s.Frame,$target,
                 0,0,$s.Frame.Width,$s.Frame.Height,
                 [System.Drawing.GraphicsUnit]::Pixel,$s.Attributes[[string]$sender.Tag])
+            if ($s.AeroEnabled) {
+                Draw-AeroLiquidOverlay -Graphics $e.Graphics -Width $sender.Width -Height $sender.Height -Percent ([double]$s.Native.Value) -Phase $s.Phase -Strength $s.AeroStrength -ColorName ([string]$sender.Tag)
+            }
         })
         $form.Controls.Add($image)
         $state.Copies += $image
@@ -135,6 +142,39 @@ $slider.Add_ValueChanged({
     Update-NativeFrame
 })
 
+
+$aeroToggle = [System.Windows.Forms.CheckBox]::new()
+$aeroToggle.Text = 'Aero Liquid ON (uncheck for exact approved v1.8 colors)'
+$aeroToggle.AutoSize = $true
+$aeroToggle.Checked = $true
+$aeroToggle.Location = [System.Drawing.Point]::new(28,454)
+$form.Controls.Add($aeroToggle)
+$aeroToggle.Add_CheckedChanged({
+    param($sender,$e)
+    $s = $sender.FindForm().Tag
+    $s.AeroEnabled = [bool]$sender.Checked
+    foreach ($view in $s.Copies) { $view.Invalidate() }
+})
+$intensity = Add-Text 'Aero intensity' 28 501 105 26
+$strength = [System.Windows.Forms.TrackBar]::new()
+$strength.Minimum = 0
+$strength.Maximum = 100
+$strength.Value = 70
+$strength.TickFrequency = 20
+$strength.Location = [System.Drawing.Point]::new(142,490)
+$strength.Size = [System.Drawing.Size]::new(366,43)
+$form.Controls.Add($strength)
+$strengthReadout = Add-Text '70%' 527 501 75 24
+$strength.Add_ValueChanged({
+    param($sender,$e)
+    $s = $sender.FindForm().Tag
+    $s.AeroStrength = [double]$sender.Value
+    $strengthReadout.Text = "$($sender.Value)%"
+    foreach ($view in $s.Copies) { $view.Invalidate() }
+})
+$footnote = Add-Text 'The original green bar stays untouched. The other bars reuse its theme.' 28 545 568 24
+$footnote.ForeColor = [System.Drawing.Color]::DimGray
+
 function Update-NativeFrame {
     $bmp = [System.Drawing.Bitmap]::new(400,13)
     try {
@@ -149,7 +189,7 @@ function Update-NativeFrame {
         throw
     }
 }
-function Save-TintedFrame([string]$color,[string]$path) {
+function Save-TintedFrame([string]$color,[string]$path,[bool]$withAero = $false) {
     $bmp = [System.Drawing.Bitmap]::new(400,13)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     try {
@@ -161,13 +201,16 @@ function Save-TintedFrame([string]$color,[string]$path) {
                 0,0,400,13,
                 [System.Drawing.GraphicsUnit]::Pixel,$state.Attributes[$color])
         }
+        if ($withAero -and $color -ne 'Original green') {
+            Draw-AeroLiquidOverlay -Graphics $g -Width 400 -Height 13 -Percent ([double]$state.Native.Value) -Phase $state.Phase -Strength $state.AeroStrength -ColorName $color
+        }
         $bmp.Save($path,[System.Drawing.Imaging.ImageFormat]::Png)
     } finally { $g.Dispose(); $bmp.Dispose() }
 }
 
 $timer = [System.Windows.Forms.Timer]::new()
 $timer.Interval = 33
-$timer.Add_Tick({ Update-NativeFrame })
+$timer.Add_Tick({ $state.Phase += 0.11; Update-NativeFrame })
 $state.Timer = $timer
 
 $form.Add_Shown({
@@ -214,6 +257,6 @@ if (-not $TestDir) {
         $frame.Dispose()
         $baseline.Dispose()
         if ($state.Errors -ne 0) { throw "Native snapshot errors: $($state.Errors)" }
-        Write-Host "Native original and five recolored copies rendered. Captures: $($state.Captures)."
+        Write-Host "Approved v1.8 colors retained; the Aero layer is optional. Captures: $($state.Captures)."
     } finally { $form.Close(); $form.Dispose() }
 }

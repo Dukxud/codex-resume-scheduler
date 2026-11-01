@@ -74,10 +74,10 @@ function New-AeroProgressBar {
     $bar.CreationProperties = $properties
 
     $bar.Add_CoreWebView2InitializationCompleted({
-        param($sender,$args)
-        Write-Host "Aero WebView2 init: success=$($args.IsSuccess)"
-        if (-not $args.IsSuccess) {
-            $script:aeroError = "WebView2 failed: $($args.InitializationException.Message)"
+        param($sender,$eventArgs)
+        Write-Host "Aero WebView2 init: success=$($eventArgs.IsSuccess)"
+        if (-not $eventArgs.IsSuccess) {
+            $script:aeroError = "WebView2 failed: $($eventArgs.InitializationException.Message)"
             return
         }
         $settings = $sender.CoreWebView2.Settings
@@ -92,13 +92,13 @@ function New-AeroProgressBar {
         })
     })
     $bar.Add_NavigationCompleted({
-        param($sender,$args)
-        Write-Host "Aero navigation completed: $($args.IsSuccess), $($args.WebErrorStatus)"
-        if ($args.IsSuccess -and -not $sender.IsDisposed) {
+        param($sender,$eventArgs)
+        Write-Host "Aero navigation completed: $($eventArgs.IsSuccess), $($eventArgs.WebErrorStatus)"
+        if ($eventArgs.IsSuccess -and -not $sender.IsDisposed) {
             $sender.Tag.Ready = $true
             Send-AeroState $sender
-        } elseif (-not $args.IsSuccess) {
-            $script:aeroError = "Aero HTML navigation failed: $($args.WebErrorStatus)"
+        } elseif (-not $eventArgs.IsSuccess) {
+            $script:aeroError = "Aero HTML navigation failed: $($eventArgs.WebErrorStatus)"
         }
     })
     $Parent.Controls.Add($bar)

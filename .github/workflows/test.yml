@@ -15,6 +15,9 @@ jobs:
         run: ./scripts/Prepare-AeroWebView2.ps1
       - name: Codex usage tests
         run: node --test tests/*.test.js
+      - name: Appearance dialog and saved preferences
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/aero-appearance-dialog.test.ps1
       - name: Actual Aero v3 Windows rendering
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/aero-webview-rendering.test.ps1

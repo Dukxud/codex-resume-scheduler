@@ -29,6 +29,19 @@ The GUI dispatches saved-conversation discovery, repository lookup, and pending 
 
 **Concurrent sessions:** the previous process-based open-session detector was removed because it could not reliably identify an independently opened interactive Codex conversation. Before scheduling a continuation, close any other Codex window that might be using that conversation.
 
+## Customize progress bars (v1.12.1)
+
+Click **Appearance...** in the scheduler. It is available in both standard and compact modes.
+
+The dialog controls:
+- **Usage-bar color** and **countdown color** independently: Windows green, Aero sapphire, cyan, violet, amber, ruby red.
+- **Liquid material:** optical glass, mirror enamel, iridescent pearl.
+- **Reflections:** product studio, Aero daylight, neon showroom.
+- **Shimmer intensity:** 0–200%; **shimmer speed:** 25–300%.
+- **Aero Liquid ON/OFF:** turn the shader off to keep the original v1.8-style Windows-color bar. The underlying percentages never change.
+
+Use **Save and close** to apply to all visible bars and persist the choices locally with other scheduler preferences; **Cancel** discards edits, and **Defaults** restores the approved baseline. The moving highlight is now visible at actual 400×17 usage-bar scale. This is an Aero/WebGL2 visual effect; machines without WebView2 continue using the prior WPF fallback instead.
+
 ## Requirements
 
 - Windows 10/11 x64, signed-in desktop session, **PowerShell 7**. The Aero graphics need the Microsoft Edge WebView2 Runtime, normally installed on Windows 11. WPF fallback remains available without it.

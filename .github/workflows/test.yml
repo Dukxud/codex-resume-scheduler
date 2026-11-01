@@ -34,6 +34,9 @@ jobs:
       - name: Real worker failure exit-code propagation
         shell: pwsh
         run: pwsh -NoProfile -File ./tests/worker-exit-status.test.ps1
+      - name: Full scheduled worker with isolated Codex mock
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/codex-worker-integration.test.ps1
       - name: Actual Aero v3 Windows rendering
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/aero-webview-rendering.test.ps1

@@ -101,11 +101,11 @@ function Ensure-AeroFallback {
     $parent = $Bar.Parent
     if (-not $parent -or $parent.IsDisposed) { return }
     try {
-        $host = New-FlowingProgressBar $parent $Bar.Left $Bar.Top $Bar.Width $Bar.Height ([string]$Bar.Tag.Kind)
-        $Bar.Tag.Fallback = $host
+        $replacementBar = New-FlowingProgressBar $parent $Bar.Left $Bar.Top $Bar.Width $Bar.Height ([string]$Bar.Tag.Kind)
+        $Bar.Tag.Fallback = $replacementBar
         $Bar.Visible = $false
-        $host.BringToFront()
-        Set-FlowingProgress $host $Bar.Tag.Percent
+        $replacementBar.BringToFront()
+        Set-FlowingProgress $replacementBar $Bar.Tag.Percent
     } catch {
         $script:aeroError = "Aero recovery failed: $($_.Exception.Message)"
     }

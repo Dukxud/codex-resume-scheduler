@@ -5,16 +5,20 @@ Add-Type -AssemblyName System.Drawing
 $env:CODEX_BAR_RENDERER = 'wpf'
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexFlowingBar.ps1')
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexAeroBar.ps1')
-$source = Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexResumeScheduler.ps1'
-$tokens = $null; $parseErrors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$parseErrors)
-if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
-foreach ($name in @('New-UsageCard','Render-UsageCard')) {
+$root = Split-Path -Parent $PSScriptRoot
+foreach ($spec in @(
+    @('New-UsageCard','CodexUiForms.ps1'),
+    @('Render-UsageCard','CodexUiRefresh.ps1')
+)) {
+    $tokens = $null; $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+        (Join-Path $root $spec[1]),[ref]$tokens,[ref]$parseErrors)
+    if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
     $matches = @($ast.FindAll({
         param($node)
-        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $spec[0]
     },$true))
-    if ($matches.Count -ne 1) { throw "Expected one function: $name" }
+    if ($matches.Count -ne 1) { throw "Expected one function: $($spec[0])" }
     Invoke-Expression $matches[0].Extent.Text
 }
 function Format-ResetTime { param($Seconds) return 'Reset display' }

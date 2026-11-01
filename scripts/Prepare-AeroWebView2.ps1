@@ -17,7 +17,24 @@ function Copy-RequiredFile([string]$relative,[string]$filename) {
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "SDK $version missing $relative" }
     Copy-Item -LiteralPath $source -Destination (Join-Path $folder $filename) -Force
 }
-Copy-RequiredFile 'lib/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll' 'Microsoft.Web.WebView2.Core.dll'
-Copy-RequiredFile 'lib/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll' 'Microsoft.Web.WebView2.WinForms.dll'
+# Package target frameworks evolve independently of our Windows host. Select
+# a shared compatible framework directory, never mix versions of the two DLLs.
+$frameworks = @('net8.0-windows','net8.0','net6.0-windows','net6.0','netcoreapp3.0','net462','net45')
+$managed = $null
+foreach($tfm in $frameworks){
+    $dir = Join-Path $expanded "lib/$tfm"
+    if ((Test-Path (Join-Path $dir 'Microsoft.Web.WebView2.Core.dll')) -and
+        (Test-Path (Join-Path $dir 'Microsoft.Web.WebView2.WinForms.dll'))) {
+        $managed = "lib/$tfm"
+        break
+    }
+}
+if (-not $managed) {
+    $candidates = @(Get-ChildItem -Path $expanded -Recurse -Filter 'Microsoft.Web.WebView2.Core.dll' | Select-Object -ExpandProperty FullName)
+    throw "No compatible WebView2 framework in SDK. Core DLL candidates: $($candidates -join ', ')"
+}
+Write-Host "WebView2 assemblies: $managed"
+Copy-RequiredFile "$managed/Microsoft.Web.WebView2.Core.dll" 'Microsoft.Web.WebView2.Core.dll'
+Copy-RequiredFile "$managed/Microsoft.Web.WebView2.WinForms.dll" 'Microsoft.Web.WebView2.WinForms.dll'
 Copy-RequiredFile 'runtimes/win-x64/native/WebView2Loader.dll' 'WebView2Loader.dll'
 Write-Host "Microsoft WebView2 SDK $version staged for x64 Windows. No executable installed."

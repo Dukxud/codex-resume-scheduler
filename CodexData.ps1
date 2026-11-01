@@ -1,3 +1,4 @@
+Import-Module (Join-Path $PSScriptRoot 'components/SettingsStore/SettingsStore.psm1') -Force -ErrorAction Stop
 # Codex Resume Scheduler - local data readers (PowerShell 7).
 # Used by the GUI's short-lived background thread jobs and scheduled runners.
 # No UI controls, timers, or persistent services.
@@ -184,26 +185,14 @@ function Read-SessionModel {
     } catch { return $null }
 }
 
-# UI draft settings are local to this Windows account, not part of a scheduled job.
+# App-specific facade over the reusable JSON settings store.
 function Read-CodexUiSettings {
     param([string]$Directory)
-    $file = Join-Path $Directory 'settings.json'
-    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return $null }
-    try { return (Get-Content -LiteralPath $file -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop) }
-    catch { return $null }
+    return Read-JsonSettings -Path (Join-Path $Directory 'settings.json')
 }
-
 function Write-CodexUiSettings {
     param([string]$Directory, $State)
-    [void](New-Item -ItemType Directory -Path $Directory -Force -ErrorAction Stop)
-    $destination = Join-Path $Directory 'settings.json'
-    $temporary = Join-Path $Directory ('.settings-' + [guid]::NewGuid().ToString('N') + '.tmp')
-    try {
-        $State | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $temporary -Encoding utf8 -ErrorAction Stop
-        [System.IO.File]::Move($temporary, $destination, $true)
-    } finally {
-        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
-    }
+    Write-JsonSettings -Path (Join-Path $Directory 'settings.json') -Value $State
 }
 
 function Get-RestoredRunTime {

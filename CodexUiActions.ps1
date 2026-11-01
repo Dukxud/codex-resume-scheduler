@@ -140,7 +140,15 @@ $schedule.Add_Click({
         } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jobFilePath -Encoding utf8
         $installedRunner = Join-Path $runtime.Directory 'CodexRunJob.vbs'
         $runnerArguments = Get-CodexTaskArguments $installedRunner $jobFilePath
-        [void](Register-OneTimeTask -Name $name -At $when -Executable (Join-Path $env:WINDIR 'System32\wscript.exe') -Arguments $runnerArguments -WorkingDirectory $root -Description "Codex session $sessionId ($branch)")
+        try {
+            [void](Register-OneTimeTask -Name $name -At $when -Executable (Join-Path $env:WINDIR 'System32\wscript.exe') -Arguments $runnerArguments -WorkingDirectory $root -Description "Codex session $sessionId ($branch)")
+        } catch {
+            # The generic adapter rolls back a failed validation. Keep payloads
+            # only if Windows still reports a registered task for diagnosis.
+            $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+            if (-not $existing) { Remove-Item -LiteralPath $jobFilePath -Force -ErrorAction SilentlyContinue }
+            throw
+        }
         $script:settingsTimer.Stop()
         Save-CurrentFormState
         Refresh-PendingList

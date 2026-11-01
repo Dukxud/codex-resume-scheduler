@@ -1,6 +1,8 @@
 # Verify costly data reads are dispatched to background jobs, never from refresh handlers.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $root 'CodexUiState.ps1')
+$script:ui = New-CodexUiState
 $gui = Get-Content -LiteralPath (Join-Path $root 'CodexUiRefresh.ps1') -Raw
 $data = Get-Content -LiteralPath (Join-Path $root 'CodexData.ps1') -Raw
 $tokens = $null; $parseErrors = $null
@@ -21,11 +23,11 @@ foreach ($definition in $definitions | Where-Object Name -in @('Refresh-SessionL
 }
 # Start-DataRead must coalesce an in-flight request, not start parallel duplicates.
 Invoke-Expression (@($definitions | Where-Object Name -eq 'Start-DataRead')[0].Extent.Text)
-$script:dataJobs = @{}; $script:dataQueued = @{}; $script:startedJobs = 0
+$script:ui.Selection.dataJobs = @{}; $script:ui.Selection.dataQueued = @{}; $script:startedJobs = 0
 function Start-ThreadJob { param($ArgumentList,$ScriptBlock) $script:startedJobs++; [pscustomobject]@{ State = 'Running' } }
 function Update-Status { param($Text) throw "Unexpected start failure: $Text" }
 $appDir = 'C:\fake'
 Start-DataRead -Kind 'pending'
 Start-DataRead -Kind 'pending'
-if ($script:startedJobs -ne 1 -or -not $script:dataQueued['pending']) { throw 'Duplicate pending refresh was not coalesced.' }
+if ($script:startedJobs -ne 1 -or -not $script:ui.Selection.dataQueued['pending']) { throw 'Duplicate pending refresh was not coalesced.' }
 Write-Host 'Background refresh wiring and coalescing checks passed.'

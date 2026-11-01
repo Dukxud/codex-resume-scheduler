@@ -9,7 +9,8 @@ $root=Split-Path -Parent $PSScriptRoot
 $version=(Get-Content -LiteralPath (Join-Path $root 'VERSION') -Raw).Trim()
 if(-not $Preview -and (-not $CertificateThumbprint -or -not $TimestampServer)){throw 'Public component distribution requires an authenticated code-signing certificate.'}
 $name="AeroProgress-Component-v$version" + $(if($Preview){'-Preview'}else{''})
-$folder=Join-Path $env:RUNNER_TEMP $name
+$tempRoot=if($env:RUNNER_TEMP){$env:RUNNER_TEMP}else{[IO.Path]::GetTempPath()}
+$folder=Join-Path $tempRoot $name
 if(Test-Path $folder){Remove-Item -LiteralPath $folder -Recurse -Force}
 [void](New-Item -ItemType Directory -Force -Path $folder)
 foreach($file in @('AeroProgress.psm1','AeroProgress.psd1','README.md')){

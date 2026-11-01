@@ -4,6 +4,60 @@
 $script:aeroChecked = $false
 $script:aeroAvailable = $false
 $script:aeroError = ''
+$script:aeroBars = [System.Collections.Generic.List[System.Windows.Forms.Control]]::new()
+
+# Bound, local appearance preferences. The defaults preserve the approved
+# design; settings.json is shared with the existing form-draft persistence.
+function Initialize-AeroAppearance {
+    param($Settings)
+    $defaults = [ordered]@{
+        quota = 'green'
+        time = 'blue'
+        finish = 0
+        lighting = 0
+        shimmer = 100
+        speed = 100
+        aero = $true
+    }
+    $stored = if ($Settings) { $Settings.barAppearance } else { $null }
+    if ($stored) {
+        foreach ($name in @($defaults.Keys)) {
+            if ($stored.PSObject.Properties[$name]) {
+                $defaults[$name] = $stored.$name
+            }
+        }
+    }
+    foreach ($kind in @('quota','time')) {
+        if ($defaults[$kind] -notin @('green','blue','cyan','violet','amber','red')) {
+            $defaults[$kind] = $(if ($kind -eq 'quota') { 'green' } else { 'blue' })
+        }
+    }
+    foreach ($key in @('finish','lighting')) {
+        if ($defaults[$key] -notin @(0,1,2)) { $defaults[$key] = 0 }
+        $defaults[$key] = [int]$defaults[$key]
+    }
+    foreach ($key in @('shimmer','speed')) {
+        try { $defaults[$key] = [int]$defaults[$key] } catch { $defaults[$key] = 100 }
+    }
+    $defaults['shimmer'] = [math]::Clamp($defaults['shimmer'],0,200)
+    $defaults['speed'] = [math]::Clamp($defaults['speed'],25,300)
+    $defaults['aero'] = ($defaults['aero'] -eq $true)
+    $script:aeroAppearance = $defaults
+}
+Initialize-AeroAppearance $null
+
+function Update-AeroAppearance {
+    param([System.Collections.IDictionary]$Appearance)
+    $script:aeroAppearance = $Appearance
+    foreach ($bar in @($script:aeroBars)) {
+        if ($bar.IsDisposed) {
+            [void]$script:aeroBars.Remove($bar)
+            continue
+        }
+        $bar.Tag.Color = [string]$Appearance[$bar.Tag.Kind]
+        Send-AeroState $bar
+    }
+}
 
 function Test-AeroRenderer {
     if ($script:aeroChecked) { return $script:aeroAvailable }
@@ -45,6 +99,11 @@ function Send-AeroState {
         type = 'set'
         value = if ($null -eq $Bar.Tag.Percent) { 0 } else { [double]$Bar.Tag.Percent / 100 }
         color = [string]$Bar.Tag.Color
+        finish = [int]$script:aeroAppearance['finish']
+        lighting = [int]$script:aeroAppearance['lighting']
+        shimmer = [double]$script:aeroAppearance['shimmer'] / 100
+        speed = [double]$script:aeroAppearance['speed'] / 100
+        aero = [bool]$script:aeroAppearance['aero']
     } | ConvertTo-Json -Compress
     $Bar.CoreWebView2.PostWebMessageAsJson($payload)
 }
@@ -60,7 +119,7 @@ function New-AeroProgressBar {
         return New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind
     }
 
-    $selected = if ($Color) { $Color } elseif ($Kind -eq 'quota') { 'green' } else { 'blue' }
+    $selected = if ($Color) { $Color } else { [string]$script:aeroAppearance[$Kind] }
     $bar = [Microsoft.Web.WebView2.WinForms.WebView2]::new()
     $bar.Location = [System.Drawing.Point]::new($X,$Y)
     $bar.Size = [System.Drawing.Size]::new($Width,$Height)
@@ -68,14 +127,13 @@ function New-AeroProgressBar {
     $bar.AllowExternalDrop = $false
     $bar.DefaultBackgroundColor = [System.Drawing.Color]::Transparent
     $bar.AccessibleName = if ($Kind -eq 'quota') { 'Usage remaining' } else { 'Time until scheduled run' }
-    $bar.Tag = [pscustomobject]@{ Percent = $null; Color = $selected; Ready = $false }
+    $bar.Tag = [pscustomobject]@{ Percent = $null; Color = $selected; Kind = $Kind; Ready = $false }
     $properties = [Microsoft.Web.WebView2.WinForms.CoreWebView2CreationProperties]::new()
     $properties.UserDataFolder = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CodexResumeScheduler\AeroWebView2'
     $bar.CreationProperties = $properties
 
     $bar.Add_CoreWebView2InitializationCompleted({
         param($sender,$eventArgs)
-        Write-Host "Aero WebView2 init: success=$($eventArgs.IsSuccess)"
         if (-not $eventArgs.IsSuccess) {
             $script:aeroError = "WebView2 failed: $($eventArgs.InitializationException.Message)"
             return
@@ -87,13 +145,11 @@ function New-AeroProgressBar {
         $settings.IsZoomControlEnabled = $false
         $sender.CoreWebView2.Add_NavigationStarting({
             param($source,$event)
-            Write-Host "Aero navigating: $($event.Uri); expected: $($script:aeroDocumentUri.AbsoluteUri)"
             if ($event.Uri -ne $script:aeroDocumentUri.AbsoluteUri) { $event.Cancel = $true }
         })
     })
     $bar.Add_NavigationCompleted({
         param($sender,$eventArgs)
-        Write-Host "Aero navigation completed: $($eventArgs.IsSuccess), $($eventArgs.WebErrorStatus)"
         if ($eventArgs.IsSuccess -and -not $sender.IsDisposed) {
             $sender.Tag.Ready = $true
             Send-AeroState $sender
@@ -102,6 +158,7 @@ function New-AeroProgressBar {
         }
     })
     $Parent.Controls.Add($bar)
+    $script:aeroBars.Add($bar)
     # Source assignment starts initialization asynchronously; no GUI blocking.
     $bar.Source = $script:aeroDocumentUri
     return $bar

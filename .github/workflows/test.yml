@@ -28,6 +28,12 @@ jobs:
       - name: Appearance dialog and saved preferences
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/aero-appearance-dialog.test.ps1
+      - name: Independent reusable component tests
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/reusable-components.test.ps1
+      - name: Real worker failure exit-code propagation
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/worker-exit-status.test.ps1
       - name: Actual Aero v3 Windows rendering
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/aero-webview-rendering.test.ps1
@@ -106,6 +112,17 @@ jobs:
         if: github.ref != 'refs/heads/main'
         shell: pwsh
         run: ./scripts/Package-AeroComponent.ps1 -OutputDirectory ./ComponentArtifacts -Preview
+      - name: Package standalone reusable modules
+        if: github.ref != 'refs/heads/main'
+        shell: pwsh
+        run: ./scripts/Package-ReusableComponents.ps1 -OutputDirectory ./ReusableArtifacts -Preview
+      - name: Upload standalone reusable modules
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReusableComponents-Preview
+          path: ReusableArtifacts/*.zip
+          retention-days: 30
       - name: Upload standalone AeroProgress component
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
@@ -117,7 +134,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: CodexResumeScheduler-v1.13.0-Security-Preview
+          name: CodexResumeScheduler-v1.14.0-Modular-Preview
           path: PreviewArtifacts/*.zip
           retention-days: 30
 
@@ -144,8 +161,12 @@ jobs:
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
           $archive = ./scripts/Package-CodexScheduler.ps1 -OutputDirectory $env:RUNNER_TEMP -CertificateThumbprint $env:CODEX_SIGNING_THUMBPRINT -TimestampServer $env:CODEX_TIMESTAMP_SERVER
+          $aero = ./scripts/Package-AeroComponent.ps1 -OutputDirectory $env:RUNNER_TEMP -CertificateThumbprint $env:CODEX_SIGNING_THUMBPRINT -TimestampServer $env:CODEX_TIMESTAMP_SERVER
+          $modules = ./scripts/Package-ReusableComponents.ps1 -OutputDirectory $env:RUNNER_TEMP -CertificateThumbprint $env:CODEX_SIGNING_THUMBPRINT -TimestampServer $env:CODEX_TIMESTAMP_SERVER
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_VERSION=$version"
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_ARCHIVE=$archive"
+          Add-Content -Path $env:GITHUB_ENV -Value "AERO_ARCHIVE=$aero"
+          Add-Content -Path $env:GITHUB_ENV -Value "MODULES_ARCHIVE=$modules"
       - name: Publish versioned GitHub release
         shell: pwsh
         env:
@@ -154,5 +175,5 @@ jobs:
           $tag = "v$env:RELEASE_VERSION"
           gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) { Write-Host "Release $tag already exists; keeping it unchanged."; exit 0 }
-          gh release create $tag $env:RELEASE_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --latest --title "Codex Resume Scheduler $tag" --notes "Original Windows v1.8 source colors with approved Aero Liquid v3 WebGL2 optics and fixed convex tip for usage limits and countdowns; Microsoft WebView2 SDK bundled, WPF fallback for unavailable runtime. Console-free Windows Script Host launcher; no custom executable or commercial libraries. Download the attached ZIP and open Start-Codex-Scheduler.vbs."
+          gh release create $tag $env:RELEASE_ARCHIVE $env:AERO_ARCHIVE $env:MODULES_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --latest --title "Codex Resume Scheduler $tag" --notes "Original Windows v1.8 source colors with approved Aero Liquid v3 WebGL2 optics and fixed convex tip for usage limits and countdowns; Microsoft WebView2 SDK bundled, WPF fallback for unavailable runtime. Console-free Windows Script Host launcher; no custom executable or commercial libraries. Download the attached ZIP and open Start-Codex-Scheduler.vbs."
           if ($LASTEXITCODE -ne 0) { throw 'Versioned release publishing failed.' }

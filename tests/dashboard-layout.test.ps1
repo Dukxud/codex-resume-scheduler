@@ -94,6 +94,10 @@ try {
     Require ($script:ui.Dashboard.runBarHosts[1].Child.Value -eq 75) 'Second run shows its own percentage.'
     Require ($script:ui.Dashboard.runBarHosts[2].Child.Value -eq 0) 'Legacy run keeps an empty track.'
     Require ($script:ui.Dashboard.runBarHosts[0].Child -is [System.Windows.Controls.ProgressBar]) 'Runs must use real WPF controls.'
+    # A queue of hundreds of tasks must NOT spawn hundreds of WebView2 browsers.
+    foreach($index in 4..120){[void]$grid.Rows.Add('Time','2m',"Other $index")}
+    Sync-DashboardRunBars
+    Require ($script:ui.Dashboard.runBarHosts.Count -lt 10) 'Rendering hidden jobs created unbounded browser controls.'
     $grid.Rows.Clear()
     Sync-DashboardRunBars
     Require ($script:ui.Dashboard.runBarHosts.Count -eq 0) 'Empty queue must release all run bars and their WPF hosts.'

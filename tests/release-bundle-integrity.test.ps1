@@ -48,7 +48,7 @@ try {
         'components/README.md','components/AeroProgress/AeroProgress.psm1',
         'components/RuntimeBundle/RuntimeBundle.psm1','components/SettingsStore/SettingsStore.psm1',
         'components/Countdown/Countdown.psm1','components/OneTimeTasks/OneTimeTasks.psm1',
-        'AeroWebView2/WebView2Loader.dll','assets/AeroBar.html')){
+        'components/AeroProgress/AeroWebView2/WebView2Loader.dll','components/AeroProgress/AeroBar.html')){
         if(-not (Test-Path -LiteralPath (Join-Path $base $file))){throw "Missing reusable module artifact: $file"}
       }
       if(Test-Path (Join-Path $base 'CodexResumeScheduler.ps1')){throw 'Reusable kit must not contain Codex or UI runtime.'}

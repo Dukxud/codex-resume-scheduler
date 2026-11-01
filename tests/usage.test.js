@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test');const assert=require('node:assert/strict');const path=require('node:path');
-const {summarizeRateLimits,describeWindow,normalizeModels,readCodexState,isLimitErrorLine}=require('../CodexUsage.js');
+const {summarizeRateLimits,describeWindow,normalizeModels,readCodexState,isLimitErrorLine,identifyAccount}=require('../CodexUsage.js');
 const {decide,failureSeen}=require('../CodexRetry.js');
 const now=1793000000;const win=(used,delta,duration=300)=>({usedPercent:used,resetsAt:now+delta,windowDurationMins:duration});
 const bucket=(used,delta,model,duration=300)=>({normalModelSlug:model,primary:win(used,delta,duration)});
@@ -71,4 +71,21 @@ test('retry assessment includes the freshly verified account identity',()=>{
  const snapshot=summarizeRateLimits({accountId:'account-abc',ordinaryUsageAllowed:false,rateLimits:{primary:win(100,600)}},now,'model');
  const error='{"type":"turn.failed","error":{"message":"Usage limit exceeded"}}';
  assert.equal(decide(error,snapshot,now,17).accountId,'account-abc');
+});
+
+test('account/read email fallback is stable, private and distinguishes users',()=>{
+ const a=identifyAccount({}, {account:{type:'chatgpt',email:' Example@Email.Test '}});
+ const b=identifyAccount({}, {account:{type:'chatgpt',email:'example@email.test'}});
+ const other=identifyAccount({}, {account:{type:'chatgpt',email:'different@email.test'}});
+ assert.equal(a.accountId,b.accountId);
+ assert.match(a.accountId,/^chatgpt-email-sha256:[0-9a-f]{64}$/);
+ assert.notEqual(other.accountId,a.accountId);
+ assert.equal(JSON.stringify(a).includes('example@'),false);
+ assert.deepEqual(identifyAccount({}, {account:{type:'apiKey'}}),{accountId:null,accountIdentitySource:null});
+ assert.deepEqual(identifyAccount({accountId:'workspace-1'}, {account:{type:'chatgpt',email:'example@email.test'}}),{accountId:'workspace-1',accountIdentitySource:'rate-limits-id'});
+});
+test('real account/read handshake supplies identity when rateLimits omits accountId',async()=>{
+ const snapshot=await readCodexState(path.join(__dirname,'mock-app-server.js'),{catalog:false});
+ assert.match(snapshot.accountId,/^chatgpt-email-sha256:[0-9a-f]{64}$/);
+ assert.equal(snapshot.accountIdentitySource,'chatgpt-email');
 });

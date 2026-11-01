@@ -25,16 +25,17 @@ test('launchers rely only on the Windows provided script host', () => {
 });
 
 test('scheduled jobs and retries use the installed Windows Script Host wrapper', () => {
-  const source = fs.readFileSync(path.join(root, 'CodexResumeScheduler.ps1'), 'utf8');
-  assert.match(source, /'CodexRunJob\.vbs'\)\)/);
-  assert.match(source, /New-ScheduledTaskAction -Execute \(Join-Path \$env:WINDIR 'System32\\wscript\.exe'\)/);
-  assert.match(source, /New-ScheduledTaskAction -Execute \(Join-Path \$env:WINDIR 'System32\\wscript\.exe'\)/);
-  assert.match(source, /Start-Transcript/);
-  assert.doesNotMatch(source, /CodexScheduler\.exe|-NoExit/);
+  const engine = fs.readFileSync(path.join(root, 'CodexRunEngine.ps1'), 'utf8');
+  const actions = fs.readFileSync(path.join(root, 'CodexUiActions.ps1'), 'utf8');
+  assert.match(engine, /CodexRunJob\.vbs/);
+  assert.match(engine, /Register-OneTimeTask/);
+  assert.match(actions, /Register-OneTimeTask/);
+  assert.match(engine, /Start-Transcript/);
+  assert.doesNotMatch(engine + actions, /CodexScheduler\.exe|-NoExit/);
 });
 
 test('release version is displayed in the interface', () => {
-  const source = fs.readFileSync(path.join(root, 'CodexResumeScheduler.ps1'), 'utf8');
+  const source = fs.readFileSync(path.join(root, 'CodexUiForms.ps1'), 'utf8');
   const version = fs.readFileSync(path.join(root, 'VERSION'), 'utf8').trim();
   assert.ok(source.includes("Codex Resume Scheduler v" + version));
   assert.match(version, /^\d+\.\d+\.\d+$/);

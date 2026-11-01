@@ -18,8 +18,9 @@ These PowerShell modules can be imported independently. None needs Codex, the sc
 | JobOutcomes | Atomic and validated completed/failed/deferred/blocked/cancelled outcome records | PowerShell 7 |
 | WindowShell | Native Windows Forms windows and standard controls | Windows |
 | ProgressHost | Renderer-neutral primary/fallback control ownership, layout, and disposal | Windows |
+| FlowingProgress | Native WPF compositor-animated glossy progress surface with caller-defined colors | Windows |
 
-The reusable kit has **nine** modules. Each may be copied alone, except JobOutcomes requires the small SettingsStore dependency (copy both folders together). AeroProgress requires its local HTML shader and WebView2 SDK files.
+The reusable kit has **ten** modules. Each may be copied alone, except JobOutcomes requires the small SettingsStore dependency (copy both folders together). AeroProgress requires its local HTML shader and WebView2 SDK files. FlowingProgress requires WPF and WindowsFormsIntegration, but no Codex settings, quota code, or browser.
 
 The independent consumer test under tests/second-application-reuse.test.ps1 copies only components/ into an unrelated application and exercises the APIs without importing Codex.
 

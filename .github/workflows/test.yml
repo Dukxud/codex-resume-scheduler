@@ -10,8 +10,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Prepare signed Microsoft WebView2 SDK
+        shell: pwsh
+        run: ./scripts/Prepare-AeroWebView2.ps1
       - name: Codex usage tests
         run: node --test tests/*.test.js
+      - name: Actual Aero v3 Windows rendering
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/aero-webview-rendering.test.ps1
+      - name: Upload Aero Windows rendering evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aero-webview-windows-screenshots
+          path: AeroScreenshots/*.png
+          if-no-files-found: ignore
       - name: Repository ambiguity checks
         shell: pwsh
         run: ./tests/repository-detection.test.ps1
@@ -71,6 +84,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare signed Microsoft WebView2 SDK
+        shell: pwsh
+        run: ./scripts/Prepare-AeroWebView2.ps1
       - name: Assemble numbered Windows release
         shell: pwsh
         run: |
@@ -80,12 +96,14 @@ jobs:
           $folder = Join-Path $env:RUNNER_TEMP $bundleName
           [void](New-Item -ItemType Directory -Path $folder -Force)
           $files = @('CodexResumeScheduler.ps1','CodexDashboard.ps1',
-            'CodexFlowingBar.ps1','CodexData.ps1','CodexUsage.js','CodexRetry.js','Start-Codex-Scheduler.vbs',
+            'CodexFlowingBar.ps1','CodexAeroBar.ps1','CodexData.ps1','CodexUsage.js','CodexRetry.js','Start-Codex-Scheduler.vbs',
             'Start-Codex-Scheduler.cmd','CodexRunJob.vbs','README.md','LICENSE','VERSION')
           foreach ($name in $files) {
             if (-not (Test-Path -LiteralPath $name -PathType Leaf)) { throw "Release file missing: $name" }
             Copy-Item -LiteralPath $name -Destination $folder
           }
+          Copy-Item -LiteralPath assets -Destination $folder -Recurse
+          Copy-Item -LiteralPath AeroWebView2 -Destination $folder -Recurse
           $archive = Join-Path $env:RUNNER_TEMP "$bundleName.zip"
           Compress-Archive -Path $folder -DestinationPath $archive -Force
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_VERSION=$version"
@@ -98,5 +116,5 @@ jobs:
           $tag = "v$env:RELEASE_VERSION"
           gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) { Write-Host "Release $tag already exists; keeping it unchanged."; exit 0 }
-          gh release create $tag $env:RELEASE_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --latest --title "Codex Resume Scheduler $tag" --notes "Microsoft WPF animated flowing shine across usage limits and countdown bars at accurate fixed percentages. Console-free Windows Script Host launcher; no custom executable or commercial libraries. Download the attached ZIP and open Start-Codex-Scheduler.vbs."
+          gh release create $tag $env:RELEASE_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --latest --title "Codex Resume Scheduler $tag" --notes "Original Windows v1.8 source colors with approved Aero Liquid v3 WebGL2 optics and fixed convex tip for usage limits and countdowns; Microsoft WebView2 SDK bundled, WPF fallback for unavailable runtime. Console-free Windows Script Host launcher; no custom executable or commercial libraries. Download the attached ZIP and open Start-Codex-Scheduler.vbs."
           if ($LASTEXITCODE -ne 0) { throw 'Versioned release publishing failed.' }

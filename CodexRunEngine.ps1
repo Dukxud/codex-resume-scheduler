@@ -30,23 +30,6 @@ function Read-UsageState {
     return $state
 }
 
-# Legacy settings.json files contain only lastAccess. A draft is optional.
-$script:uiSettings = Read-CodexUiSettings $appDir
-$script:savedDraft = if ($script:uiSettings -and $script:uiSettings.draft) { $script:uiSettings.draft } else { $null }
-$script:preferredSessionId = if ($script:savedDraft) { [string]$script:savedDraft.sessionId } else { '' }
-$script:preferredModelId = if ($script:savedDraft) { [string]$script:savedDraft.model } else { '' }
-$script:preferredEffort = if ($script:savedDraft) { [string]$script:savedDraft.effort } else { '' }
-$script:startupSavedSessionId = $script:preferredSessionId
-$script:startupSavedModelId = $script:preferredModelId
-$script:repoSelectionSessionId = ''
-$script:settingsReady = $false
-
-function Get-SavedAccessPreference {
-    if ($script:savedDraft -and $script:savedDraft.access -in @('workspace-write','yolo','read-only')) { return [string]$script:savedDraft.access }
-    if ($script:uiSettings -and $script:uiSettings.lastAccess -in @('workspace-write','yolo','read-only')) { return [string]$script:uiSettings.lastAccess }
-    return 'workspace-write'
-}
-
 function Assert-ModelEffortSupported {
     param([object[]]$Models, [string]$Model, [string]$Effort)
     $entry = @($Models | Where-Object { $_.id -ceq $Model }) | Select-Object -First 1

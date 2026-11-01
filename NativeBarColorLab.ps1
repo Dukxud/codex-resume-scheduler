@@ -172,7 +172,7 @@ function Save-TintedFrame([string]$color,[string]$path) {
 }
 
 $timer = [System.Windows.Forms.Timer]::new()
-$timer.Interval = 75
+$timer.Interval = 33
 $timer.Add_Tick({ Update-NativeFrame })
 $state.Timer = $timer
 
@@ -213,7 +213,15 @@ if (-not $TestDir) {
         Update-NativeFrame
         if ($state.Native.Value -ne 24) { throw 'Slider not connected to native original.' }
         $slider.Value = 68
-        [System.Windows.Forms.Application]::DoEvents()
+        # Windows themes may animate native progress changes. Capture only after
+        # the actual native yellow/red bars have reached the requested position.
+        foreach($entry in $state.NativeStates) {
+            if ($entry.Bar.Value -ne 68) { throw 'Native status bar value is out of sync.' }
+        }
+        for($i=0;$i -lt 18;$i++){
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 100
+        }
         Update-NativeFrame
         foreach($c in $colors) {
             $out = Join-Path $TestDir "$($c.Replace(' ','-')).png"

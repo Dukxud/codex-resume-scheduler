@@ -31,6 +31,9 @@ jobs:
       - name: Actual Aero v3 Windows rendering
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/aero-webview-rendering.test.ps1
+      - name: WebView2 crash recovery to WPF
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/aero-runtime-fallback.test.ps1
       - name: Upload Aero Windows rendering evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -91,7 +91,8 @@ function Schedule-LimitRetry {
     try {
         [void](Register-OneTimeTask -Name $name -At $when -Executable $exe -Arguments (Get-CodexTaskArguments $runner $jobFile) -WorkingDirectory $Job.repo -Description "Codex retry $attempt/4")
     } catch {
-        Remove-Item -LiteralPath $jobFile -Force -ErrorAction SilentlyContinue
+        $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if (-not $existing) { Remove-Item -LiteralPath $jobFile -Force -ErrorAction SilentlyContinue }
         throw
     }
     Write-Host "Quota '$BucketId' blocked; retry $attempt/4 scheduled for $($when.ToString('yyyy-MM-dd HH:mm')) (local)."

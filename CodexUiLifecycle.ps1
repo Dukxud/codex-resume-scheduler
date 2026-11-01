@@ -9,39 +9,39 @@ $autoRefresh.Add_Tick({
 $form.Add_Shown({
     [void][CodexScheduler.NativeWindow]::ShowWindow($form.Handle, 5) # SW_SHOW
     $form.Activate()
-    $script:settingsReady = $true
+    $script:ui.Preferences.settingsReady = $true
     Update-DashboardLayout
-    $script:countdownTimer.Start()
+    $script:ui.Dashboard.countdownTimer.Start()
     try { Refresh-SessionList; Refresh-PendingList } catch { Update-Status "Startup warning: $($_.Exception.Message)" }
     Request-UsageRefresh
     $autoRefresh.Start()
     $dataPoll.Start()
 })
 $form.Add_FormClosing({
-    $script:settingsTimer.Stop()
+    $script:ui.Preferences.settingsTimer.Stop()
     try { Save-CurrentFormState } catch {
         [System.Windows.Forms.MessageBox]::Show("Could not save preferences: $($_.Exception.Message)", 'Settings save error') | Out-Null
     }
 })
 $form.Add_FormClosed({
-    $script:countdownTimer.Stop()
+    $script:ui.Dashboard.countdownTimer.Stop()
     $autoRefresh.Stop()
     $usagePoll.Stop()
     $dataPoll.Stop()
-    foreach ($job in @($script:dataJobs.Values)) {
+    foreach ($job in @($script:ui.Selection.dataJobs.Values)) {
         try { Stop-Job -Job $job -ErrorAction SilentlyContinue; Remove-Job -Job $job -Force -ErrorAction SilentlyContinue } catch { }
     }
     if ($script:aeroHealthTimer) { $script:aeroHealthTimer.Stop(); $script:aeroHealthTimer.Dispose() }
-    if ($script:usageProcess) {
-        try { if (-not $script:usageProcess.HasExited) { $script:usageProcess.Kill($true) } } catch { }
-        $script:usageProcess.Dispose()
-        $script:usageProcess = $null
+    if ($script:ui.Usage.usageProcess) {
+        try { if (-not $script:ui.Usage.usageProcess.HasExited) { $script:ui.Usage.usageProcess.Kill($true) } } catch { }
+        $script:ui.Usage.usageProcess.Dispose()
+        $script:ui.Usage.usageProcess = $null
     }
 })
 [void]$form.ShowDialog()
 $autoRefresh.Dispose()
-$script:countdownTimer.Dispose()
-$script:settingsTimer.Dispose()
+$script:ui.Dashboard.countdownTimer.Dispose()
+$script:ui.Preferences.settingsTimer.Dispose()
 $usagePoll.Dispose()
 $dataPoll.Dispose()
 $repoHints.Dispose()

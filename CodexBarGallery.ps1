@@ -169,6 +169,7 @@ function New-SchedulerBarGallery {
         @{ Key='prism'; Name='D — Prism Energy'; Detail='Violet glass + illuminated edge' }
     )
     $bars = [System.Collections.Generic.List[System.Windows.Forms.Integration.ElementHost]]::new()
+    $valueLabels = [System.Collections.Generic.List[System.Windows.Forms.Label]]::new()
     foreach ($i in 0..3) {
         $entry = $entries[$i]
         $top = 104 + $i * 112
@@ -200,6 +201,7 @@ function New-SchedulerBarGallery {
         $percentLabel.Size = [System.Drawing.Size]::new(470,20)
         $percentLabel.Name = "GalleryValue_$($entry.Key)"
         $row.Controls.Add($percentLabel)
+        $valueLabels.Add($percentLabel)
     }
 
     $sliderLabel = [System.Windows.Forms.Label]::new()
@@ -219,9 +221,9 @@ function New-SchedulerBarGallery {
     $slider.Add_ValueChanged({
         $value = $slider.Value
         $sliderLabel.Text = "PROGRESS  |  $value% (sample)"
-        foreach ($bar in $bars) {
-            $bar.Child.Value = [double]$value
-            $bar.Parent.Controls["GalleryValue_$($bar.Tag)"].Text = "$value% — sample data"
+        for ($i=0; $i -lt $bars.Count; $i++) {
+            $bars[$i].Child.Value = [double]$value
+            $valueLabels[$i].Text = "$value% — sample data"
         }
     })
     $footer = [System.Windows.Forms.Label]::new()
@@ -231,7 +233,7 @@ function New-SchedulerBarGallery {
     $footer.Size = [System.Drawing.Size]::new(760,25)
     $gallery.Controls.Add($footer)
 
-    return [pscustomobject]@{ Form=$gallery; Bars=$bars; Slider=$slider }
+    return [pscustomobject]@{ Form=$gallery; Bars=$bars; ValueLabels=$valueLabels; Slider=$slider }
 }
 
 function Show-SchedulerBarGallery {

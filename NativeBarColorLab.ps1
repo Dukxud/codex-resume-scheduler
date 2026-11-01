@@ -13,6 +13,8 @@ Add-Type -AssemblyName System.Drawing
 Add-Type -Namespace NativeBarLab -Name Window -MemberDefinition @'
 [System.Runtime.InteropServices.DllImport("user32.dll")]
 public static extern bool ShowWindow(System.IntPtr handle, int command);
+[System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint="SendMessageW")]
+public static extern System.IntPtr SendMessage(System.IntPtr hWnd, uint message, System.IntPtr wParam, System.IntPtr lParam);
 '@
 
 function New-ColorTransform([string]$color) {
@@ -50,8 +52,8 @@ function New-ColorTransform([string]$color) {
 
 $form = [System.Windows.Forms.Form]::new()
 $form.Text = 'v1.8 Windows bar — same bar, different colors'
-$form.ClientSize = [System.Drawing.Size]::new(620,475)
-$form.MinimumSize = [System.Drawing.Size]::new(638,500)
+$form.ClientSize = [System.Drawing.Size]::new(620,575)
+$form.MinimumSize = [System.Drawing.Size]::new(638,600)
 $form.BackColor = [System.Drawing.Color]::White
 $form.StartPosition = 'CenterScreen'
 $form.Font = [System.Drawing.Font]::new('Segoe UI',10)
@@ -61,6 +63,7 @@ $form.FormBorderStyle = 'FixedDialog'
 
 $state = [pscustomobject]@{
     Native=$null
+    NativeStates=@()
     Frame=$null
     Timer=$null
     ValueLabel=$null
@@ -84,12 +87,13 @@ $heading.Font = [System.Drawing.Font]::new('Segoe UI',11,[System.Drawing.FontSty
 $note = Add-Text 'No synthetic glass, no hand-drawn gradients. Same pixels, different hue.' 24 53 570 26
 $note.ForeColor = [System.Drawing.Color]::DimGray
 
-$colors = @('Original green','Blue','Cyan','Violet','Amber','Red')
+$colors = @('Original green','Windows yellow','Windows red','Blue','Cyan','Violet','Amber','Red')
 foreach($i in 0..($colors.Count-1)) {
     $y = 108 + $i*47
     $label = Add-Text $colors[$i] 27 $y 130 20
-    if ($i -eq 0) {
-        # Original native control from v1.8, with the original theme and dimensions.
+    if ($i -le 2) {
+        # All three are the original native v1.8 control: the OS selects their color.
+        # Green = normal, yellow = paused, red = error (PBM_SETSTATE).
         $bar = [System.Windows.Forms.ProgressBar]::new()
         $bar.Location = [System.Drawing.Point]::new(160,$y)
         $bar.Size = [System.Drawing.Size]::new(400,13)
@@ -97,7 +101,8 @@ foreach($i in 0..($colors.Count-1)) {
         $bar.Maximum = 100
         $bar.Value = 68
         $form.Controls.Add($bar)
-        $state.Native = $bar
+        if ($i -eq 0) { $state.Native = $bar }
+        else { $state.NativeStates += [pscustomobject]@{Bar=$bar; State=$(if($i -eq 1){3}else{2})} }
     } else {
         $image = [System.Windows.Forms.PictureBox]::new()
         $image.Location = [System.Drawing.Point]::new(160,$y)
@@ -119,18 +124,19 @@ foreach($i in 0..($colors.Count-1)) {
     }
 }
 
-$valueLabel = Add-Text '68%' 527 408 70 30
+$valueLabel = Add-Text '68%' 527 502 70 30
 $state.ValueLabel = $valueLabel
 $slider = [System.Windows.Forms.TrackBar]::new()
 $slider.Minimum = 0; $slider.Maximum = 100; $slider.Value = 68
 $slider.TickFrequency = 10
-$slider.Location = [System.Drawing.Point]::new(25,396)
+$slider.Location = [System.Drawing.Point]::new(25,492)
 $slider.Size = [System.Drawing.Size]::new(485,45)
 $form.Controls.Add($slider)
 $slider.Add_ValueChanged({
     param($sender,$e)
     $s = $sender.FindForm().Tag
     $s.Native.Value = $sender.Value
+    foreach($entry in $s.NativeStates) { $entry.Bar.Value = $sender.Value }
     $s.ValueLabel.Text = "$($sender.Value)%"
     Update-NativeFrame
 })
@@ -173,6 +179,10 @@ $state.Timer = $timer
 $form.Add_Shown({
     [void][NativeBarLab.Window]::ShowWindow($form.Handle,5)
     $form.Activate()
+    foreach($entry in $state.NativeStates) {
+        [void][NativeBarLab.Window]::SendMessage($entry.Bar.Handle,[uint32]1040,
+            [IntPtr]$entry.State,[IntPtr]::Zero)
+    }
     Update-NativeFrame
     $state.Timer.Start()
 })
@@ -206,10 +216,20 @@ if (-not $TestDir) {
         [System.Windows.Forms.Application]::DoEvents()
         Update-NativeFrame
         foreach($c in $colors) {
-            Save-TintedFrame $c (Join-Path $TestDir "$($c.Replace(' ','-')).png")
+            $out = Join-Path $TestDir "$($c.Replace(' ','-')).png"
+            if ($c -match '^Windows ') {
+                $nativeBar = @($state.NativeStates | Where-Object {
+                    $(if($c -eq 'Windows yellow'){3}else{2}) -eq $_.State
+                })[0].Bar
+                $bitmap = [System.Drawing.Bitmap]::new(400,13)
+                try {
+                    $nativeBar.DrawToBitmap($bitmap,[System.Drawing.Rectangle]::new(0,0,400,13))
+                    $bitmap.Save($out,[System.Drawing.Imaging.ImageFormat]::Png)
+                } finally { $bitmap.Dispose() }
+            } else { Save-TintedFrame $c $out }
         }
-        $frame = [System.Drawing.Bitmap]::new(620,475)
-        $form.DrawToBitmap($frame,[System.Drawing.Rectangle]::new(0,0,620,475))
+        $frame = [System.Drawing.Bitmap]::new(620,575)
+        $form.DrawToBitmap($frame,[System.Drawing.Rectangle]::new(0,0,620,575))
         $frame.Save((Join-Path $TestDir 'native-windows-color-comparison.png'),[System.Drawing.Imaging.ImageFormat]::Png)
         $frame.Dispose()
         $baseline.Dispose()

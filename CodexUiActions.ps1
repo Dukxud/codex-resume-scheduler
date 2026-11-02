@@ -76,8 +76,10 @@ $cancelRun.Add_Click({
     if ($grid.SelectedRows.Count -ne 1) { [System.Windows.Forms.MessageBox]::Show('Select an upcoming task first.','No selection') | Out-Null; return }
     $name = [string]$grid.SelectedRows[0].Tag
     if ([System.Windows.Forms.MessageBox]::Show("Cancel and remove the one-time task '$name'?",'Cancel scheduled run','YesNo','Question') -ne 'Yes') { return }
+    $taskRemoved = $false
     try {
         Remove-OneTimeTask -Name $name
+        $taskRemoved = $true
         $payloadPath=Join-Path $appDir ($name + '.json')
         if(Test-Path -LiteralPath $payloadPath -PathType Leaf){
             $payload=Get-Content -LiteralPath $payloadPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
@@ -86,7 +88,8 @@ $cancelRun.Add_Click({
         }
         Request-UsageRefresh
     } catch {
-        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Cancellation failed') | Out-Null
+        $caption = if ($taskRemoved) { 'Task cancelled; cleanup warning' } else { 'Cancellation failed' }
+        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,$caption) | Out-Null
     } finally {
         # Task removal can succeed before a later file write fails. Always
         # reconcile the displayed list with Windows Task Scheduler.

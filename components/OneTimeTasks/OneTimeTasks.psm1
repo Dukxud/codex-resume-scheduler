@@ -8,6 +8,9 @@ function Register-OneTimeTask {
           [Parameter(Mandatory)][string]$WorkingDirectory,
           [string]$Description = '')
     if ($Name -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$') { throw 'Invalid one-time task name.' }
+    # Convert an explicit UTC instant before comparing or creating a local trigger.
+    # Unspecified DateTime values are accepted as already local wall-clock time.
+    if ($At.Kind -eq [DateTimeKind]::Utc) { $At = $At.ToLocalTime() }
     if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw 'Task executable missing.' }
     if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) { throw 'Task working directory missing.' }
     if ($At -le (Get-Date)) { throw 'A one-time task must be in the future.' }

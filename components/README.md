@@ -74,3 +74,5 @@ Unit and Windows GUI integration checks live under tests. The app package and st
 The standalone consumer tests run generic one-time scheduling against an isolated fake OS task provider and exercise the **real** WebView2 shader from a packaged standalone module in a separate Windows application. They do not execute the user's actual scheduled tasks.
 
 **Clock correctness:** Countdown converts timestamps to UTC before computing elapsed time, preventing wrong durations across daylight-saving time changes. OneTimeTasks rejects ambiguous or nonexistent local trigger times rather than guessing which clock occurrence to schedule; the caller should request another unambiguous time.
+
+OneTimeTasks accepts local `DateTime` instances and explicit UTC `DateTime` values, converting UTC instants to local Task Scheduler boundaries. Unspecified `DateTime` values are interpreted as local wall-clock times. Ambiguous or invalid daylight-saving clock times are rejected rather than guessed.

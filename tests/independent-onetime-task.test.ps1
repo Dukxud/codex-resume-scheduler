@@ -32,6 +32,11 @@ try {
     if($script:tasks[$name].State -ne 'Disabled'){throw 'Standalone disable failed.'}
     Remove-OneTimeTask -Name $name
     if($script:tasks.Count -ne 0){throw 'Standalone removal failed.'}
+    $utcFuture=[DateTimeOffset]::UtcNow.AddHours(3).UtcDateTime
+    $utcJob=Register-OneTimeTask -Name 'Utc-Example' -At $utcFuture -Executable (Get-Command pwsh.exe).Source -Arguments 'abc' -WorkingDirectory $temp
+    $triggerTime=([datetime]$script:tasks[$utcJob].Triggers[0].StartBoundary).ToString('yyyy-MM-dd HH:mm')
+    if($triggerTime -ne $utcFuture.ToLocalTime().ToString('yyyy-MM-dd HH:mm')){throw 'UTC instant was not normalized to the local task boundary.'}
+    Remove-OneTimeTask -Name $utcJob
     $script:badRead=$true
     $failed=$false
     try{[void](Register-OneTimeTask -Name 'Rollback-Example' -At (Get-Date).AddHours(2) -Executable (Get-Command pwsh.exe).Source -Arguments 'abc' -WorkingDirectory $temp)}catch{$failed=$true}

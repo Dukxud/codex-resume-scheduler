@@ -83,6 +83,7 @@ try {
     $script:ui.Dashboard.compactToggle.Checked = $false
     Require ($script:ui.Dashboard.compactToggle.Visible) 'The switch must remain visible when returning to full mode.'
     Require ($grid.Visible) 'The full run list should be restored.'
+    Require ($recentResults.Visible) 'Run-history control must be available in normal mode.'
     [void]$grid.Rows.Add('Time','5m','Demo 1')
     [void]$grid.Rows.Add('Time','7m','Demo 2')
     [void]$grid.Rows.Add('Time','9m','Demo 3')

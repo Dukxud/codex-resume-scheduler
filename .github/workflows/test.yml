@@ -58,6 +58,9 @@ jobs:
       - name: Live packaged AeroProgress in an unrelated application
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/standalone-aero-consumer.test.ps1
+      - name: Real WinForms persisted job-history dialog
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/history-dialog.test.ps1
       - name: Prove standalone components in a separate application
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/second-application-reuse.test.ps1

@@ -34,5 +34,11 @@ try {
     Require ($quota.Child.Value -eq 0) 'Unknown quota must remain unfilled.'
     Set-FlowingProgress $run 100
     Require ($run.Child.Value -eq 100) 'Completed run countdown must fill completely.'
+    $customPalette=Get-CodexFlowingPalette -Kind quota -Color '#F08030'
+    Require ($customPalette.BaseTop -ne '#5DE0B5' -and $customPalette.BaseBottom -ne '#14805D') 'Custom fallback palette must honor user-selected color.'
+    $custom=New-FlowingProgressBar $form 18 88 400 18 'quota' -Color '#F08030'
+    Set-FlowingProgress $custom 42
+    Require ($custom.Child.Value -eq 42) 'Custom-color fallback must retain its true percentage.'
+    Require ($null -ne $custom.Child.Template.FindName('FlowGlint',$custom.Child)) 'Custom-color fallback must retain moving glossy animation.'
     Write-Host "WPF animated flow confirmed: glint moved from $start to $end at fixed 57%."
 } finally { $form.Close(); $form.Dispose() }

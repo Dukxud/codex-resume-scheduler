@@ -1,0 +1,50 @@
+# Fetch Microsoft's pinned, signed WebView2 SDK for test/release packaging.
+# Do not run at application startup. Installed users receive these files in ZIP.
+$ErrorActionPreference = 'Stop'
+$version = '1.0.4314.35'
+$root = Split-Path -Parent $PSScriptRoot
+$folder = Join-Path $root 'AeroWebView2'
+[void](New-Item -ItemType Directory -Force -Path $folder)
+$tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
+$package = Join-Path $tempRoot "Microsoft.Web.WebView2.$version.zip"
+$expanded = Join-Path $tempRoot "Microsoft.Web.WebView2.$version"
+$url = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/$version/microsoft.web.webview2.$version.nupkg"
+# Audited SHA-256 of the exact NuGet SDK archive, independently of the
+# downloaded archive contents. A mismatch aborts before extracting binaries.
+$expectedSha256 = '90778deb1b77e36292828b4b5833c9255c27533f40e0ddd55891ae718944edc4'
+Invoke-WebRequest -Uri $url -OutFile $package
+$sha256 = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($sha256 -cne $expectedSha256) {
+    Remove-Item -LiteralPath $package -Force -ErrorAction SilentlyContinue
+    throw "Microsoft WebView2 SDK SHA-256 mismatch for $version."
+}
+Write-Host "Verified pinned Microsoft WebView2 SDK SHA-256."
+if (Test-Path $expanded) { Remove-Item $expanded -Recurse -Force }
+Expand-Archive -Path $package -DestinationPath $expanded -Force
+
+function Copy-RequiredFile([string]$relative,[string]$filename) {
+    $source = Join-Path $expanded $relative
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "SDK $version missing $relative" }
+    Copy-Item -LiteralPath $source -Destination (Join-Path $folder $filename) -Force
+}
+# Package target frameworks evolve independently of our Windows host. Select
+# a shared compatible framework directory, never mix versions of the two DLLs.
+$frameworks = @('net8.0-windows','net8.0','net6.0-windows','net6.0','netcoreapp3.0','net462','net45')
+$managed = $null
+foreach($tfm in $frameworks){
+    $dir = Join-Path $expanded "lib/$tfm"
+    if ((Test-Path (Join-Path $dir 'Microsoft.Web.WebView2.Core.dll')) -and
+        (Test-Path (Join-Path $dir 'Microsoft.Web.WebView2.WinForms.dll'))) {
+        $managed = "lib/$tfm"
+        break
+    }
+}
+if (-not $managed) {
+    $candidates = @(Get-ChildItem -Path $expanded -Recurse -Filter 'Microsoft.Web.WebView2.Core.dll' | Select-Object -ExpandProperty FullName)
+    throw "No compatible WebView2 framework in SDK. Core DLL candidates: $($candidates -join ', ')"
+}
+Write-Host "WebView2 assemblies: $managed"
+Copy-RequiredFile "$managed/Microsoft.Web.WebView2.Core.dll" 'Microsoft.Web.WebView2.Core.dll'
+Copy-RequiredFile "$managed/Microsoft.Web.WebView2.WinForms.dll" 'Microsoft.Web.WebView2.WinForms.dll'
+Copy-RequiredFile 'runtimes/win-x64/native/WebView2Loader.dll' 'WebView2Loader.dll'
+Write-Host "Microsoft WebView2 SDK $version staged for x64 Windows. No executable installed."

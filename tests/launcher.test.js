@@ -14,22 +14,28 @@ test('launchers rely only on the Windows provided script host', () => {
   assert.match(gui, /shell\.Run\(command,\s*0,\s*False\)/);
   assert.match(runner, /shell\.Run\(command,\s*0,\s*True\)/);
   assert.match(runner, /WScript\.Quit status/);
+  for(const launcher of [gui,runner]) {
+    assert.match(launcher,/pwsh = files\.BuildPath\(shell\.ExpandEnvironmentStrings\("%ProgramFiles%"\), "PowerShell\\7\\pwsh\.exe"\)/);
+    assert.match(launcher,/command = Chr\(34\) & pwsh & Chr\(34\)/);
+    assert.doesNotMatch(launcher,/command\s*=\s*"pwsh\.exe/i);
+  }
   assert.match(runner, /-RunJob -JobFile/);
   assert.doesNotMatch(gui + runner + cmd, /CodexScheduler\.exe|CodexLauncher\.cs/);
   assert.equal(fs.existsSync(path.join(root, 'CodexLauncher.cs')), false);
 });
 
 test('scheduled jobs and retries use the installed Windows Script Host wrapper', () => {
-  const source = fs.readFileSync(path.join(root, 'CodexResumeScheduler.ps1'), 'utf8');
-  assert.match(source, /'CodexRunJob\.vbs'\)\)/);
-  assert.match(source, /New-ScheduledTaskAction -Execute \(Join-Path \$env:WINDIR 'System32\\wscript\.exe'\)/);
-  assert.match(source, /New-ScheduledTaskAction -Execute \(Join-Path \$env:WINDIR 'System32\\wscript\.exe'\)/);
-  assert.match(source, /Start-Transcript/);
-  assert.doesNotMatch(source, /CodexScheduler\.exe|-NoExit/);
+  const engine = fs.readFileSync(path.join(root, 'CodexRunEngine.ps1'), 'utf8');
+  const actions = fs.readFileSync(path.join(root, 'CodexUiActions.ps1'), 'utf8');
+  assert.match(engine, /CodexRunJob\.vbs/);
+  assert.match(engine, /Register-OneTimeTask/);
+  assert.match(actions, /Register-OneTimeTask/);
+  assert.match(engine, /Start-Transcript/);
+  assert.doesNotMatch(engine + actions, /CodexScheduler\.exe|-NoExit/);
 });
 
 test('release version is displayed in the interface', () => {
-  const source = fs.readFileSync(path.join(root, 'CodexResumeScheduler.ps1'), 'utf8');
+  const source = fs.readFileSync(path.join(root, 'CodexUiForms.ps1'), 'utf8');
   const version = fs.readFileSync(path.join(root, 'VERSION'), 'utf8').trim();
   assert.ok(source.includes("Codex Resume Scheduler v" + version));
   assert.match(version, /^\d+\.\d+\.\d+$/);

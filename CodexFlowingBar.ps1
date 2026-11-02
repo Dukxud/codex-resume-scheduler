@@ -1,105 +1,54 @@
-# Native .NET Windows Presentation Foundation (WPF) animated progress bars,
-# hosted inside the existing WinForms scheduler. No external DLLs or executables.
-# WPF owns the compositor animation; the scheduled percentage never oscillates.
-Add-Type -AssemblyName PresentationFramework
-Add-Type -AssemblyName PresentationCore
-Add-Type -AssemblyName WindowsBase
-Add-Type -AssemblyName WindowsFormsIntegration
+# Codex theme adapter for the independently reusable animated WPF progress module.
+Import-Module (Join-Path $PSScriptRoot 'components/FlowingProgress/FlowingProgress.psm1') -Force -ErrorAction Stop
 
-function New-FlowingProgressBar {
-    param(
-        [System.Windows.Forms.Control]$Parent,
-        [int]$X, [int]$Y, [int]$Width, [int]$Height,
-        [ValidateSet('quota','time')][string]$Kind
-    )
-    $palette = if ($Kind -eq 'quota') {
-        @{ BaseTop='#5DE0B5'; BaseBottom='#14805D'; Track='#E5F1EC'; Outline='#B3CFC2' }
+function Get-CodexFlowingPalette {
+    param([ValidateSet('quota','time')][string]$Kind,[string]$Color='')
+    $defaults = if ($Kind -eq 'quota') {
+        @{BaseTop='#5DE0B5';BaseBottom='#14805D';Track='#E5F1EC';Outline='#B3CFC2'}
     } else {
-        @{ BaseTop='#76B5F9'; BaseBottom='#2566BC'; Track='#E2ECFA'; Outline='#B4C8E5' }
+        @{BaseTop='#76B5F9';BaseBottom='#2566BC';Track='#E2ECFA';Outline='#B4C8E5'}
     }
-    $markup = @'
-<ProgressBar xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Minimum="0" Maximum="100" Value="0" Focusable="False"
-             Background="Transparent" BorderThickness="0">
-  <ProgressBar.Template>
-    <ControlTemplate TargetType="{x:Type ProgressBar}">
-      <Grid ClipToBounds="True">
-        <Border x:Name="PART_Track" Background="__TRACK__"
-                CornerRadius="8" BorderThickness="1" BorderBrush="__OUTLINE__"/>
-        <Border x:Name="PART_Indicator" CornerRadius="8" ClipToBounds="True"
-                HorizontalAlignment="Left">
-          <Grid ClipToBounds="True">
-            <Border CornerRadius="8">
-              <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                  <GradientStop Color="__TOP__" Offset="0"/>
-                  <GradientStop Color="__BOTTOM__" Offset="1"/>
-                </LinearGradientBrush>
-              </Border.Background>
-            </Border>
-            <Border CornerRadius="8,8,0,0" Background="#65FFFFFF"
-                    VerticalAlignment="Top" Height="7"/>
-            <Rectangle x:Name="FlowGlint" HorizontalAlignment="Left" Width="115"
-                       IsHitTestVisible="False">
-              <Rectangle.Fill>
-                <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
-                  <GradientStop Color="#00FFFFFF" Offset="0"/>
-                  <GradientStop Color="#0AFFFFFF" Offset="0.22"/>
-                  <GradientStop Color="#DFFFFFFF" Offset="0.50"/>
-                  <GradientStop Color="#0AFFFFFF" Offset="0.78"/>
-                  <GradientStop Color="#00FFFFFF" Offset="1"/>
-                </LinearGradientBrush>
-              </Rectangle.Fill>
-              <Rectangle.RenderTransform>
-                <TranslateTransform X="-115"/>
-              </Rectangle.RenderTransform>
-            </Rectangle>
-          </Grid>
-        </Border>
-      </Grid>
-      <ControlTemplate.Triggers>
-        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-          <BeginStoryboard>
-            <Storyboard>
-              <DoubleAnimation Storyboard.TargetName="FlowGlint"
-                               Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
-                               From="-115" To="425" Duration="0:0:2.4"
-                               RepeatBehavior="Forever"/>
-            </Storyboard>
-          </BeginStoryboard>
-        </EventTrigger>
-      </ControlTemplate.Triggers>
-    </ControlTemplate>
-  </ProgressBar.Template>
-</ProgressBar>
-'@
-    foreach ($pair in @(
-        @('__TRACK__',$palette.Track),
-        @('__OUTLINE__',$palette.Outline),
-        @('__TOP__',$palette.BaseTop),
-        @('__BOTTOM__',$palette.BaseBottom)
-    )) { $markup = $markup.Replace($pair[0],$pair[1]) }
-    $progress = [System.Windows.Markup.XamlReader]::Parse($markup)
-    $elementHost = [System.Windows.Forms.Integration.ElementHost]::new()
-    $elementHost.Location = [System.Drawing.Point]::new($X,$Y)
-    $elementHost.Size = [System.Drawing.Size]::new($Width,$Height)
-    $elementHost.BackColor = $Parent.BackColor
-    $elementHost.Child = $progress
-    $elementHost.AccessibleName = if ($Kind -eq 'quota') { 'Usage remaining' } else { 'Time until scheduled run' }
-    $elementHost.Tag = $null # null means no accepted percentage; draw an empty track.
-    $Parent.Controls.Add($elementHost)
-    return $elementHost
+    if (-not $Color -or ($Kind -eq 'quota' -and $Color -eq 'green') -or
+        ($Kind -eq 'time' -and $Color -eq 'blue')) { return $defaults }
+    $preset = @{
+        green='#14DE8E';blue='#168DFF';cyan='#04D5F7'
+        violet='#9D64FF';amber='#FFB328';red='#FF3B62'
+    }
+    $hex=if ($preset.ContainsKey($Color)) {$preset[$Color]} else {$Color}
+    if ($hex -notmatch '^#[0-9a-fA-F]{6}$') { throw 'Invalid flowing-progress color.' }
+    $base=[System.Drawing.ColorTranslator]::FromHtml($hex)
+    function Mix-FlowColor($color,[int]$target,[double]$fraction) {
+        $red=[int][math]::Round($color.R * (1-$fraction) + $target * $fraction)
+        $green=[int][math]::Round($color.G * (1-$fraction) + $target * $fraction)
+        $blue=[int][math]::Round($color.B * (1-$fraction) + $target * $fraction)
+        return ('#{0:X2}{1:X2}{2:X2}' -f $red,$green,$blue)
+    }
+    return @{
+        BaseTop=Mix-FlowColor $base 255 .30
+        BaseBottom=Mix-FlowColor $base 0 .42
+        Track=Mix-FlowColor $base 255 .90
+        Outline=Mix-FlowColor $base 255 .60
+    }
+}
+function New-FlowingProgressBar {
+    param([System.Windows.Forms.Control]$Parent,
+          [int]$X,[int]$Y,[int]$Width,[int]$Height,
+          [ValidateSet('quota','time')][string]$Kind,
+          [string]$Color='')
+    $palette=Get-CodexFlowingPalette -Kind $Kind -Color $Color
+    $accessible=if($Kind -eq 'quota'){'Usage remaining'}else{'Time until scheduled run'}
+    return New-FlowingProgressView -Parent $Parent -X $X -Y $Y -Width $Width -Height $Height -Colors $palette -AccessibleName $accessible
+}
+function Set-FlowingProgress {
+    param([System.Windows.Forms.Integration.ElementHost]$Bar,$Percent)
+    Set-FlowingProgressViewState -Bar $Bar -Percent $Percent
 }
 
-function Set-FlowingProgress {
+function Set-FlowingProgressColors {
     param(
         [System.Windows.Forms.Integration.ElementHost]$Bar,
-        $Percent
+        [ValidateSet('quota','time')][string]$Kind,
+        [string]$Color
     )
-    $value = if ($null -eq $Percent) { $null }
-             else { [double][math]::Clamp([double]$Percent,0,100) }
-    if ($Bar.Tag -eq $value) { return }
-    $Bar.Tag = $value
-    $Bar.Child.Value = if ($null -eq $value) { 0.0 } else { $value }
+    Set-FlowingProgressViewColors -Bar $Bar -Colors (Get-CodexFlowingPalette -Kind $Kind -Color $Color)
 }

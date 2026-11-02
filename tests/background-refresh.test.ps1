@@ -1,7 +1,9 @@
 # Verify costly data reads are dispatched to background jobs, never from refresh handlers.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$gui = Get-Content -LiteralPath (Join-Path $root 'CodexResumeScheduler.ps1') -Raw
+. (Join-Path $root 'CodexUiState.ps1')
+$script:ui = New-CodexUiState
+$gui = @('CodexUiRefresh.ps1','CodexUiSelection.ps1','CodexUiPending.ps1','CodexUiUsage.ps1') | ForEach-Object { Get-Content -LiteralPath (Join-Path $root $_) -Raw } | Out-String
 $data = Get-Content -LiteralPath (Join-Path $root 'CodexData.ps1') -Raw
 $tokens = $null; $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseInput($gui, [ref]$tokens, [ref]$parseErrors)
@@ -12,7 +14,8 @@ if ($gui -notmatch 'Get-ReportedThreadDirectory' -or $gui -notmatch 'Find-Sessio
 if ($data -notmatch 'thread/read' -or $data -notmatch 'Get-ReportedThreadDirectory') { throw 'Codex metadata lookup missing from the data helper.' }
 if ($gui -notmatch 'Start-ThreadJob' -or $gui -notmatch '\$dataPoll\.Add_Tick') { throw 'Background refresh and result polling missing.' }
 if ($data -notmatch "Get-ScheduledTask -TaskName 'CodexResume-\*'") { throw 'Pending refresh must use task name filtering.' }
-if ($gui -notmatch "'CodexUsage.js','CodexRetry.js','CodexData.ps1','CodexDashboard.ps1','CodexFlowingBar.ps1','CodexRunJob.vbs'") { throw 'Scheduled runner needs all helper files installed.' }
+$worker = Get-Content -LiteralPath (Join-Path $root 'CodexRunEngine.ps1') -Raw
+if ($worker -notmatch 'Get-CodexRuntimeFiles' -or $worker -notmatch 'Assert-RuntimeFingerprint') { throw 'Scheduled runner must use an immutable runtime snapshot.' }
 $definitions = @($ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -in @('Refresh-SessionList','Refresh-PendingList','Request-SelectionLookup','Start-DataRead')}, $true))
 if ($definitions.Count -ne 4) { throw 'Expected four async data-refresh entrypoints.' }
 foreach ($definition in $definitions | Where-Object Name -in @('Refresh-SessionList','Refresh-PendingList','Request-SelectionLookup')) {
@@ -20,11 +23,11 @@ foreach ($definition in $definitions | Where-Object Name -in @('Refresh-SessionL
 }
 # Start-DataRead must coalesce an in-flight request, not start parallel duplicates.
 Invoke-Expression (@($definitions | Where-Object Name -eq 'Start-DataRead')[0].Extent.Text)
-$script:dataJobs = @{}; $script:dataQueued = @{}; $script:startedJobs = 0
+$script:ui.Async.dataJobs = @{}; $script:ui.Async.dataQueued = @{}; $script:startedJobs = 0
 function Start-ThreadJob { param($ArgumentList,$ScriptBlock) $script:startedJobs++; [pscustomobject]@{ State = 'Running' } }
 function Update-Status { param($Text) throw "Unexpected start failure: $Text" }
 $appDir = 'C:\fake'
 Start-DataRead -Kind 'pending'
 Start-DataRead -Kind 'pending'
-if ($script:startedJobs -ne 1 -or -not $script:dataQueued['pending']) { throw 'Duplicate pending refresh was not coalesced.' }
+if ($script:startedJobs -ne 1 -or -not $script:ui.Async.dataQueued['pending']) { throw 'Duplicate pending refresh was not coalesced.' }
 Write-Host 'Background refresh wiring and coalescing checks passed.'

@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test');const assert=require('node:assert/strict');const path=require('node:path');
-const {summarizeRateLimits,describeWindow,normalizeModels,readCodexState,isLimitErrorLine}=require('../CodexUsage.js');
+const {summarizeRateLimits,describeWindow,normalizeModels,readCodexState,isLimitErrorLine,identifyAccount}=require('../CodexUsage.js');
 const {decide,failureSeen}=require('../CodexRetry.js');
 const now=1793000000;const win=(used,delta,duration=300)=>({usedPercent:used,resetsAt:now+delta,windowDurationMins:duration});
 const bucket=(used,delta,model,duration=300)=>({normalModelSlug:model,primary:win(used,delta,duration)});
@@ -45,6 +45,7 @@ test('retries only with actual error and verified future reset',()=>{
  const snapshot=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimits:{primary:win(100,600)}},now,'any');
  const error='{"type":"turn.failed","error":{"message":"Usage limit exceeded"}}';
  assert.equal(decide(error,snapshot,now).runAt,now+720);
+ assert.equal(decide(error,snapshot,now,0).kind,'not-limit'); // even a stale error event cannot retry a successful command
  assert.equal(decide('complete',snapshot,now).kind,'not-limit');
  assert.equal(decide(error,{...snapshot,selectionVerified:false},now).kind,'unknown');
 });
@@ -64,4 +65,46 @@ test('unknown backend payload fails safely and never synthesizes a reset',()=>{
 test('workspace-credit and spend-control blockers are not treated as timed usage resets',()=>{
  const v=summarizeRateLimits({ordinaryUsageAllowed:false,rateLimits:{primary:win(100,600),rateLimitReachedType:'workspace_member_usage_limit_reached'}},now,'model');
  assert.equal(v.recommendedResetAt,null);
+});
+
+test('retry assessment includes the freshly verified account identity',()=>{
+ const snapshot=summarizeRateLimits({accountId:'account-abc',ordinaryUsageAllowed:false,rateLimits:{primary:win(100,600)}},now,'model');
+ const error='{"type":"turn.failed","error":{"message":"Usage limit exceeded"}}';
+ assert.equal(decide(error,snapshot,now,17).accountId,'account-abc');
+});
+
+test('workspace account ID is canonical across rate limits and routing sources',()=>{
+ const rate={accountId:'workspace-123'};
+ const routing={account:{type:'chatgpt',email:'person@example.test'},workspaceRouting:{chatgptAccountId:'workspace-123'}};
+ const fromRate=identifyAccount(rate,null);
+ const fromRouting=identifyAccount({},routing);
+ const both=identifyAccount(rate,routing);
+ assert.match(both.accountId,/^workspace-sha256:[0-9a-f]{64}$/);
+ assert.equal(fromRate.accountId,fromRouting.accountId);
+ assert.equal(fromRate.accountId,both.accountId);
+ assert.equal(both.accountIdentityStatus,'verified');
+ assert.equal(JSON.stringify(both).includes('person@'),false);
+ assert.equal(JSON.stringify(both).includes('workspace-123'),false);
+});
+test('different workspaces with the same email never compare equal',()=>{
+ const email='shared@example.test';
+ const a=identifyAccount({}, {account:{type:'chatgpt',email},workspaceRouting:{chatgptAccountId:'workspace-a'}});
+ const b=identifyAccount({}, {account:{type:'chatgpt',email},workspaceRouting:{chatgptAccountId:'workspace-b'}});
+ assert.notEqual(a.accountId,b.accountId);
+});
+test('contradictory backend workspace IDs fail closed and never select one opportunistically',()=>{
+ const conflict=identifyAccount({accountId:'workspace-1'}, {workspaceRouting:{chatgptAccountId:'workspace-2'},account:{type:'chatgpt',email:'shared@example.test'}});
+ assert.deepEqual(conflict,{accountId:null,accountIdentitySource:null,accountIdentityStatus:'conflict'});
+});
+test('email-only and API-key identity cannot authorize unattended runs',()=>{
+ assert.deepEqual(identifyAccount({}, {account:{type:'chatgpt',email:'person@example.test'}}),
+   {accountId:null,accountIdentitySource:null,accountIdentityStatus:'unavailable'});
+ assert.deepEqual(identifyAccount({}, {account:{type:'apiKey'}}),
+   {accountId:null,accountIdentitySource:null,accountIdentityStatus:'unavailable'});
+});
+test('actual app-server handshake retrieves workspace identity',async()=>{
+ const snapshot=await readCodexState(path.join(__dirname,'mock-app-server.js'),{catalog:false});
+ assert.match(snapshot.accountId,/^workspace-sha256:[0-9a-f]{64}$/);
+ assert.equal(snapshot.accountIdentitySource,'workspace-routing');
+ assert.equal(snapshot.accountIdentityStatus,'verified');
 });

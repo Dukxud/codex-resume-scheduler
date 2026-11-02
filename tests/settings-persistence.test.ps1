@@ -33,7 +33,7 @@ try {
     $legacy = Read-CodexUiSettings $folder
     Require ($legacy.lastAccess -eq 'yolo') 'Legacy settings should remain readable.'
 
-    $gui = Get-Content -LiteralPath (Join-Path $root 'CodexResumeScheduler.ps1') -Raw
+    $gui = @('CodexResumeScheduler.ps1','CodexUiState.ps1','CodexUiForms.ps1','CodexUiActions.ps1','CodexUiLifecycle.ps1','CodexUiRefresh.ps1') | ForEach-Object { Get-Content -LiteralPath (Join-Path $root $_) -Raw } | Out-String
     foreach ($feature in @('Save-CurrentFormState','settingsTimer.Add_Tick','form.Add_FormClosing',
                            'whenBox.Add_ValueChanged','repoBox.Add_TextChanged','messageBox.Add_TextChanged',
                            'autoResumeCheck.Add_CheckedChanged','accessBox.Add_SelectedIndexChanged',

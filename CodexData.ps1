@@ -1,18 +1,17 @@
+Import-Module (Join-Path $PSScriptRoot 'components/GitRepository/GitRepository.psm1') -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot 'components/SettingsStore/SettingsStore.psm1') -Force -ErrorAction Stop
+. (Join-Path $PSScriptRoot 'CodexJobStore.ps1')
 # Codex Resume Scheduler - local data readers (PowerShell 7).
-# Used by the GUI's short-lived background thread jobs and scheduled runners.
+# Used by GUI background jobs; the scheduled CLI worker does not import this file.
 # No UI controls, timers, or persistent services.
 
 function Get-RepositoryRoot {
     param([string]$Path)
-    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) { return $null }
-    try {
-        $result = & git -C $Path rev-parse --show-toplevel 2>$null
-        if ($LASTEXITCODE -ne 0 -or -not $result) { return $null }
-        return ([string]($result | Select-Object -First 1)).Trim()
-    } catch { return $null }
+    return Get-GitRepositoryRoot -Path $Path
 }
 
 function Get-RecentCliSessions {
+    $sessionIdPattern = '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
     $sessionRoot = Join-Path $(if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }) 'sessions'
     $sessions = @()
     if (Test-Path -LiteralPath $sessionRoot -PathType Container) {
@@ -60,7 +59,8 @@ function Get-ReportedThreadDirectory {
 }
 
 function Find-SessionRepository {
-    param($Session, [string]$ReportedCwd = $null)
+    param($Session, [string]$ReportedCwd = $null,
+          [Parameter(Mandatory)][string]$AppDirectory)
     if (-not $Session) { return $null }
     $candidates = [System.Collections.Generic.List[string]]::new()
     $reportedRoot = Get-RepositoryRoot $ReportedCwd
@@ -68,8 +68,8 @@ function Find-SessionRepository {
     if ($direct) { $candidates.Add($direct) }
 
     # A prior schedule is evidence, not proof that it targeted the right checkout.
-    if (Test-Path -LiteralPath $appDir -PathType Container) {
-        foreach ($saved in @(Get-ChildItem -LiteralPath $appDir -Filter 'CodexResume-*.json' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5)) {
+    if (Test-Path -LiteralPath $AppDirectory -PathType Container) {
+        foreach ($saved in @(Get-CodexJobPayloadFiles -Directory $AppDirectory)) {
             try {
                 $job = Get-Content -LiteralPath $saved.FullName -Raw -ErrorAction Stop | ConvertFrom-Json
                 if ([string]$job.sessionId -ne [string]$Session.Id) { continue }
@@ -122,6 +122,7 @@ function Find-SessionRepository {
 }
 
 function Get-UpcomingCodexTasks {
+    param([Parameter(Mandatory)][string]$AppDirectory)
     $items = @()
     # Query our task prefixes rather than enumerate every Windows scheduled task.
     $tasks = @(Get-ScheduledTask -TaskName 'CodexResume-*' -ErrorAction SilentlyContinue) +
@@ -134,7 +135,7 @@ function Get-UpcomingCodexTasks {
         try { $when = [datetime]$trig.StartBoundary } catch { continue }
         if ($when -le (Get-Date)) { continue }
         $name = [string]$task.TaskName
-        $json = Join-Path $appDir ($name + '.json')
+        $json = Join-Path $AppDirectory ($name + '.json')
         $description = 'Existing scheduled task'
         $session = '-'
         $repo = '-'
@@ -184,26 +185,14 @@ function Read-SessionModel {
     } catch { return $null }
 }
 
-# UI draft settings are local to this Windows account, not part of a scheduled job.
+# App-specific facade over the reusable JSON settings store.
 function Read-CodexUiSettings {
     param([string]$Directory)
-    $file = Join-Path $Directory 'settings.json'
-    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { return $null }
-    try { return (Get-Content -LiteralPath $file -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop) }
-    catch { return $null }
+    return Read-JsonSettings -Path (Join-Path $Directory 'settings.json')
 }
-
 function Write-CodexUiSettings {
     param([string]$Directory, $State)
-    [void](New-Item -ItemType Directory -Path $Directory -Force -ErrorAction Stop)
-    $destination = Join-Path $Directory 'settings.json'
-    $temporary = Join-Path $Directory ('.settings-' + [guid]::NewGuid().ToString('N') + '.tmp')
-    try {
-        $State | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $temporary -Encoding utf8 -ErrorAction Stop
-        [System.IO.File]::Move($temporary, $destination, $true)
-    } finally {
-        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue }
-    }
+    Write-JsonSettings -Path (Join-Path $Directory 'settings.json') -Value $State
 }
 
 function Get-RestoredRunTime {

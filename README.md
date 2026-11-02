@@ -163,3 +163,11 @@ The standalone component kit is exercised by a **second unrelated Windows applic
 ### Current development validation status
 
 The v1.16 source-level pass corrected Browse queue ownership, native WPF appearance updates, generic progress state ownership, implicit data-reader paths, and post-registration status reporting. The PR remains a draft. No CI was run for those corrections. See docs/ADVERSARIAL-SOURCE-REVIEW.md for evidence and remaining target-device acceptance.
+
+## Consolidated merge status
+
+The production-release safety guard is already installed on main. The v1.16 PR is retargeted directly to main and its candidate workflow removes the publication job; tests are manual-dispatch only. Preview ZIP scripts remain available but unsigned.
+
+AeroProgress now stores WebView2 state privately, without reading or overwriting Control.Tag. Consumers query Get-AeroProgressViewStatus instead. The Scheduler's quota/time Tag data belongs to its own adapter. SettingsStore is for replaceable preferences, not Weight Trajectory measurements.
+
+**Do not merge until direct Windows acceptance on BLACK-PUDDLE is complete.** Follow docs/WINDOWS-ACCEPTANCE.md and docs/RELEASE-POLICY.md. PRs #14 and #15 are superseded by PR #16; they should not be merged independently. After acceptance, squash-merge #16 and close the older PRs. No CI tests were run for these changes.

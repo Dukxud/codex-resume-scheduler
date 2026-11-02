@@ -32,3 +32,14 @@ The application-specific WinForms controllers still coordinate through shared ap
 - Older pinned-runtime folders are not automatically garbage-collected. Safe cleanup requires proof that no registered task still refers to them.
 
 **Disposition:** Keep PR #16 in draft. The source-level correction is complete; runtime and distribution acceptance are not established without Windows execution. This review intentionally did not use CI.
+
+## Final bounded adoption corrections (source-only)
+
+1. The generic AeroProgress module no longer claims Control.Tag. A status snapshot API now owns Ready, Failure, Color and requested Value, and its initialization/navigation error paths report errors without assuming that an exception message exists.
+2. CodexAeroBar owns only its own quota/time Tag data and uses the generic status API to detect real WebView2 failures, retaining its existing WPF recovery mechanism.
+3. The standalone consumer source asserts that updating AeroProgress does not overwrite arbitrary host metadata. Existing integration sources now query the public status API. These cases were reviewed, not executed.
+4. SettingsStore is expressly limited to replaceable preferences, never the adopting application's durable measurements.
+5. The main workflow is manual-only; PR #16 removes the release job and targets main directly. Earlier PRs #14 and #15 are marked superseded. Preview packaging is still available.
+6. A direct Windows acceptance checklist and an explicit release policy were added to the repository. The merge remains blocked until actual target-device evidence establishes functionality and security.
+
+No CI was run or inspected during this closeout. The newest changes have not been operationally verified, and PR #16 is intentionally left as an unmerged draft.

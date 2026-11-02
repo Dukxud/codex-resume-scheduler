@@ -95,3 +95,11 @@ One-time task creation normalizes explicitly UTC timestamps to local Windows tri
 Browse invalidation now targets the Async controller's work queue. The native WPF fallback path registers owned bars and supports in-place palette changes through a named template fill, while the reusable FlowingProgress module stores values without modifying caller Tag data. CodexData now receives the application directory explicitly, and scheduling acknowledges validated registration independently of later preference or refresh errors.
 
 No CI or Windows execution was used for this latest pass. Runtime validation of the changes remains necessary before merging. See ADVERSARIAL-SOURCE-REVIEW.md.
+
+## Adopter-interface hardening and release boundary
+
+AeroProgress does not use adopter-owned WinForms Control.Tag. It owns asynchronous renderer readiness, failure, target progress, and color privately with a weak-key control-lifetime mapping. Get-AeroProgressViewStatus exposes a read-only snapshot; Set-AeroProgressViewState remains the state-update API. The Codex adapter owns its separate quota/time metadata and checks the renderer's status through its exported API before recovering to WPF. Other applications can use their own Tag values.
+
+The SettingsStore component is a single-writer preferences helper, intentionally not a database. Corrupt and missing JSON are indistinguishable to its read API; it offers no transactional revision control. The adopting Weight Trajectory application must keep measurement persistence independent.
+
+PR #16 consolidates the older stacked PRs. Release publishing is removed from the candidate workflow, and a manual-only trigger on main disables the older push-only release logic until the merge. Signing and real Windows acceptance remain separate gates. See WINDOWS-ACCEPTANCE.md and RELEASE-POLICY.md. No CI validation was used for this source-level hardening.

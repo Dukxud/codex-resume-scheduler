@@ -1,4 +1,4 @@
-# Security and code-quality review — v1.15.0 candidate
+# Security and code-quality review — v1.16.0 candidate
 
 ## Scope and evidence
 
@@ -25,7 +25,7 @@ Reviewed the actual Windows launchers, scheduled-task flow, WebView2 host, relea
 - **Antivirus-specific evidence remains absent.** Bitdefender can terminate Chromium WebView2 child processes, producing a blank widget or crash, independently of SmartScreen. The AeroProgress module reports process failure; the scheduler adapter replaces the failed view with a WPF fallback. Windows-specific renderer failures still require on-device verification.
 - Scheduled jobs run unattended and may invoke Codex with `--dangerously-bypass-approvals-and-sandbox` **only after an explicit user-selected YOLO mode and confirmation**. This remains inherently high risk. Run as an ordinary limited Windows user; avoid scheduling full-access jobs on untrusted repositories.
 - Scheduled job JSON, prompts, session metadata and transcripts are stored within user-writable LocalAppData. Same-user tampering and sensitive log retention are outside this component pass. Never upload raw scheduler logs or job JSON publicly.
-- The v1.15.0 review splits GUI presentation, background reads, event actions, lifecycle, and a separate CLI runner. The general-purpose modules carry no Codex or GUI orchestration state. A future application-specific UI rewrite should remain separately reviewable.
+- The v1.16.0 review splits GUI presentation, background reads, event actions, lifecycle, and a separate CLI runner. The general-purpose modules carry no Codex or GUI orchestration state. A future application-specific UI rewrite should remain separately reviewable.
 - Checksums do not replace signatures. SmartScreen reputation is separate from an Authenticode signature; signed new releases can still be flagged until positive reputation develops.
 
 ## Reusable component contract
@@ -55,7 +55,7 @@ The command signs and verifies all PowerShell files, strips the execution-policy
 Run `scripts/Get-SchedulerSecurityDiagnostics.ps1` locally (read-only), and obtain the *Bitdefender detection name*, blocked file path and quarantine/event timestamp from the Bitdefender UI. Compare to `SHA256SUMS.txt` and Windows crash events. A verified false positive can be submitted through Bitdefender's sample-review process. **Do not turn off antivirus or add blanket exclusions.**
 
 
-## Added v1.15.0 review controls
+## Added v1.16.0 review controls
 
 - One-time scheduled runners are content-addressed, copied once, and verified against saved SHA-256 metadata at execution. Existing tasks are never silently updated to another version.
 - Codex execution failures return nonzero process exit codes; Windows Script Host forwards them to Task Scheduler. Success explicitly blocks retry analysis.
@@ -66,8 +66,16 @@ Run `scripts/Get-SchedulerSecurityDiagnostics.ps1` locally (read-only), and obta
 
 ## Reuse hardening
 
-- Unattended account binding comes from a rate-limit account ID when supplied, else a SHA-256 fingerprint of the ChatGPT account email via documented account/read. The email is never persisted. An identical email across multiple workspaces remains a limitation if the backend provides no workspace-specific ID.
+- Unattended account binding hashes only a backend-selected workspace ID (`account/read.workspaceRouting.chatgptAccountId` or unambiguous `account/rateLimits/read.accountId`). Same-email workspaces receive distinct fingerprints; contradictory or unknown backend IDs fail closed. Email is not accepted as identity.
 - Worker imports generic GitRepository, not GUI session helpers or ambient variables. Task state is explicitly recorded as deferred, blocked, completed, failed, or cancelled.
 - ProgressHost now owns recovery and disposal; WPF fallback uses the standalone FlowingProgress component and retains the requested hue; WindowShell owns generic WinForms primitives; UI modules own an explicit state context.
 - The unrelated-application integration test copies only reusable components and exercises them without scheduler code.
 - The Aero browser process is still an independent WebView2 subprocess; the host uses a finite number of views proportional to visible scheduled rows, not total pending tasks.
+
+## v1.16 adversarial fixes
+
+- Canonical selected-workspace identity; never authenticate solely by the user's email, and never persist raw identity data. Experimental routing may be unavailable on older Codex installations; unattended work then requires a trustworthy rate-limit account ID or is disallowed.
+- Separate persisted run results from pending-job JSON; expose history through the GUI and store a nextJob ID for deferred work.
+- Generic ProgressHost owns fallback state internally, not in a caller-controlled Tag. WebView2 native loader is loaded by explicit path without changing PATH, and dependency failures can be rechecked.
+- Ten modules remain separately importable. CI additionally exercises generic task registration, failure rollback, and genuine WebGL2 rendering from the standalone ZIP.
+- Clean-code changes separate conversation, pending, usage and asynchronous dispatch responsibilities and index pending tasks by ID; no claim of cross-platform rendering or target-device antivirus acceptance is made.

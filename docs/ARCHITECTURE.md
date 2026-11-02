@@ -1,4 +1,4 @@
-# Architecture — Codex Resume Scheduler v1.15.0
+# Architecture — Codex Resume Scheduler v1.16.0
 
 ## Design boundaries
 
@@ -21,9 +21,14 @@ There are two layers:
 - CodexRunEngine.ps1 — Codex model/catalog validation, CLI session continuation, usage-based retry, pinned runtime contract.
 - CodexData.ps1 — local session, Git, pending task and UI-settings facade.
 - CodexUsage.js / CodexRetry.js — official App Server protocol reads and pure quota/retry decisions.
-- CodexUiForms.ps1 — application-specific WinForms layout through reusable WindowShell primitives.
+- CodexUiForms.ps1 — WinForms layout through reusable WindowShell primitives.
+- CodexUiSelection.ps1 — conversation selection and repository evidence decisions.
+- CodexUiPending.ps1 — scheduled-run queue presentation and indexing.
+- CodexUiUsage.ps1 — short-lived quota-process and snapshot presentation.
+- CodexUiHistory.ps1 — user-visible persisted run outcomes.
+- CodexJobStore.ps1 — read-only payload/history discovery that excludes result records from repository searches.
 - CodexUiState.ps1 — explicit, separately owned selection, usage, preferences and dashboard contexts; reusable modules do not import this.
-- CodexUiRefresh.ps1 — background data fetch and quota snapshots.
+- CodexUiRefresh.ps1 — coalesced background-operation dispatcher, delegating to the selection, pending and usage controllers.
 - CodexUiActions.ps1 — user actions, autosave and task creation.
 - CodexUiLifecycle.ps1 — window startup/shutdown and resource cleanup.
 - CodexDashboard.ps1 — standard/compact presentation and countdown display.
@@ -60,3 +65,13 @@ New tasks use a separate fingerprinted runtime folder. Older tasks retain their 
 The standalone worker no longer imports CodexData or references UI globals; its Git and account checks are explicit imports. The UI has a declared state owner grouped by responsibility rather than dozens of unowned script variables. ProgressHost owns the primary/fallback lifecycle, and the dashboard allocates one bar per **visible row**, never per queued task. `account/read` provides a hashed ChatGPT-email fallback when the rate-limit account identifier is absent; the service never persists or exposes the raw email. A multi-workspace switch under the same email cannot be distinguished without an authoritative backend account identifier; unattended retry still refuses completely unknown identities.
 
 A queued retry is persisted as `deferred`, not `completed`. Removing an upcoming task unregisters it and records `cancelled`, while logs are retained for audit. Existing work may still be interrupted by Windows sign-out or sleeping, and real hardware/antivirus behavior remains outside CI.
+
+## v1.16 adversarial acceptance
+
+Auto-resume hashes a backend-selected workspace ID (experimental workspaceRouting or rate-limit accountId). Email-only identity and contradictory IDs fail closed. No raw workspace identifiers or emails are written to job metadata.
+
+Run-history files (`*.result.json`) are parsed independently of pending job payloads (`*.json`); the former never displace repository evidence. Deferred outcomes retain the next scheduled task name. The UI displays completion, failure, blocking, deferral and cancellation statuses, including malformed records. Countdown updates use a prebuilt index rather than scanning the entire pending queue for each row.
+
+The WebView2 module loads its native SDK by explicit path, leaves process `PATH` untouched, and retries dependency checks after failures. ProgressHost owns fallback controls without claiming caller `Control.Tag`.
+
+The second-app test exercises all ten component imports, while separate acceptance cases invoke generic scheduling operations and test real, packaged WebGL2 rendering with no Codex code. CI cannot establish real account operations, Bitdefender response or Windows Task Scheduler behavior on BLACK-PUDDLE.

@@ -46,13 +46,13 @@ Use **Save and close** to apply to all visible bars and persist the choices loca
 
 **Current preview builds remain unsigned.** The previous hidden Windows Script Host/PowerShell launcher may still be flagged by antivirus. This preview does **not** disable antivirus or ask for exclusions. A production build now fails unless it has a real publisher code-signing certificate and timestamp; signed launcher scripts no longer request `-ExecutionPolicy Bypass`. Signing does not guarantee immediate SmartScreen reputation.
 
-The Aero progress-bar renderer has been separated into an independently importable **[AeroProgress PowerShell module](components/AeroProgress/README.md)**. Windows CI packages it separately as `AeroProgress-Component-v1.13.0-Preview.zip`; other WinForms apps can use its API without importing the scheduler or Task Scheduler. The existing scheduler adapter retains WPF fallback, including recovery if WebView2 reports a child-process failure.
+The Aero progress-bar renderer has been separated into an independently importable **[AeroProgress PowerShell module](components/AeroProgress/README.md)**. Windows CI packages it separately as `AeroProgress-Component-v1.16.0-Preview.zip`; other WinForms apps can use its API without importing the scheduler or Task Scheduler. The existing scheduler adapter retains WPF fallback, including recovery if WebView2 reports a child-process failure.
 
 See [security review, risks and signing workflow](docs/SECURITY-REVIEW.md). A read-only security diagnostics script is included at `tools/Get-SchedulerSecurityDiagnostics.ps1` in the packaged app (or in the repository `scripts` directory). It does not change Bitdefender settings.
 
-## Modular architecture and reusable components (v1.15.0 adversarial review)
+## Modular architecture and reusable components (v1.16.0 adversarial review)
 
-The GUI now has a thin entrypoint and separate files for layout, asynchronous reads, user actions, and application lifecycle. The Codex-specific worker lives in CodexRunEngine.ps1, **outside the GUI**. Generic infrastructure is independently importable:
+The GUI has a thin entrypoint and smaller Codex-specific controllers for forms, conversation selection, upcoming runs, model/usage polling, background dispatch, recent results, actions, and lifecycle. The Codex-specific worker lives in CodexRunEngine.ps1, **outside the GUI**. Generic infrastructure is independently importable:
 
 - **AeroProgress:** reusable animated material and WebView2 host.
 - **Countdown:** independent text and percentage calculations.
@@ -69,7 +69,7 @@ See [reusable components and usage examples](components/README.md) and [architec
 
 **Scheduled jobs are pinned to their original worker files.** A later app upgrade creates a new runtime snapshot rather than overwriting the runner for existing tasks. Before execution, the worker validates every pinned file against the saved SHA-256 fingerprint. This detects accidental runtime changes; it does not defend against the same Windows account intentionally rewriting both job metadata and files.
 
-The scheduler records distinct completed, deferred, failed and blocked outcomes. Nonzero Codex errors remain nonzero unless a verified retry is registered; that case is saved explicitly as deferred. Retries require verified account identity. When the rate-limit response omits accountId, the documented account/read endpoint can supply a hashed ChatGPT email fingerprint; no raw email is saved. If neither identity exists, automatic retry is unavailable and manual scheduling remains allowed. Refresh usage to check identity, or disable Auto-resume and schedule a manual run. Older tasks without runtime pinning keep their existing registered launchers; cancel and reschedule to adopt version-pinned execution.
+The scheduler records completed, deferred, failed, blocked and cancelled outcomes, including the name of any registered follow-up task. Use **Recent results** to inspect their history. Automatic retry requires a verified selected-workspace identity. The application computes the same canonical hash from `account/rateLimits/read.accountId` or from experimental `account/read.workspaceRouting.chatgptAccountId`; it rejects conflicting identifiers. **Email alone never permits unattended execution.** If the backend offers no reliable workspace ID, automatic retry is unavailable and manual scheduling remains possible. Previously created tasks retain their old launchers and must be cancelled and rescheduled to use pinned runtimes.
 
 ## Requirements
 
@@ -86,11 +86,11 @@ The scheduler records distinct completed, deferred, failed and blocked outcomes.
 4. Usage and pending jobs load automatically; optionally click **Refresh now**. If a reset time is available, click **Use reset +2 min**, or enter a time manually.
 5. Select the conversation, **model**, repository, model-supported effort, access mode, and instruction, then click **Schedule once**. Leave Auto-resume checked to retry on a confirmed usage-limit failure.
 
-Newly scheduled jobs use Windows Script Host (`wscript.exe`) to run in the background without a visible terminal. Output and failures are saved in `%LOCALAPPDATA%\CodexResumeScheduler`; use **Open logs folder** to inspect them. **Older pending jobs retain their originally registered command**; cancel and reschedule them if you want them to run without a console. Keep the computer **awake, online, and signed into Windows** at the scheduled time. A task missed while the computer was unavailable may execute at the next opportunity.
+Newly scheduled jobs use Windows Script Host (`wscript.exe`) to run in the background without a visible terminal. Output and failures are saved in `%LOCALAPPDATA%\CodexResumeScheduler`; use **Open logs folder** for transcripts and **Recent results** for the recorded run status. **Older pending jobs retain their originally registered command**; cancel and reschedule them if you want them to run without a console. Keep the computer **awake, online, and signed into Windows** at the scheduled time. A task missed while the computer was unavailable may execute at the next opportunity.
 
 ## How the usage read works
 
-`CodexUsage.js` starts a short-lived `codex app-server --listen stdio://` via the npm package's Node entrypoint, performs the supported `initialize`/`initialized` handshake, calls `account/rateLimits/read`, and exits. It does **not** read `auth.json`, use a custom web endpoint, scrape logs, send a prompt, or consume a Codex model turn.
+`CodexUsage.js` starts a short-lived `codex app-server --listen stdio://` via the npm package's Node entrypoint, performs the `initialize`/`initialized` handshake with experimental workspace-routing capability enabled, reads `account/read` and `account/rateLimits/read`, and exits. It does **not** read `auth.json`, use a custom web endpoint, scrape logs, send a prompt, or consume a Codex model turn.
 
 The response may include both five-hour and weekly limits, or other-duration windows. The UI displays the snapshot's actual duration and reset time, not assumed 5h/weekly slots. If several **applicable** windows are exhausted, it suggests the **latest** of their reset times. Otherwise, it displays the next window reset as informational, **not** a promise that usage will be restored. If the backend says usage is restricted without an identifiable exhausted window, the reset button remains disabled; scheduling remains available manually. Quota selection uses `rateLimitsByLimitId` and the reported `normalModelSlug` when present. When multiple quotas exist and the selected model cannot be mapped unambiguously, **no automatic reset time is inferred**. Information can be stale, and actual model permission remains authoritative.
 
@@ -158,4 +158,4 @@ The optional `Publish-To-GitHub.cmd` launches the publication helper, which uses
 
 ### Reuse acceptance
 
-The standalone component kit is exercised by a **second unrelated Windows application**, using only copied component folders and no Codex runtime, source files or user profile. The scheduler UI uses an explicit selection/usage/preferences/dashboard state context; the Codex worker has no GUI state dependency. Queued tasks allocate browser-backed progress views only for visible rows. These are verified by isolated Windows tests; application-specific forms and renderer integrations remain Windows-only.
+The standalone component kit is exercised by a **second unrelated Windows application**, using only copied component folders and no Codex runtime, source files or user profile. Dedicated acceptance tests exercise the generic one-time-task adapter and create a real WebGL2 progress bar using the extracted reusable ZIP. The scheduler UI uses an explicit selection/usage/preferences/dashboard state context; the Codex worker has no GUI state dependency. Queued tasks allocate browser-backed progress views only for visible rows. These are verified by isolated Windows tests; application-specific forms and renderer integrations remain Windows-only.

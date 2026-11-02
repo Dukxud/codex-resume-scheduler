@@ -158,4 +158,8 @@ The optional `Publish-To-GitHub.cmd` launches the publication helper, which uses
 
 ### Reuse acceptance
 
-The standalone component kit is exercised by a **second unrelated Windows application**, using only copied component folders and no Codex runtime, source files or user profile. Dedicated acceptance tests exercise the generic one-time-task adapter and create a real WebGL2 progress bar using the extracted reusable ZIP. The scheduler UI uses an explicit selection/usage/preferences/dashboard state context; the Codex worker has no GUI state dependency. Queued tasks allocate browser-backed progress views only for visible rows. These are verified by isolated Windows tests; application-specific forms and renderer integrations remain Windows-only.
+The standalone component kit is exercised by a **second unrelated Windows application**, using only copied component folders and no Codex runtime, source files or user profile. Dedicated acceptance tests exercise the generic one-time-task adapter and create a real WebGL2 progress bar using the extracted reusable ZIP. The scheduler UI uses an explicit selection/usage/preferences/dashboard state context; the Codex worker has no GUI state dependency. Queued tasks allocate browser-backed progress views only for visible rows. Windows acceptance tests exist, but the latest source-level changes were deliberately not run through CI or target-device Windows execution. Application-specific forms and renderer integrations remain Windows-only.
+
+### Current development validation status
+
+The v1.16 source-level pass corrected Browse queue ownership, native WPF appearance updates, generic progress state ownership, implicit data-reader paths, and post-registration status reporting. The PR remains a draft. No CI was run for those corrections. See docs/ADVERSARIAL-SOURCE-REVIEW.md for evidence and remaining target-device acceptance.

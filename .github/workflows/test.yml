@@ -89,6 +89,9 @@ jobs:
       - name: Scheduled retry behavior
         shell: pwsh
         run: ./tests/scheduler-retry.test.ps1
+      - name: Isolated model catalog controller and stale-authority checks
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/model-catalog-controller.test.ps1
       - name: Model and access persistence checks
         shell: pwsh
         run: ./tests/model-and-session.test.ps1

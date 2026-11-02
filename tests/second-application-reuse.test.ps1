@@ -44,7 +44,10 @@ try {
         $button=Add-DesktopButton -Parent $form -Text 'Example' -X 8 -Y 36
         Require ($title.Parent -eq $form -and $button.Parent -eq $form) 'Desktop window shell has hidden application dependencies.'
         $gloss=New-FlowingProgressView -Parent $form -X 270 -Y 40 -Width 130 -Height 17 -Colors @{BaseTop='#ED9CFF';BaseBottom='#552099';Track='#ECE8FF';Outline='#CCC2DE'} -AccessibleName 'Unrelated application progress'
+        $gloss.Tag='belongs to unrelated consumer'
         Set-FlowingProgressViewState -Bar $gloss -Percent 37.5
+        Require ($gloss.Tag -eq 'belongs to unrelated consumer') 'Standalone WPF progress must not claim Control.Tag.'
+        Require ((Get-FlowingProgressViewValue -Bar $gloss) -eq 37.5) 'WPF module did not retain its own percentage.'
         Require ($gloss.Child.Value -eq 37.5 -and $gloss.AccessibleName -eq 'Unrelated application progress') 'Standalone WPF animation requires Codex adapter.'
         $primary=[System.Windows.Forms.Panel]::new()
         $primary.Bounds=[System.Drawing.Rectangle]::new(8,80,240,20)

@@ -82,3 +82,9 @@ The standalone consumer tests run generic one-time scheduling against an isolate
 **Clock correctness:** Countdown converts timestamps to UTC before computing elapsed time, preventing wrong durations across daylight-saving time changes. OneTimeTasks rejects ambiguous or nonexistent local trigger times rather than guessing which clock occurrence to schedule; the caller should request another unambiguous time.
 
 OneTimeTasks accepts local `DateTime` instances and explicit UTC `DateTime` values, converting UTC instants to local Task Scheduler boundaries. Unspecified `DateTime` values are interpreted as local wall-clock times. Ambiguous or invalid daylight-saving clock times are rejected rather than guessed.
+
+### FlowingProgress state and appearance contract
+
+The public API includes New-FlowingProgressView, Get-FlowingProgressViewValue, Set-FlowingProgressViewState, and Set-FlowingProgressViewColors. Accepted percentages are owned by the module, not the caller's ElementHost.Tag. Palettes supply BaseTop, BaseBottom, Track, and Outline hexadecimal colors. Calling Set-FlowingProgressViewColors recolors an existing live view without replacing its ElementHost.
+
+The scheduler-specific adapter tracks native fallback bars alongside browser-backed bars. It can apply an appearance change to either renderer while preserving each caller's control reference. These latest changes have been inspected statically, not validated by a new Windows execution or CI run.

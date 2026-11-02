@@ -163,6 +163,7 @@ $schedule.Add_Click({
         }
         # The validated Windows task already exists. A preference write or
         # follow-up UI refresh failure must not report scheduling as failed.
+        Update-Status "Scheduled once for $($when.ToString('MMM dd, h:mm tt')): $name"
         $script:ui.Preferences.settingsTimer.Stop()
         try { Save-CurrentFormState } catch {
             Update-Status "Scheduled $name, but preferences were not saved: $($_.Exception.Message)"

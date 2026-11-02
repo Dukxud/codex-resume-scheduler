@@ -37,8 +37,8 @@ test('pending list shows recognizable project and preserves full task identity',
 });
 
 test('background result does not override an entered root and list refresh retains it', () => {
-  const lookup = source.slice(source.indexOf("'selection' {", source.indexOf('$dataPoll.Add_Tick')));
-  assert.match(lookup, /if \(-not \[string\]::IsNullOrWhiteSpace\(\$repoBox\.Text\)\) \{ break \}/);
+  const lookup = namedFunction('Apply-SelectionResult');
+  assert.match(lookup, /if \(-not \[string\]::IsNullOrWhiteSpace\(\$repoBox\.Text\)\) \{ return \}/);
   const sessions = namedFunction('Apply-SessionList');
   assert.match(sessions, /if \(\$selectedId -and \$chosen -and -not \[string\]::IsNullOrWhiteSpace\(\$repoBox\.Text\)\)/);
 });

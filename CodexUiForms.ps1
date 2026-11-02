@@ -19,17 +19,6 @@ public static extern bool ShowWindow(System.IntPtr handle, int command);
 
 
 
-# Legacy settings.json files contain only lastAccess. A draft is optional.
-$script:ui.Preferences.uiSettings = Read-CodexUiSettings $appDir
-$script:ui.Preferences.savedDraft = if ($script:ui.Preferences.uiSettings -and $script:ui.Preferences.uiSettings.draft) { $script:ui.Preferences.uiSettings.draft } else { $null }
-$script:ui.Selection.preferredSessionId = if ($script:ui.Preferences.savedDraft) { [string]$script:ui.Preferences.savedDraft.sessionId } else { '' }
-$script:ui.Selection.preferredModelId = if ($script:ui.Preferences.savedDraft) { [string]$script:ui.Preferences.savedDraft.model } else { '' }
-$script:ui.Selection.preferredEffort = if ($script:ui.Preferences.savedDraft) { [string]$script:ui.Preferences.savedDraft.effort } else { '' }
-$script:ui.Selection.startupSavedSessionId = $script:ui.Selection.preferredSessionId
-$script:ui.Selection.startupSavedModelId = $script:ui.Selection.preferredModelId
-$script:ui.Selection.repoSelectionSessionId = ''
-$script:ui.Preferences.settingsReady = $false
-
 function Get-SavedAccessPreference {
     if ($script:ui.Preferences.savedDraft -and $script:ui.Preferences.savedDraft.access -in @('workspace-write','yolo','read-only')) { return [string]$script:ui.Preferences.savedDraft.access }
     if ($script:ui.Preferences.uiSettings -and $script:ui.Preferences.uiSettings.lastAccess -in @('workspace-write','yolo','read-only')) { return [string]$script:ui.Preferences.uiSettings.lastAccess }
@@ -106,8 +95,6 @@ $modelBox.Size = [System.Drawing.Size]::new(325,30)
 $modelBox.DropDownStyle = 'DropDownList'
 $modelBox.DisplayMember = 'Display'
 $form.Controls.Add($modelBox)
-$script:ui.Selection.models = @()
-$script:ui.Selection.modelCatalogLoaded = $false
 
 [void](Add-Label 'Instruction' 18 247)
 $messageBox = New-Object System.Windows.Forms.TextBox
@@ -236,20 +223,10 @@ function Update-Status {
     $status.Text = $Text
 }
 
-# Keep filesystem, Git, and Task Scheduler reads off the Windows Forms thread.
-# Each operation has at most one active job and one coalesced follow-up request.
-$script:ui.Selection.dataJobs = @{}
-$script:ui.Selection.dataQueued = @{}
-$script:ui.Dashboard.pendingSnapshot = @()
-$script:ui.Selection.selectionGeneration = 0
-$script:ui.Selection.selectionJobGeneration = 0
-$script:ui.Selection.selectionOriginalModel = $null
-$script:ui.Selection.loadingSessions = $false
 $repoHints = [System.Windows.Forms.ToolTip]::new()
 $usageHints = [System.Windows.Forms.ToolTip]::new()
 $actionHints = [System.Windows.Forms.ToolTip]::new()
 $actionHints.SetToolTip($schedule, 'Creates one Windows Task Scheduler run. Your settings are rechecked when the task starts.')
 $actionHints.SetToolTip($autoResumeCheck, 'Only retries after a confirmed Codex usage-limit failure; does not monitor other Codex terminals.')
 $actionHints.SetToolTip($useReset, 'Uses the applicable exhausted quota reset time plus two minutes, when Codex reports one.')
-$script:ui.Selection.models = @()
 

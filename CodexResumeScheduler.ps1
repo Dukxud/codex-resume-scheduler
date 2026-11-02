@@ -37,7 +37,7 @@ if ($RunJob) {
 }
 . (Join-Path $PSScriptRoot 'CodexData.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiState.ps1')
-$script:ui = New-CodexUiState
+$script:ui = New-CodexUiState -Settings (Read-CodexUiSettings $appDir)
 . (Join-Path $PSScriptRoot 'CodexUiForms.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiSelection.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiPending.ps1')

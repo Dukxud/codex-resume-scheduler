@@ -44,7 +44,7 @@ try{
     $local=$utc.ToLocalTime()
     Require ((Get-CountdownText -DueAt $utc.AddHours(2) -Now $local) -eq '2h 0m') 'Mixed UTC/local instants were compared as wall-clock values.'
     $epoch=[DateTimeOffset]::new($utc).ToUnixTimeSeconds()
-    $elapsed=Get-CountdownElapsedPercent -DueAt $utc.AddHours(2) -CreatedAt $epoch -Now $local.AddHours(1).ToUniversalTime()
+    $elapsed=Get-CountdownElapsedPercent -DueAt $utc.AddHours(2) -CreatedAt $epoch -Now $utc.AddHours(1).ToLocalTime()
     Require ($elapsed -eq 50) 'Elapsed progress must be computed in UTC, not local wall-clock hours.'
     Write-Host 'Independent runtime, settings and timezone-safe countdown components PASS.'
 }finally{

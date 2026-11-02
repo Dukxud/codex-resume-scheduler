@@ -6,6 +6,7 @@ $script:aeroChecked = $false
 $script:aeroAvailable = $false
 $script:aeroError = ''
 $script:aeroBars = [System.Collections.Generic.List[System.Windows.Forms.Control]]::new()
+$script:nativeBars = [System.Collections.Generic.List[object]]::new()
 
 function Initialize-AeroAppearance {
     param($Settings)
@@ -52,6 +53,15 @@ Initialize-AeroAppearance $null
 function Update-AeroAppearance {
     param([System.Collections.IDictionary]$Appearance)
     $script:aeroAppearance = $Appearance
+    # Direct WPF bars exist when the browser runtime is unavailable or disabled.
+    # They own stable ElementHost controls, and must receive live theme edits too.
+    foreach ($entry in @($script:nativeBars)) {
+        if ($entry.Bar.IsDisposed) {
+            [void]$script:nativeBars.Remove($entry)
+            continue
+        }
+        Set-FlowingProgressColors -Bar $entry.Bar -Kind $entry.Kind -Color ([string]$Appearance[$entry.Kind])
+    }
     foreach ($bar in @($script:aeroBars)) {
         if ($bar.IsDisposed) {
             [void]$script:aeroBars.Remove($bar)
@@ -67,12 +77,12 @@ function Update-AeroAppearance {
 
 
 function Test-AeroRenderer {
-    if ($script:aeroChecked -and $script:aeroAvailable) { return $true }
-    $script:aeroChecked = $true
     if ($env:CODEX_BAR_RENDERER -eq 'wpf') {
         $script:aeroError = 'WPF fallback explicitly selected.'
         return $false
     }
+    if ($script:aeroChecked -and $script:aeroAvailable) { return $true }
+    $script:aeroChecked = $true
     $script:aeroSdk = Join-Path $PSScriptRoot 'AeroWebView2'
     $script:aeroAsset = Join-Path $PSScriptRoot 'assets/AeroBar.html'
     $support = Test-AeroProgressSupport -SdkDirectory $script:aeroSdk -AssetPath $script:aeroAsset
@@ -122,6 +132,11 @@ function Get-AeroProgressSurface {
 function Remove-AeroProgressBar {
     param([System.Windows.Forms.Control]$Bar)
     if(-not $Bar){return}
+    foreach ($entry in @($script:nativeBars)) {
+        if ([object]::ReferenceEquals($entry.Bar,$Bar)) {
+            [void]$script:nativeBars.Remove($entry)
+        }
+    }
     [void]$script:aeroBars.Remove($Bar)
     Remove-ProgressHost -Primary $Bar
 }
@@ -144,6 +159,19 @@ function Start-AeroHealthMonitor {
     if (-not $script:aeroHealthTimer.Enabled) { $script:aeroHealthTimer.Start() }
 }
 
+# Both rendering paths return stable controls with explicit host ownership.
+function New-CodexNativeProgressBar {
+    param(
+        [System.Windows.Forms.Control]$Parent,
+        [int]$X,[int]$Y,[int]$Width,[int]$Height,
+        [ValidateSet('quota','time')][string]$Kind,
+        [string]$Color
+    )
+    $bar = New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind -Color $Color
+    $script:nativeBars.Add([pscustomobject]@{ Bar=$bar; Kind=$Kind })
+    return $bar
+}
+
 function New-AeroProgressBar {
     param(
         [System.Windows.Forms.Control]$Parent,
@@ -155,7 +183,7 @@ function New-AeroProgressBar {
         $Color
     } else { [string]$script:aeroAppearance[$Kind] }
     if (-not (Test-AeroRenderer)) {
-        return New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind -Color $chosen
+        return New-CodexNativeProgressBar $Parent $X $Y $Width $Height $Kind $chosen
     }
     try {
         $view = New-AeroProgressView -Parent $Parent -X $X -Y $Y -Width $Width -Height $Height `
@@ -169,7 +197,7 @@ function New-AeroProgressBar {
         return $view
     } catch {
         $script:aeroError = "Aero view failed: $($_.Exception.Message)"
-        return New-FlowingProgressBar $Parent $X $Y $Width $Height $Kind -Color $chosen
+        return New-CodexNativeProgressBar $Parent $X $Y $Width $Height $Kind $chosen
     }
 }
 

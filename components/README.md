@@ -72,3 +72,5 @@ Unit and Windows GUI integration checks live under tests. The app package and st
 `AeroProgress` loads its WebView2 native loader from an explicit SDK path; it never mutates global `PATH`. A previously missing asset can be installed and retested without restarting. Switching native SDKs inside a process where one has already loaded may require restarting, because loaded native DLLs cannot always be unloaded safely.
 
 The standalone consumer tests run generic one-time scheduling against an isolated fake OS task provider and exercise the **real** WebView2 shader from a packaged standalone module in a separate Windows application. They do not execute the user's actual scheduled tasks.
+
+**Clock correctness:** Countdown converts timestamps to UTC before computing elapsed time, preventing wrong durations across daylight-saving time changes. OneTimeTasks rejects ambiguous or nonexistent local trigger times rather than guessing which clock occurrence to schedule; the caller should request another unambiguous time.

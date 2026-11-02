@@ -11,6 +11,11 @@ function Register-OneTimeTask {
     if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { throw 'Task executable missing.' }
     if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) { throw 'Task working directory missing.' }
     if ($At -le (Get-Date)) { throw 'A one-time task must be in the future.' }
+    # Task Scheduler stores a local wall-clock boundary without an offset.
+    # A repeated/absent hour cannot describe exactly one desired instant.
+    if ([TimeZoneInfo]::Local.IsAmbiguousTime($At) -or [TimeZoneInfo]::Local.IsInvalidTime($At)) {
+        throw 'The selected local time is ambiguous or nonexistent because of a daylight-saving time transition.'
+    }
     $action = New-ScheduledTaskAction -Execute $Executable -Argument $Arguments -WorkingDirectory $WorkingDirectory
     $trigger = New-ScheduledTaskTrigger -Once -At $At
     $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited

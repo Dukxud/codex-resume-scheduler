@@ -38,7 +38,15 @@ try{
     $now=[datetime]'2027-01-01T10:00:00'
     Require ((Get-CountdownText -DueAt $now.AddMinutes(5) -Now $now) -eq '5m 0s') 'Countdown label incorrect.'
     Require ((Get-CountdownElapsedPercent -DueAt $now -CreatedAt $null -Now $now) -eq $null) 'Missing start must remain unknown.'
-    Write-Host 'Independent runtime, settings and countdown components PASS.'
+    # UTC and local instants must produce identical countdowns even when the
+    # host is in a non-UTC timezone. Avoid subtracting local wall-clock ticks.
+    $utc=[datetime]::SpecifyKind([datetime]'2026-11-01T05:30:00',[DateTimeKind]::Utc)
+    $local=$utc.ToLocalTime()
+    Require ((Get-CountdownText -DueAt $utc.AddHours(2) -Now $local) -eq '2h 0m') 'Mixed UTC/local instants were compared as wall-clock values.'
+    $epoch=[DateTimeOffset]::new($utc).ToUnixTimeSeconds()
+    $elapsed=Get-CountdownElapsedPercent -DueAt $utc.AddHours(2) -CreatedAt $epoch -Now $local.AddHours(1).ToUniversalTime()
+    Require ($elapsed -eq 50) 'Elapsed progress must be computed in UTC, not local wall-clock hours.'
+    Write-Host 'Independent runtime, settings and timezone-safe countdown components PASS.'
 }finally{
     if(Test-Path $temp){Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue}
 }

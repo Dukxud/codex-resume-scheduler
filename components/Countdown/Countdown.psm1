@@ -2,7 +2,9 @@
 function Get-CountdownText {
     [CmdletBinding()]
     param([Parameter(Mandatory)][datetime]$DueAt,[Parameter(Mandatory)][datetime]$Now)
-    $seconds = [long][math]::Ceiling(($DueAt - $Now).TotalSeconds)
+    # Convert instants before subtracting: local clock arithmetic is wrong across
+    # daylight-saving time changes and when callers mix UTC and local kinds.
+    $seconds = [long][math]::Ceiling(($DueAt.ToUniversalTime() - $Now.ToUniversalTime()).TotalSeconds)
     if ($seconds -le 0) { return 'Due now' }
     $days = [long][math]::Floor($seconds / 86400)
     $hours = [long][math]::Floor(($seconds % 86400) / 3600)
@@ -19,10 +21,12 @@ function Get-CountdownElapsedPercent {
           [Parameter(Mandatory)][datetime]$Now)
     if ($null -eq $CreatedAt -or [string]$CreatedAt -notmatch '^\d{9,12}$') { return $null }
     try {
-        $start = [DateTimeOffset]::FromUnixTimeSeconds([long]$CreatedAt).LocalDateTime
-        $duration = ($DueAt - $start).TotalSeconds
+        $start = [DateTimeOffset]::FromUnixTimeSeconds([long]$CreatedAt).UtcDateTime
+        $due = $DueAt.ToUniversalTime()
+        $nowUtc = $Now.ToUniversalTime()
+        $duration = ($due - $start).TotalSeconds
         if ($duration -le 0) { return $null }
-        return [int][math]::Round([math]::Clamp(100 * ($Now-$start).TotalSeconds / $duration, 0, 100))
+        return [int][math]::Round([math]::Clamp(100 * ($nowUtc - $start).TotalSeconds / $duration, 0, 100))
     } catch { return $null }
 }
 Export-ModuleMember -Function Get-CountdownText,Get-CountdownElapsedPercent

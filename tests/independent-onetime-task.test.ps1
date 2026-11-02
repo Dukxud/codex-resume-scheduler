@@ -36,5 +36,18 @@ try {
     $failed=$false
     try{[void](Register-OneTimeTask -Name 'Rollback-Example' -At (Get-Date).AddHours(2) -Executable (Get-Command pwsh.exe).Source -Arguments 'abc' -WorkingDirectory $temp)}catch{$failed=$true}
     if(-not $failed -or $script:tasks.Count -ne 0){throw 'Validation mismatch must roll back OS registration.'}
-    Write-Host 'Standalone task registration, disable, removal and rollback PASS.'
+    # If the Windows host uses daylight saving time, reject a repeated
+    # local wall-clock time rather than scheduling the wrong occurrence.
+    $zone=[TimeZoneInfo]::Local
+    $checked=0
+    if($zone.SupportsDaylightSavingTime){
+        $candidate=[datetime]'2027-11-07T01:30:00'
+        if($zone.IsAmbiguousTime($candidate)){
+            $checked++
+            $rejected=$false
+            try{[void](Register-OneTimeTask -Name 'Ambiguous-Example' -At $candidate -Executable (Get-Command pwsh.exe).Source -Arguments 'abc' -WorkingDirectory $temp)}catch{$rejected=$true}
+            if(-not $rejected){throw 'Repeated daylight-saving-time hour must be rejected.'}
+        }
+    }
+    Write-Host "Standalone task registration, disable, removal, rollback and DST safety PASS ($checked transition checks)."
 }finally{if(Test-Path -LiteralPath $temp){Remove-Item -LiteralPath $temp -Force -Recurse -ErrorAction SilentlyContinue}}

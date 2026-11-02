@@ -27,7 +27,9 @@ try {
     [void](New-Item -ItemType Directory -Path $independentRepo -Force)
     & git -C $independentRepo init -b isolated --quiet
     Require ($LASTEXITCODE -eq 0) 'Independent Git init failed.'
-    Require ((Get-GitRepositoryRoot -Path $independentRepo) -eq $independentRepo) 'Git root lookup requires Codex.'
+    $actualRoot=([string](Get-GitRepositoryRoot -Path $independentRepo)).TrimEnd([char[]]@('/','\')).Replace('\','/')
+    $expectedRoot=([IO.Path]::GetFullPath($independentRepo)).TrimEnd([char[]]@('/','\')).Replace('\','/')
+    Require ($actualRoot -ieq $expectedRoot) "Git root mismatch: actual '$actualRoot' expected '$expectedRoot'."
     Require ((Get-GitCurrentBranch -Path $independentRepo) -eq 'isolated') 'Git branch lookup requires Codex.'
     Require ($null -eq (Get-GitRepositoryRoot -Path $app)) 'Unrelated folder was misclassified as a Git repository.'
     $scripts=Join-Path $app 'scripts'

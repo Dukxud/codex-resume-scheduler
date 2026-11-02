@@ -24,17 +24,17 @@ try{
     $fallbackHost=Get-AeroProgressSurface $bar
     Require ($fallbackHost -is [Windows.Forms.Integration.ElementHost]) 'WPF recovery bar was not created.'
     Require (-not $bar.Visible -and $fallbackHost.Visible) 'Failed WebView must be hidden and WPF visible.'
-    Require ([math]::Abs([double]$fallbackHost.Tag-62) -lt .001) 'Recovery lost last authoritative percentage.'
+    Require ([math]::Abs([double](Get-FlowingProgressViewValue $fallbackHost)-62) -lt .001) 'Recovery lost last authoritative percentage.'
     Set-AeroProgress $bar 91
-    Require ([math]::Abs([double]$fallbackHost.Tag-91) -lt .001) 'Further percentage updates failed after recovery.'
+    Require ([math]::Abs([double](Get-FlowingProgressViewValue $fallbackHost)-91) -lt .001) 'Further percentage updates failed after recovery.'
     Set-AeroProgress $bar $null
-    Require ($null -eq $fallbackHost.Tag) 'Unknown percentage must remain unknown after recovery.'
+    Require ($null -eq (Get-FlowingProgressViewValue $fallbackHost)) 'Unknown percentage must remain unknown after recovery.'
     Ensure-AeroFallback $bar
     Require ([object]::ReferenceEquals($fallbackHost,(Get-AeroProgressSurface $bar))) 'Recovery created duplicate controls.'
     Update-AeroAppearance ([ordered]@{quota='violet';time='amber';finish=0;lighting=0;shimmer=100;speed=100;aero=$true})
     $updatedFallback=Get-AeroProgressSurface $bar
     Require ($updatedFallback -ne $fallbackHost -and $fallbackHost.IsDisposed) 'Appearance update did not recreate recovered bar.'
-    Require ($updatedFallback.Tag -eq $null) 'Appearance change must retain unknown percentage.'
+    Require ((Get-FlowingProgressViewValue $updatedFallback) -eq $null) 'Appearance change must retain unknown percentage.'
     # Recovered bars must follow the real DataGridView layout and be destroyed
     # with their row; otherwise they remain stuck on screen after scrolling.
     $grid=[Windows.Forms.DataGridView]::new()

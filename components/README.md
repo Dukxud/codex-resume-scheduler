@@ -4,7 +4,7 @@ These PowerShell modules can be imported independently. None needs Codex, the sc
 
 | Module | Purpose | Platform | Public functions |
 |---|---|---|---|
-| AeroProgress | Live WebGL2 optical progress bars in Windows Forms | Windows + WebView2 | Test-AeroProgressColor, Test-AeroProgressSupport, New-AeroProgressView, Set-AeroProgressViewState |
+| AeroProgress | Live WebGL2 optical progress bars in Windows Forms | Windows + WebView2 | Test-AeroProgressColor, Test-AeroProgressSupport, New-AeroProgressView, Set-AeroProgressViewState, Get-AeroProgressViewStatus |
 | Countdown | Pure elapsed percentage and time-to-run text | PowerShell 7 | Get-CountdownText, Get-CountdownElapsedPercent |
 | SettingsStore | Atomic local JSON settings, schema defined by the host | PowerShell 7 | Read-JsonSettings, Write-JsonSettings |
 | RuntimeBundle | Fingerprinted, content-addressed runtime snapshots | PowerShell 7 | Get-RuntimeFingerprint, Assert-RuntimeFingerprint, Publish-ImmutableRuntime |
@@ -58,7 +58,7 @@ See [AeroProgress](AeroProgress/README.md) for a complete standalone animated Wi
 - UI-specific bindings (CodexUi*) and CodexRunEngine.ps1 are adapters, not reusable core.
 - RuntimeBundle protects against accidental replacement and checks file content before execution. It is **not** a security boundary against the same Windows user, who can modify both the runtime and locally stored task metadata. Signed first-party code is needed for publisher authentication.
 - OneTimeTasks uses Windows Task Scheduler's interactive-user principal and does not run while signed out.
-- SettingsStore returns null on absent or unreadable JSON; the host owns schema validation and any upgrades.
+- SettingsStore handles single-writer, replaceable preferences only. It returns null for either missing or corrupted JSON and offers no concurrent transaction isolation, compare-and-swap revision protection or historical recovery. Do not reuse it for Weight Trajectory measurements or other irreplaceable records. The host owns schema validation and upgrades.
 - Countdown has no UI dependencies; unknown creation time produces null, never a fabricated progress percentage.
 - Each module is independently importable; the Windows-specific modules are not directly portable to non-Windows UI frameworks.
 - The scheduler's Codex-specific recovery and account verification are intentionally **not** in the general-purpose components.
@@ -88,3 +88,7 @@ OneTimeTasks accepts local `DateTime` instances and explicit UTC `DateTime` valu
 The public API includes New-FlowingProgressView, Get-FlowingProgressViewValue, Set-FlowingProgressViewState, and Set-FlowingProgressViewColors. Accepted percentages are owned by the module, not the caller's ElementHost.Tag. Palettes supply BaseTop, BaseBottom, Track, and Outline hexadecimal colors. Calling Set-FlowingProgressViewColors recolors an existing live view without replacing its ElementHost.
 
 The scheduler-specific adapter tracks native fallback bars alongside browser-backed bars. It can apply an appearance change to either renderer while preserving each caller's control reference. These latest changes have been inspected statically, not validated by a new Windows execution or CI run.
+
+### AeroProgress consumer independence
+
+AeroProgress has a public status API and no longer uses adopter-owned Control.Tag. The scheduler adapter alone owns its quota/time metadata. An unrelated program may store arbitrary data in Control.Tag without affecting renderer readiness or state. For value and failure checks, use Get-AeroProgressViewStatus instead of reading the control's Tag.

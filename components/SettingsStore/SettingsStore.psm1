@@ -1,4 +1,6 @@
-# Generic atomic JSON preferences store. The application chooses the path and schema.
+# Single-writer, replaceable JSON preferences only; host chooses path/schema.
+# Missing and corrupt JSON both read as null. No revision, concurrency, history
+# or database durability guarantees. Never use this for measurement records.
 function Read-JsonSettings {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)

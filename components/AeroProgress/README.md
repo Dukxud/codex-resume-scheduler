@@ -33,10 +33,16 @@ Set-AeroProgressViewState -View $view -State @{
 [Windows.Forms.Application]::Run($form)
 ```
 
-The module queues the state until WebView2 is initialized, so callers do not need to sleep, poll, or manage WebView2 message events. Inspect `$view.Tag.Failure` if a view fails.
+The module queues the state until WebView2 is initialized, so callers do not need to sleep, poll, or manage WebView2 message events. Inspect the Failure field of Get-AeroProgressViewStatus -View $view if a view fails. The returned Ready, Color, and Value fields report renderer state and the last requested target, not observed shader animation.
 
 **Distribution:** the release workflow publishes a separate `AeroProgress-Component.zip` containing the module, renderer and Microsoft SDK libraries. That SDK is not the WebView2 Evergreen Runtime. A supported Windows installation must have the runtime installed.
 
 **License:** the module and renderer are distributed under the repository MIT license; Microsoft WebView2 binaries retain their own publisher/licensing terms.
 
 **Trust:** the component ZIP is not signed merely because its Microsoft dependencies are. Do not claim publisher authentication until a trusted release certificate is configured.
+
+## Ownership and reuse
+
+The caller owns WinForms Control.Tag. AeroProgress does not read, write, or replace that property; internal readiness, failure and progress state is stored with weak-key control ownership. Read status with Get-AeroProgressViewStatus and submit changes with Set-AeroProgressViewState.
+
+The status Value is the requested normalized target (0–1), not actual animation progress. The host owns control disposal and renderer-recovery policy. Do not force-reimport the module while views from a previous module instance are still active, because an import creates a fresh internal state store.

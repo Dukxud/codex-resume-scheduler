@@ -43,3 +43,12 @@ function Set-FlowingProgress {
     param([System.Windows.Forms.Integration.ElementHost]$Bar,$Percent)
     Set-FlowingProgressViewState -Bar $Bar -Percent $Percent
 }
+
+function Set-FlowingProgressColors {
+    param(
+        [System.Windows.Forms.Integration.ElementHost]$Bar,
+        [ValidateSet('quota','time')][string]$Kind,
+        [string]$Color
+    )
+    Set-FlowingProgressViewColors -Bar $Bar -Colors (Get-CodexFlowingPalette -Kind $Kind -Color $Color)
+}

@@ -1,5 +1,6 @@
 Import-Module (Join-Path $PSScriptRoot 'components/GitRepository/GitRepository.psm1') -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot 'components/SettingsStore/SettingsStore.psm1') -Force -ErrorAction Stop
+. (Join-Path $PSScriptRoot 'CodexJobStore.ps1')
 # Codex Resume Scheduler - local data readers (PowerShell 7).
 # Used by the GUI's short-lived background thread jobs and scheduled runners.
 # No UI controls, timers, or persistent services.
@@ -66,7 +67,7 @@ function Find-SessionRepository {
 
     # A prior schedule is evidence, not proof that it targeted the right checkout.
     if (Test-Path -LiteralPath $appDir -PathType Container) {
-        foreach ($saved in @(Get-ChildItem -LiteralPath $appDir -Filter 'CodexResume-*.json' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5)) {
+        foreach ($saved in @(Get-CodexJobPayloadFiles -Directory $appDir)) {
             try {
                 $job = Get-Content -LiteralPath $saved.FullName -Raw -ErrorAction Stop | ConvertFrom-Json
                 if ([string]$job.sessionId -ne [string]$Session.Id) { continue }

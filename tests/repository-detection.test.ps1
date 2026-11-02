@@ -9,6 +9,7 @@ if ($errors) { throw ($errors.Message -join '; ') }
 $function = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-SessionRepository' }, $true))
 if ($function.Count -ne 1) { throw 'Expected exactly one session repository selector.' }
 Invoke-Expression $function[0].Extent.Text
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'CodexJobStore.ps1')
 
 $script:roots = @{ 'C:\original' = 'C:/original'; 'C:\actual' = 'C:/actual'; 'C:/original' = 'C:/original' }
 function Get-RepositoryRoot {
@@ -49,6 +50,21 @@ try {
     if ($null -ne $found.Root -or $found.Candidates.Count -ne 2) { throw 'Prior schedules must not hide conflicting current checkout evidence.' }
     $found = Find-SessionRepository $session 'C:\actual'
     if ($found.Root -ne 'C:/actual' -or $found.AlternativeRoots[0] -ne 'C:/original') { throw 'Previous schedule must not override Codex metadata.' }
+    # Outcome records sort newest but are not job payloads. A valid old
+    # schedule must not be displaced even after many newer completed runs.
+    1..20 | ForEach-Object {
+        $outcome=Join-Path $appDir ("CodexResume-noise{0:00}.result.json" -f $_)
+        '{"schema":1,"status":"completed","at":"2026-01-01T00:00:00Z","attempt":0,"exitCode":0,"message":"","nextJob":""}' |
+            Set-Content -LiteralPath $outcome
+    }
+    $found = Find-SessionRepository $session
+    if ($null -ne $found.Root -or @($found.Candidates).Count -ne 2) {
+        throw 'Completed-run result records displaced older valid repository evidence.'
+    }
+    $payloads=@(Get-CodexJobPayloadFiles -Directory $appDir)
+    if ($payloads.Count -ne 1 -or $payloads[0].Name -ne 'CodexResume-prior.json') {
+        throw 'Job-file reader included result files or lost older saved jobs.'
+    }
     Write-Host 'Repository detection checks passed.'
 } finally {
     Remove-Item -LiteralPath $appDir -Recurse -Force

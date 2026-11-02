@@ -75,7 +75,7 @@ $refreshRuns.Add_Click({ try { Refresh-PendingList } catch { [System.Windows.For
 $cancelRun.Add_Click({
     if ($grid.SelectedRows.Count -ne 1) { [System.Windows.Forms.MessageBox]::Show('Select an upcoming task first.','No selection') | Out-Null; return }
     $name = [string]$grid.SelectedRows[0].Tag
-    if ([System.Windows.Forms.MessageBox]::Show("Disable the one-time task '$name'?",'Cancel scheduled run','YesNo','Question') -ne 'Yes') { return }
+    if ([System.Windows.Forms.MessageBox]::Show("Cancel and remove the one-time task '$name'?",'Cancel scheduled run','YesNo','Question') -ne 'Yes') { return }
     try {
         Remove-OneTimeTask -Name $name
         $payloadPath=Join-Path $appDir ($name + '.json')
@@ -88,6 +88,7 @@ $cancelRun.Add_Click({
         Request-UsageRefresh
     } catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Cancellation failed') | Out-Null }
 })
+$recentResults.Add_Click({ Show-CodexRunHistoryDialog -Owner $form -Directory $appDir })
 $openFolder.Add_Click({
     [void](New-Item -Path $appDir -ItemType Directory -Force)
     Start-Process explorer.exe -ArgumentList ('"' + $appDir + '"')

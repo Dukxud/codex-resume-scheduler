@@ -98,16 +98,16 @@ function Schedule-LimitRetry {
         throw
     }
     Write-Host "Quota '$BucketId' blocked; retry $attempt/4 scheduled for $($when.ToString('yyyy-MM-dd HH:mm')) (local)."
-    return $true
+    return $name
 }
 
 # Task Scheduler reports handler success; the persisted outcome distinguishes
 # completed work from a correctly registered retry.
 function Set-CodexRunOutcome {
-    param([string]$JobFile,[string]$Status,[int]$Attempt=0,$ExitCode=$null,[string]$Message='')
+    param([string]$JobFile,[string]$Status,[int]$Attempt=0,$ExitCode=$null,[string]$Message='',[string]$NextJob='')
     if (-not $JobFile -or -not [IO.Path]::IsPathRooted($JobFile)) { return }
     $outcomePath=[IO.Path]::ChangeExtension($JobFile,'.result.json')
-    [void](Write-JobOutcome -Path $outcomePath -Status $Status -Attempt $Attempt -ExitCode $ExitCode -Message $Message)
+    [void](Write-JobOutcome -Path $outcomePath -Status $Status -Attempt $Attempt -ExitCode $ExitCode -Message $Message -NextJob $NextJob)
 }
 function Invoke-CodexScheduledJob {
     [CmdletBinding()]
@@ -148,8 +148,9 @@ function Invoke-CodexScheduledJob {
         if ($auto -and [int]$job.retryAttempt -gt 0) {
             if (-not $state.canAttempt) {
                 if ($state.recommendationKind -eq 'exhausted-window' -and $state.recommendedResetAt -and [int]$job.retryAttempt -lt 4) {
-                    if (Schedule-LimitRetry $job ([long]$state.recommendedResetAt) ([long]$state.recommendedResetAt + 120) ([string]$state.bucketId) $AppDirectory $RuntimeDirectory) {
-                        Set-CodexRunOutcome -JobFile $JobFile -Status 'deferred' -Attempt ([int]$job.retryAttempt) -Message 'Another retry registered after verified quota reset.'
+                    $nextJob=Schedule-LimitRetry $job ([long]$state.recommendedResetAt) ([long]$state.recommendedResetAt + 120) ([string]$state.bucketId) $AppDirectory $RuntimeDirectory
+                    if ($nextJob) {
+                        Set-CodexRunOutcome -JobFile $JobFile -Status 'deferred' -Attempt ([int]$job.retryAttempt) -Message 'Another retry registered after verified quota reset.' -NextJob ([string]$nextJob)
                         return 0
                     }
                 } else { Write-Host "Usage still unavailable; no reliable future retry: $($state.blockedReason)" -ForegroundColor Yellow }
@@ -173,20 +174,20 @@ function Invoke-CodexScheduledJob {
         & $codex @argsList 2>&1 | Tee-Object -FilePath $events | Out-Host
         $result = $LASTEXITCODE
         Write-Host "Codex exit code: $result" -ForegroundColor $(if ($result -eq 0) { 'Green' } else { 'Yellow' })
-        $retryRegistered = $false
+        $nextJob = $null
         if ($auto -and $result -ne 0) {
             $retryHelper = Join-Path $PSScriptRoot 'CodexRetry.js'
             $cli = Get-CodexCliJs
             $assessment = & node $retryHelper --events $events --cli-js $cli --model $model --exit-code $result | Select-Object -Last 1 | ConvertFrom-Json
             if ($assessment.kind -eq 'retry') {
                 if (-not $assessment.accountId -or $assessment.accountId -cne $job.accountId) { throw 'Codex account changed or identity unavailable; refusing retry.' }
-                $retryRegistered = [bool](Schedule-LimitRetry $job ([long]$assessment.resetAt) ([long]$assessment.runAt) ([string]$assessment.bucketId) $AppDirectory $RuntimeDirectory)
+                $nextJob = Schedule-LimitRetry $job ([long]$assessment.resetAt) ([long]$assessment.runAt) ([string]$assessment.bucketId) $AppDirectory $RuntimeDirectory
             } elseif ($assessment.kind -eq 'unknown') {
                 Write-Host "Not auto-resuming: $($assessment.reason)" -ForegroundColor Yellow
             }
         }
-        if ($retryRegistered) {
-            Set-CodexRunOutcome -JobFile $JobFile -Status 'deferred' -Attempt ([int]$job.retryAttempt) -ExitCode ([int]$result) -Message 'Codex hit a verified limit; a retry is scheduled.'
+        if ($nextJob) {
+            Set-CodexRunOutcome -JobFile $JobFile -Status 'deferred' -Attempt ([int]$job.retryAttempt) -ExitCode ([int]$result) -Message 'Codex hit a verified limit; a retry is scheduled.' -NextJob ([string]$nextJob)
             return 0
         }
         if ([int]$result -eq 0) {

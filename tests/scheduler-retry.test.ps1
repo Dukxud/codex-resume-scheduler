@@ -40,6 +40,7 @@ try {
     $run = $reset + 120
     $scheduled = Schedule-LimitRetry $job $reset $run 'meter-1' $appDir $root
     Assert $scheduled 'Expected successful verified retry registration.'
+    Assert ($scheduled -match '^CodexResume-') 'Retry must return the next task name, not an ambiguous boolean.'
     Assert ($script:registered.Count -eq 1) 'Expected one new task.'
     $item = $script:registered[0]
     $expectedTime = [DateTimeOffset]::FromUnixTimeSeconds($run).LocalDateTime

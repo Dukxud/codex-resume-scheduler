@@ -40,5 +40,6 @@ if ($RunJob) {
 $script:ui = New-CodexUiState
 . (Join-Path $PSScriptRoot 'CodexUiForms.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiRefresh.ps1')
+. (Join-Path $PSScriptRoot 'CodexUiHistory.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiActions.ps1')
 . (Join-Path $PSScriptRoot 'CodexUiLifecycle.ps1')

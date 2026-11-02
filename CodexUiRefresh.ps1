@@ -76,6 +76,9 @@ function Apply-SessionList {
 function Apply-PendingList {
     param([object[]]$Items)
     $script:ui.Dashboard.pendingSnapshot = @($Items)
+    $index=[Collections.Generic.Dictionary[string,object]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach($item in @($Items)){if($item.Name){$index[[string]$item.Name]=$item}}
+    $script:ui.Dashboard.pendingIndex=$index
     $grid.Rows.Clear()
     foreach ($item in $Items) {
         $path = ([string]$item.Repo).TrimEnd([char[]]@('/','\'))

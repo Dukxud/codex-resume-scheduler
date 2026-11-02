@@ -26,7 +26,7 @@ function New-CodexUiState {
             compactRunPanel=$null; compactRunTrack=$null; compactTitleFont=$null
             compactToggle=$null; compactUsageModel=$null; compactUsageStatus=$null
             countdownBlue=$null; countdownTimer=$null; dashboardStandardOnly=@()
-            fullTitleFont=$null; pendingSnapshot=@(); runBarHosts=$null
+            fullTitleFont=$null; pendingSnapshot=@(); pendingIndex=@{}; runBarHosts=$null
         }
     }
 }

@@ -283,6 +283,7 @@ $refreshRuns = Add-Button 'Refresh runs' 18 774 154
 $cancelRun = Add-Button 'Cancel selected' 185 774 154
 $cancelRun.Enabled = $false
 $openFolder = Add-Button 'Open logs folder' 352 774 154
+$recentResults = Add-Button 'Recent results' 520 774 158
 $status = Add-Label 'Ready. Keep Windows awake and signed in for scheduled runs.' 18 823 880
 $status.ForeColor = [System.Drawing.Color]::DimGray
 $status.AutoEllipsis = $true

@@ -131,8 +131,10 @@ function Sync-DashboardRunBars {
     $hosts=$script:ui.Dashboard.runBarHosts
     if ($null -eq $hosts -or $grid.Columns.Count -lt 2) { return }
     $visible=[Collections.Generic.List[object]]::new()
-    if($grid.Visible){
-        for($rowIndex=0;$rowIndex -lt $grid.Rows.Count;$rowIndex++){
+    if($grid.Visible -and $grid.Rows.Count -gt 0 -and $grid.FirstDisplayedScrollingRowIndex -ge 0){
+        $first=$grid.FirstDisplayedScrollingRowIndex
+        $last=[math]::Min($grid.Rows.Count-1,$first + [math]::Max(0,$grid.DisplayedRowCount($true)))
+        for($rowIndex=$first;$rowIndex -le $last;$rowIndex++){
             if(-not $grid.Rows[$rowIndex].Visible){continue}
             $cell=$grid.GetCellDisplayRectangle(1,$rowIndex,$true)
             if($cell.Width -gt 32 -and $cell.Height -ge 22){
@@ -160,12 +162,14 @@ function Sync-DashboardRunBars {
 
 function Update-DashboardCountdowns {
     $now = Get-Date
+    $lookup=$script:ui.Dashboard.pendingIndex
     foreach ($row in @($grid.Rows)) {
-        $item = @($script:ui.Dashboard.pendingSnapshot | Where-Object { $_.Name -eq [string]$row.Tag } | Select-Object -First 1)
-        if ($item.Count -eq 0) { continue }
+        $name=[string]$row.Tag
+        if (-not $name -or -not $lookup.ContainsKey($name)) { continue }
+        $item=$lookup[$name]
         $cell = $row.Cells[1]
-        $label = Get-RunCountdownText $item[0].When $now
-        $percent = Get-RunCountdownPercent $item[0].When $item[0].CreatedAt $now
+        $label = Get-RunCountdownText $item.When $now
+        $percent = Get-RunCountdownPercent $item.When $item.CreatedAt $now
         if ($cell.Value -cne $label -or $cell.Tag -ne $percent) {
             $cell.Value = $label
             $cell.Tag = $percent
@@ -215,6 +219,8 @@ function Update-DashboardLayout {
         $hasRuns = $script:ui.Dashboard.pendingSnapshot.Count -gt 0
         foreach ($control in @($separator2,$pending,$grid,$refreshRuns,$cancelRun)) { $control.Visible = $hasRuns }
         $openFolder.Location = [System.Drawing.Point]::new($(if ($hasRuns) { 352 } else { 18 }),$(if ($hasRuns) { 774 } else { 523 }))
+        $recentResults.Location = [System.Drawing.Point]::new($(if ($hasRuns) { 520 } else { 185 }),$(if ($hasRuns) { 774 } else { 523 }))
+        $recentResults.Visible = $true
         $status.Location = [System.Drawing.Point]::new(18,$(if ($hasRuns) { 823 } else { 575 }))
         $form.MinimumSize = [System.Drawing.Size]::new(940,$(if ($hasRuns) { 875 } else { 625 }))
         $form.ClientSize = [System.Drawing.Size]::new(920,$(if ($hasRuns) { 865 } else { 615 }))
@@ -268,6 +274,8 @@ function Update-DashboardLayout {
     # Reserve space below the final card for appearance customization.
     $form.ClientSize = [System.Drawing.Size]::new(464,[math]::Max(166,$height+40))
     $script:ui.Dashboard.appearanceButton.Location = [System.Drawing.Point]::new(306,$form.ClientSize.Height-37)
+    $recentResults.Location = [System.Drawing.Point]::new(150,$form.ClientSize.Height-37)
+    $recentResults.Visible = $true
     $script:ui.Dashboard.appearanceButton.Size = [System.Drawing.Size]::new(140,32)
     Update-DashboardCountdowns
     Sync-DashboardRunBars

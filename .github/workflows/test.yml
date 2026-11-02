@@ -1,7 +1,9 @@
-name: Tests
+# Manual verification only. A merge or PR update must not start automated CI.
+# Production releases are deliberately disabled until separately authorized
+# after trusted signing and target-Windows acceptance.
+name: Tests (manual only)
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -159,42 +161,3 @@ jobs:
           path: PreviewArtifacts/*.zip
           retention-days: 30
 
-  release:
-    # Never publish an untested source-branch ZIP. Main is published only after
-    # the complete Windows test suite succeeds.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: validate
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Prepare signed Microsoft WebView2 SDK
-        shell: pwsh
-        run: ./scripts/Prepare-AeroWebView2.ps1
-      - name: Assemble numbered Windows release
-        shell: pwsh
-        env:
-          CODEX_SIGNING_THUMBPRINT: ${{ secrets.CODEX_SIGNING_THUMBPRINT }}
-          CODEX_TIMESTAMP_SERVER: ${{ vars.CODEX_TIMESTAMP_SERVER }}
-        run: |
-          $version = (Get-Content VERSION -Raw).Trim()
-          $archive = ./scripts/Package-CodexScheduler.ps1 -OutputDirectory $env:RUNNER_TEMP -CertificateThumbprint $env:CODEX_SIGNING_THUMBPRINT -TimestampServer $env:CODEX_TIMESTAMP_SERVER
-          $aero = ./scripts/Package-AeroComponent.ps1 -OutputDirectory $env:RUNNER_TEMP -CertificateThumbprint $env:CODEX_SIGNING_THUMBPRINT -TimestampServer $env:CODEX_TIMESTAMP_SERVER
-          $modules = ./scripts/Package-ReusableComponents.ps1 -OutputDirectory $env:RUNNER_TEMP -CertificateThumbprint $env:CODEX_SIGNING_THUMBPRINT -TimestampServer $env:CODEX_TIMESTAMP_SERVER
-          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_VERSION=$version"
-          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_ARCHIVE=$archive"
-          Add-Content -Path $env:GITHUB_ENV -Value "AERO_ARCHIVE=$aero"
-          Add-Content -Path $env:GITHUB_ENV -Value "MODULES_ARCHIVE=$modules"
-      - name: Publish versioned GitHub release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $tag = "v$env:RELEASE_VERSION"
-          gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
-          if ($LASTEXITCODE -eq 0) { Write-Host "Release $tag already exists; keeping it unchanged."; exit 0 }
-          gh release create $tag $env:RELEASE_ARCHIVE $env:AERO_ARCHIVE $env:MODULES_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --latest --title "Codex Resume Scheduler $tag" --notes "Original Windows v1.8 source colors with approved Aero Liquid v3 WebGL2 optics and fixed convex tip for usage limits and countdowns; Microsoft WebView2 SDK bundled, WPF fallback for unavailable runtime. Console-free Windows Script Host launcher; no custom executable or commercial libraries. Download the attached ZIP and open Start-Codex-Scheduler.vbs."
-          if ($LASTEXITCODE -ne 0) { throw 'Versioned release publishing failed.' }

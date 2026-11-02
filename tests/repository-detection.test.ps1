@@ -23,32 +23,32 @@ try {
     $rollout = Join-Path $appDir 'rollout.jsonl'
     Set-Content -LiteralPath $rollout -Value ''
     $session = [pscustomobject]@{ Id = '00000000-0000-0000-0000-000000000001'; Cwd = 'C:\original'; File = $rollout }
-    $found = Find-SessionRepository $session
+    $found = Find-SessionRepository $session -AppDirectory $appDir
     if ($found.Root -ne 'C:/original') { throw 'Unique startup root should be selected.' }
 
     $arguments = @{ workdir = 'C:\actual' } | ConvertTo-Json -Compress
     $record = @{ type = 'response_item'; payload = @{ type = 'function_call'; arguments = $arguments } } | ConvertTo-Json -Compress -Depth 8
     Set-Content -LiteralPath $rollout -Value $record
-    $found = Find-SessionRepository $session
+    $found = Find-SessionRepository $session -AppDirectory $appDir
     if ($null -ne $found.Root -or $found.Candidates.Count -ne 2) { throw 'Different worktrees must not silently select the startup root.' }
 
     # Codex App Server metadata wins over an unrelated original root; both
     # checkouts remain visible for the operator to select deliberately.
-    $found = Find-SessionRepository $session 'C:\actual'
+    $found = Find-SessionRepository $session 'C:\actual' -AppDirectory $appDir
     if ($found.Root -ne 'C:/actual' -or $found.Source -ne 'Codex thread/read') { throw 'Codex reported directory must take precedence.' }
     if (@($found.AlternativeRoots).Count -ne 1 -or $found.AlternativeRoots[0] -ne 'C:/original') { throw 'Competing checkout must be shown, not discarded.' }
-    $found = Find-SessionRepository $session 'C:\missing'
+    $found = Find-SessionRepository $session 'C:\missing' -AppDirectory $appDir
     if ($null -ne $found.Root) { throw 'Invalid metadata cwd must fall back to conflict detection.' }
 
     $session.Cwd = 'C:\home'
-    $found = Find-SessionRepository $session
+    $found = Find-SessionRepository $session -AppDirectory $appDir
     if ($found.Root -ne 'C:/actual') { throw 'A unique recent worktree should be detected.' }
 
     $previous = @{ sessionId = $session.Id; repo = 'C:/original' } | ConvertTo-Json
     Set-Content -LiteralPath (Join-Path $appDir 'CodexResume-prior.json') -Value $previous
-    $found = Find-SessionRepository $session
+    $found = Find-SessionRepository $session -AppDirectory $appDir
     if ($null -ne $found.Root -or $found.Candidates.Count -ne 2) { throw 'Prior schedules must not hide conflicting current checkout evidence.' }
-    $found = Find-SessionRepository $session 'C:\actual'
+    $found = Find-SessionRepository $session 'C:\actual' -AppDirectory $appDir
     if ($found.Root -ne 'C:/actual' -or $found.AlternativeRoots[0] -ne 'C:/original') { throw 'Previous schedule must not override Codex metadata.' }
     # Outcome records sort newest but are not job payloads. A valid old
     # schedule must not be displaced even after many newer completed runs.
@@ -57,7 +57,7 @@ try {
         '{"schema":1,"status":"completed","at":"2026-01-01T00:00:00Z","attempt":0,"exitCode":0,"message":"","nextJob":""}' |
             Set-Content -LiteralPath $outcome
     }
-    $found = Find-SessionRepository $session
+    $found = Find-SessionRepository $session -AppDirectory $appDir
     if ($null -ne $found.Root -or @($found.Candidates).Count -ne 2) {
         throw 'Completed-run result records displaced older valid repository evidence.'
     }

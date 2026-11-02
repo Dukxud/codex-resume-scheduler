@@ -8,17 +8,15 @@ function Start-DataRead {
         $job = Start-ThreadJob -ArgumentList @($sourceFolder,$localAppDir,$Kind,$Session) -ScriptBlock {
             param($Folder,$LocalAppDir,$Operation,$SelectedSession)
             $ErrorActionPreference = 'Stop'
-            $appDir = $LocalAppDir
-            $sessionIdPattern = '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
             . (Join-Path $Folder 'CodexData.ps1')
             switch ($Operation) {
                 'sessions'  { Get-RecentCliSessions }
-                'pending'   { Get-UpcomingCodexTasks }
+                'pending'   { Get-UpcomingCodexTasks -AppDirectory $LocalAppDir }
                 'selection' {
                     $reportedCwd = Get-ReportedThreadDirectory ([string]$SelectedSession.Id) $Folder
                     [pscustomobject]@{ Id = [string]$SelectedSession.Id;
                         Model = Read-SessionModel $SelectedSession;
-                        Found = Find-SessionRepository $SelectedSession $reportedCwd }
+                        Found = Find-SessionRepository $SelectedSession $reportedCwd -AppDirectory $LocalAppDir }
                 }
             }
         }

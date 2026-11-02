@@ -99,30 +99,52 @@ function Apply-SelectionResult {
 
 function Apply-CodexModelCatalog {
     param([Parameter(Mandatory)]$Snapshot)
-    $script:ui.Selection.models = @($Snapshot.models | Where-Object { $_ })
-    $previous = if ($script:ui.Selection.preferredModelId) { [string]$script:ui.Selection.preferredModelId } elseif ($script:ui.Selection.preferredSessionModel) { [string]$script:ui.Selection.preferredSessionModel } else { Get-SelectedModel }
-    $script:ui.Selection.preferredSessionModel = $null # Do not override a subsequent manual model choice.
+    # The selection controller alone owns the model and effort controls.
+    # An empty or broken catalog must clear stale choices and disable runs.
+    $models = @($Snapshot.models | Where-Object { $_ })
+    $previous = if ($script:ui.Selection.preferredModelId) {
+        [string]$script:ui.Selection.preferredModelId
+    } elseif ($script:ui.Selection.preferredSessionModel) {
+        [string]$script:ui.Selection.preferredSessionModel
+    } else { Get-SelectedModel }
+    $script:ui.Selection.models = $models
+    $script:ui.Selection.preferredSessionModel = $null
     $script:ui.Selection.updatingModels = $true
-    if ($script:ui.Selection.models.Count -gt 0) {
+    try {
         $modelBox.BeginUpdate()
-        $modelBox.Items.Clear()
-        foreach ($m in $script:ui.Selection.models) {
-            [void]$modelBox.Items.Add([pscustomobject]@{ Id = $m.id; Display = $m.name; Efforts = $m.efforts; DefaultEffort = $m.defaultEffort })
+        try {
+            $modelBox.Items.Clear()
+            foreach ($model in $models) {
+                [void]$modelBox.Items.Add([pscustomobject]@{
+                    Id=$model.id;Display=$model.name;Efforts=$model.efforts
+                    DefaultEffort=$model.defaultEffort
+                })
+            }
+        } finally { $modelBox.EndUpdate() }
+
+        if ($models.Count -eq 0) {
+            $modelBox.SelectedIndex = -1
+            $effortBox.Items.Clear()
+            $schedule.Enabled = $false
+            return
         }
-        $modelBox.EndUpdate()
-        $selected = @($script:ui.Selection.models | Where-Object { $_.id -eq $previous }) | Select-Object -First 1
-        if (-not $selected -and -not $previous) { $selected = @($script:ui.Selection.models | Where-Object { $_.isDefault }) | Select-Object -First 1 }
-        if (-not $selected -and -not $previous) { $selected = @($script:ui.Selection.models) | Select-Object -First 1 }
+        $selected = @($models | Where-Object { $_.id -eq $previous }) | Select-Object -First 1
+        if (-not $selected -and -not $previous) {
+            $selected = @($models | Where-Object { $_.isDefault }) | Select-Object -First 1
+        }
+        if (-not $selected -and -not $previous) { $selected = $models | Select-Object -First 1 }
         if ($selected) {
-            $found = $false
-            foreach ($item in $modelBox.Items) { if ($item.Id -eq $selected.id) { $modelBox.SelectedItem = $item; $found = $true; break } }
-            if (-not $found) { $modelBox.SelectedIndex = -1 }
-        }
+            $item = @($modelBox.Items | Where-Object { $_.Id -eq $selected.id }) | Select-Object -First 1
+            if ($item) { $modelBox.SelectedItem = $item }
+            else { $modelBox.SelectedIndex = -1 }
+        } else { $modelBox.SelectedIndex = -1 }
         Select-AvailableEfforts
         if ($selected) {
-            $script:ui.Selection.preferredModelId = '' # Later catalog refresh preserves the live selection.
+            # The live user selection now owns future catalog refresh behavior.
+            $script:ui.Selection.preferredModelId = ''
             $script:ui.Selection.preferredEffort = ''
         }
+    } finally {
+        $script:ui.Selection.updatingModels = $false
     }
-    $script:ui.Selection.updatingModels = $false
 }

@@ -5,6 +5,30 @@ Add-Type -AssemblyName System.Drawing -ErrorAction Stop
 $script:loadedSdk = $null
 $script:loaderHandle = [IntPtr]::Zero
 $script:supportCache = @{}
+# The caller owns Control.Tag. Internal state has a weak lifetime bound
+# to the control and is never injected into other applications' metadata.
+$script:viewStates = [System.Runtime.CompilerServices.ConditionalWeakTable[System.Windows.Forms.Control,object]]::new()
+
+function Get-AeroProgressViewPrivateState {
+    param([Parameter(Mandatory)][System.Windows.Forms.Control]$View)
+    $state = [object]$null
+    if (-not $script:viewStates.TryGetValue($View,[ref]$state)) {
+        throw 'The supplied control was not created by this AeroProgress module instance.'
+    }
+    return $state
+}
+
+function Get-AeroProgressViewStatus {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][System.Windows.Forms.Control]$View)
+    $state = Get-AeroProgressViewPrivateState -View $View
+    return [pscustomobject]@{
+        Ready = [bool]$state.Ready
+        Failure = $state.Failure
+        Color = [string]$state.Color
+        Value = if ($null -eq $state.State) { $null } else { [double]$state.State['value'] }
+    }
+}
 
 function Test-AeroProgressColor {
     param([Parameter(Mandatory)][string]$Color)
@@ -78,27 +102,27 @@ function New-AeroProgressView {
     $view.AllowExternalDrop = $false
     $view.DefaultBackgroundColor = [Drawing.Color]::Transparent
     $view.AccessibleName = $AccessibleName
-    $view.Tag = [pscustomobject]@{
-        Percent = $null; Color = $Color; Kind = ''
+    $viewState = [pscustomobject]@{
         Ready = $false; State = $null; Failure = $null
-        AllowedUri = $support.AssetUri.AbsoluteUri
+        Color = $Color; AllowedUri = $support.AssetUri.AbsoluteUri
     }
+    $script:viewStates.Add($view,$viewState)
     $creation = [Microsoft.Web.WebView2.WinForms.CoreWebView2CreationProperties]::new()
     $creation.UserDataFolder = [IO.Path]::GetFullPath($UserDataDirectory)
     $view.CreationProperties = $creation
     $view.Add_CoreWebView2InitializationCompleted({
         param($control,$eventArgs)
         if (-not $eventArgs.IsSuccess) {
-            $control.Tag.Failure = $eventArgs.InitializationException.Message
+            $viewState.Failure = $eventArgs.InitializationException.Message
             return
         }
-        $control.Tag.Failure = $null
+        $viewState.Failure = $null
         $settings = $control.CoreWebView2.Settings
         $settings.AreDefaultContextMenusEnabled = $false
         $settings.AreDevToolsEnabled = $false
         $settings.AreBrowserAcceleratorKeysEnabled = $false
         $settings.IsZoomControlEnabled = $false
-        $allowedUri = [string]$control.Tag.AllowedUri
+        $allowedUri = [string]$viewState.AllowedUri
         $control.CoreWebView2.Add_NavigationStarting({
             param($source,$event)
             if ($event.Uri -ne $allowedUri) { $event.Cancel = $true }
@@ -114,27 +138,28 @@ function New-AeroProgressView {
         $control.CoreWebView2.Add_ProcessFailed({
             param($source,$event)
             if (-not $control.IsDisposed) {
-                $control.Tag.Ready = $false
-                $control.Tag.Failure = "WebView2 process failure: $($event.ProcessFailedKind)"
+                $viewState.Ready = $false
+                $viewState.Failure = "WebView2 process failure: $($event.ProcessFailedKind)"
             }
         }.GetNewClosure())
     }.GetNewClosure())
     $view.Add_NavigationCompleted({
         param($control,$eventArgs)
         if ($eventArgs.IsSuccess -and -not $control.IsDisposed) {
-            $control.Tag.Ready = $true
-            $control.Tag.Failure = $null
-            if ($null -ne $control.Tag.State) {
+            $viewState.Ready = $true
+            $viewState.Failure = $null
+            if ($null -ne $viewState.State) {
                 $control.CoreWebView2.PostWebMessageAsJson(
-                    ($control.Tag.State | ConvertTo-Json -Compress -Depth 4))
+                    ($viewState.State | ConvertTo-Json -Compress -Depth 4))
             }
         } elseif (-not $eventArgs.IsSuccess) {
-            $control.Tag.Failure = "Navigation failed: $($eventArgs.WebErrorStatus)"
+            $viewState.Failure = "Navigation failed: $($eventArgs.WebErrorStatus)"
         }
-    })
+    }.GetNewClosure())
     $Parent.Controls.Add($view)
     try { $view.Source = $support.AssetUri }
     catch {
+        [void]$script:viewStates.Remove($view)
         $Parent.Controls.Remove($view)
         $view.Dispose()
         throw
@@ -146,6 +171,7 @@ function Set-AeroProgressViewState {
     param([Parameter(Mandatory)][System.Windows.Forms.Control]$View,
           [Parameter(Mandatory)][System.Collections.IDictionary]$State)
     if ($View.IsDisposed) { return }
+    $viewState = Get-AeroProgressViewPrivateState -View $View
     if ($State['type'] -cne 'set') { throw 'Invalid Aero message type' }
     $color = [string]$State['color']
     if (-not (Test-AeroProgressColor $color)) { throw 'Invalid Aero color' }
@@ -163,11 +189,11 @@ function Set-AeroProgressViewState {
         finish=[int]$State['finish'];lighting=[int]$State['lighting']
         shimmer=$shimmer;speed=$speed;aero=[bool]$State['aero']
     }
-    $View.Tag.State = $snapshot
-    $View.Tag.Color = $color
-    if ($View.Tag.Ready -and $null -ne $View.CoreWebView2) {
+    $viewState.State = $snapshot
+    $viewState.Color = $color
+    if ($viewState.Ready -and $null -ne $View.CoreWebView2) {
         $View.CoreWebView2.PostWebMessageAsJson(($snapshot | ConvertTo-Json -Compress -Depth 4))
     }
 }
 
-Export-ModuleMember -Function Test-AeroProgressColor,Test-AeroProgressSupport,New-AeroProgressView,Set-AeroProgressViewState
+Export-ModuleMember -Function Test-AeroProgressColor,Test-AeroProgressSupport,New-AeroProgressView,Set-AeroProgressViewState,Get-AeroProgressViewStatus

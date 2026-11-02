@@ -91,9 +91,18 @@ function Test-AeroRenderer {
     return $script:aeroAvailable
 }
 
+# Codex owns this metadata and can also inject a host-specific failure.
+# The renderer module independently reports asynchronous WebView2 failures.
+function Get-CodexAeroFailure {
+    param([System.Windows.Forms.Control]$Bar)
+    if ($Bar.Tag -and $Bar.Tag.Failure) { return [string]$Bar.Tag.Failure }
+    return [string](Get-AeroProgressViewStatus -View $Bar).Failure
+}
+
 function Send-AeroState {
     param([System.Windows.Forms.Control]$Bar)
-    if (-not $Bar -or $Bar.IsDisposed -or $Bar.Tag.Failure -or (Get-ProgressHostSurface -Primary $Bar) -ne $Bar) { return }
+    if (-not $Bar -or $Bar.IsDisposed -or (Get-ProgressHostSurface -Primary $Bar) -ne $Bar) { return }
+    if (Get-CodexAeroFailure -Bar $Bar) { return }
     # The module queues this state if WebView2 has not finished starting.
     Set-AeroProgressViewState -View $Bar -State @{
         type='set'
@@ -111,7 +120,9 @@ function Send-AeroState {
 # stays as the stable caller reference; its fallback is a WPF ElementHost.
 function Ensure-AeroFallback {
     param([System.Windows.Forms.Control]$Bar)
-    if (-not $Bar -or $Bar.IsDisposed -or -not $Bar.Tag.Failure -or (Get-ProgressHostSurface -Primary $Bar) -ne $Bar) { return }
+    if (-not $Bar -or $Bar.IsDisposed -or (Get-ProgressHostSurface -Primary $Bar) -ne $Bar) { return }
+    $failure = Get-CodexAeroFailure -Bar $Bar
+    if (-not $failure) { return }
     $kind=[string]$Bar.Tag.Kind
     $color=if($Bar.Tag.Color){[string]$Bar.Tag.Color}else{[string]$script:aeroAppearance[$kind]}
     $factory={
@@ -119,7 +130,7 @@ function Ensure-AeroFallback {
         return New-FlowingProgressBar $parent $bounds.X $bounds.Y $bounds.Width $bounds.Height $kind -Color $color
     }.GetNewClosure()
     try {
-        $replacement=Repair-ProgressHost -Primary $Bar -Failed ([bool]$Bar.Tag.Failure) -FallbackFactory $factory
+        $replacement=Repair-ProgressHost -Primary $Bar -Failed $true -FallbackFactory $factory
         if($replacement){Set-FlowingProgress $replacement $Bar.Tag.Percent}
     } catch {
         $script:aeroError = "Aero recovery failed: $($_.Exception.Message)"
@@ -190,7 +201,11 @@ function New-AeroProgressBar {
             -Color $chosen -AccessibleName $(if ($Kind -eq 'quota') { 'Usage remaining' } else { 'Time until scheduled run' }) `
             -SdkDirectory $script:aeroSdk -AssetPath $script:aeroAsset `
             -UserDataDirectory (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CodexResumeScheduler/AeroWebView2')
-        $view.Tag.Kind = $Kind
+        # This Tag belongs only to the Codex adapter; AeroProgress never reads
+        # or overwrites it, so independent applications may use their own Tag.
+        $view.Tag = [pscustomobject]@{
+            Kind = $Kind; Percent = $null; Color = $chosen; Failure = $null
+        }
         $script:aeroBars.Add($view)
         Start-AeroHealthMonitor
         Send-AeroState $view

@@ -8,7 +8,7 @@
     CompatiblePSEditions = @('Core')
     FunctionsToExport = @(
         'Test-AeroProgressColor','Test-AeroProgressSupport',
-        'New-AeroProgressView','Set-AeroProgressViewState'
+        'New-AeroProgressView','Set-AeroProgressViewState','Get-AeroProgressViewStatus'
     )
     CmdletsToExport = @()
     VariablesToExport = @()

@@ -113,7 +113,12 @@ function New-AeroProgressView {
     $view.Add_CoreWebView2InitializationCompleted({
         param($control,$eventArgs)
         if (-not $eventArgs.IsSuccess) {
-            $viewState.Failure = $eventArgs.InitializationException.Message
+            $viewState.Ready = $false
+            $viewState.Failure = if ($eventArgs.InitializationException) {
+                [string]$eventArgs.InitializationException.Message
+            } else {
+                'WebView2 initialization failed without exception details.'
+            }
             return
         }
         $viewState.Failure = $null
@@ -153,14 +158,16 @@ function New-AeroProgressView {
                     ($viewState.State | ConvertTo-Json -Compress -Depth 4))
             }
         } elseif (-not $eventArgs.IsSuccess) {
+            $viewState.Ready = $false
             $viewState.Failure = "Navigation failed: $($eventArgs.WebErrorStatus)"
         }
     }.GetNewClosure())
-    $Parent.Controls.Add($view)
-    try { $view.Source = $support.AssetUri }
-    catch {
+    try {
+        $Parent.Controls.Add($view)
+        $view.Source = $support.AssetUri
+    } catch {
         [void]$script:viewStates.Remove($view)
-        $Parent.Controls.Remove($view)
+        if ($view.Parent) { $view.Parent.Controls.Remove($view) }
         $view.Dispose()
         throw
     }

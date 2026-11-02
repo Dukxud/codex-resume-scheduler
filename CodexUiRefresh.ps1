@@ -1,7 +1,7 @@
 # Asynchronous Codex data-job dispatcher. Domain rendering lives in individual controllers.
 function Start-DataRead {
     param([ValidateSet('sessions','pending','selection')][string]$Kind, $Session = $null)
-    if ($script:ui.Selection.dataJobs[$Kind]) { $script:ui.Selection.dataQueued[$Kind] = $true; return }
+    if ($script:ui.Async.dataJobs[$Kind]) { $script:ui.Async.dataQueued[$Kind] = $true; return }
     try {
         $sourceFolder = $PSScriptRoot
         $localAppDir = $appDir
@@ -22,7 +22,7 @@ function Start-DataRead {
                 }
             }
         }
-        $script:ui.Selection.dataJobs[$Kind] = $job
+        $script:ui.Async.dataJobs[$Kind] = $job
         if ($Kind -eq 'selection') { $script:ui.Selection.selectionJobGeneration = $script:ui.Selection.selectionGeneration }
     } catch { Update-Status "$Kind refresh failed to start: $($_.Exception.Message)" }
 }
@@ -34,9 +34,9 @@ $dataPoll = New-Object System.Windows.Forms.Timer
 $dataPoll.Interval = 250
 $dataPoll.Add_Tick({
     foreach ($kind in @('sessions','pending','selection')) {
-        $job = $script:ui.Selection.dataJobs[$kind]
+        $job = $script:ui.Async.dataJobs[$kind]
         if (-not $job -or $job.State -notin @('Completed','Failed','Stopped')) { continue }
-        $script:ui.Selection.dataJobs.Remove($kind)
+        $script:ui.Async.dataJobs.Remove($kind)
         try {
             $result = @(Receive-Job -Job $job -ErrorAction Stop)
             switch ($kind) {
@@ -46,8 +46,8 @@ $dataPoll.Add_Tick({
             }
         } catch { Update-Status "$kind refresh failed: $($_.Exception.Message)" }
         finally { Remove-Job -Job $job -Force -ErrorAction SilentlyContinue }
-        if ($script:ui.Selection.dataQueued[$kind]) {
-            $script:ui.Selection.dataQueued[$kind] = $false
+        if ($script:ui.Async.dataQueued[$kind]) {
+            $script:ui.Async.dataQueued[$kind] = $false
             if ($kind -eq 'selection') {
                 if ($sessionBox.SelectedItem) { Start-DataRead 'selection' $sessionBox.SelectedItem }
             } else { Start-DataRead $kind }

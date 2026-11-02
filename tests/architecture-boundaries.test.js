@@ -32,7 +32,7 @@ test('worker loads no GUI, CodexData or ambient session globals',()=>{
  assert.ok(run>=0 && uiImport>run,'worker must exit before any UI module loads');
 });
 test('UI state ownership is explicit and cross-file categories are declared',()=>{
- const groups=new Set(['Selection','Usage','Preferences','Dashboard']);
+ const groups=new Set(['Selection','Usage','Preferences','Dashboard','Async']);
  for(const file of ui){
    const source=read(file);
    for(const match of source.matchAll(/\$script:([A-Za-z_]\w*)/g)){
@@ -71,4 +71,15 @@ test('run history is user-visible and retry linking is persistent',()=>{
  assert.match(read('CodexUiForms.ps1'),/\$recentResults = Add-Button/);
  assert.match(read('CodexUiActions.ps1'),/Show-CodexRunHistoryDialog/);
  assert.match(read('CodexRunEngine.ps1'),/NextJob \(\[string\]\$nextJob\)/);
+});
+
+test('model catalog and async jobs have single state-owning controllers',()=>{
+ const selection=read('CodexUiSelection.ps1');
+ const usage=read('CodexUiUsage.ps1');
+ const asyncDispatcher=read('CodexUiRefresh.ps1');
+ assert.match(selection,/function Apply-CodexModelCatalog/);
+ assert.match(usage,/Apply-CodexModelCatalog -Snapshot \$Snapshot/);
+ assert.doesNotMatch(usage,/\$script:ui\.Selection\.[a-zA-Z]+\s*=/,'usage controller must not mutate selection-owned state');
+ assert.doesNotMatch(asyncDispatcher,/\$script:ui\.Selection\.data(?:Jobs|Queued)/);
+ assert.match(asyncDispatcher,/\$script:ui\.Async\.dataJobs/);
 });

@@ -23,11 +23,11 @@ foreach ($definition in $definitions | Where-Object Name -in @('Refresh-SessionL
 }
 # Start-DataRead must coalesce an in-flight request, not start parallel duplicates.
 Invoke-Expression (@($definitions | Where-Object Name -eq 'Start-DataRead')[0].Extent.Text)
-$script:ui.Selection.dataJobs = @{}; $script:ui.Selection.dataQueued = @{}; $script:startedJobs = 0
+$script:ui.Async.dataJobs = @{}; $script:ui.Async.dataQueued = @{}; $script:startedJobs = 0
 function Start-ThreadJob { param($ArgumentList,$ScriptBlock) $script:startedJobs++; [pscustomobject]@{ State = 'Running' } }
 function Update-Status { param($Text) throw "Unexpected start failure: $Text" }
 $appDir = 'C:\fake'
 Start-DataRead -Kind 'pending'
 Start-DataRead -Kind 'pending'
-if ($script:startedJobs -ne 1 -or -not $script:ui.Selection.dataQueued['pending']) { throw 'Duplicate pending refresh was not coalesced.' }
+if ($script:startedJobs -ne 1 -or -not $script:ui.Async.dataQueued['pending']) { throw 'Duplicate pending refresh was not coalesced.' }
 Write-Host 'Background refresh wiring and coalescing checks passed.'

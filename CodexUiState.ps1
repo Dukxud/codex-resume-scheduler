@@ -5,13 +5,14 @@ function New-CodexUiState {
     param($Settings=$null)
     $state=[pscustomobject]@{
         Selection = @{
-            dataJobs=@{}; dataQueued=@{}; loadingSessions=$false
+            loadingSessions=$false
             models=@(); modelCatalogLoaded=$false
             preferredEffort=''; preferredModelId=''; preferredSessionId=''
             preferredSessionModel=''; repoSelectionSessionId=''
             selectionGeneration=0; selectionJobGeneration=0; selectionOriginalModel=''
             startupSavedModelId=''; startupSavedSessionId=''; updatingModels=$false
         }
+        Async = @{ dataJobs=@{}; dataQueued=@{} }
         Usage = @{
             usageSnapshot=$null; usageRequestedModel=''; usageSnapshotRequestedModel=''
             usageReadFailed=$false; usageProcess=$null; usageStarted=[datetime]::MinValue

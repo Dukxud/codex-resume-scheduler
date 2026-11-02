@@ -28,7 +28,7 @@ $form.Add_FormClosed({
     $autoRefresh.Stop()
     $usagePoll.Stop()
     $dataPoll.Stop()
-    foreach ($job in @($script:ui.Selection.dataJobs.Values)) {
+    foreach ($job in @($script:ui.Async.dataJobs.Values)) {
         try { Stop-Job -Job $job -ErrorAction SilentlyContinue; Remove-Job -Job $job -Force -ErrorAction SilentlyContinue } catch { }
     }
     if ($script:aeroHealthTimer) { $script:aeroHealthTimer.Stop(); $script:aeroHealthTimer.Dispose() }

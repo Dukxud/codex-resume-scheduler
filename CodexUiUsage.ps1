@@ -66,32 +66,7 @@ function Apply-UsageSnapshot {
     $script:ui.Usage.usageSnapshotRequestedModel = $script:ui.Usage.usageRequestedModel
     $script:ui.Usage.usageReadFailed = $false
     $script:ui.Usage.usageChecked = Get-Date
-    $script:ui.Selection.models = @($Snapshot.models | Where-Object { $_ })
-    $previous = if ($script:ui.Selection.preferredModelId) { [string]$script:ui.Selection.preferredModelId } elseif ($script:ui.Selection.preferredSessionModel) { [string]$script:ui.Selection.preferredSessionModel } else { Get-SelectedModel }
-    $script:ui.Selection.preferredSessionModel = $null # Do not override a subsequent manual model choice.
-    $script:ui.Selection.updatingModels = $true
-    if ($script:ui.Selection.models.Count -gt 0) {
-        $modelBox.BeginUpdate()
-        $modelBox.Items.Clear()
-        foreach ($m in $script:ui.Selection.models) {
-            [void]$modelBox.Items.Add([pscustomobject]@{ Id = $m.id; Display = $m.name; Efforts = $m.efforts; DefaultEffort = $m.defaultEffort })
-        }
-        $modelBox.EndUpdate()
-        $selected = @($script:ui.Selection.models | Where-Object { $_.id -eq $previous }) | Select-Object -First 1
-        if (-not $selected -and -not $previous) { $selected = @($script:ui.Selection.models | Where-Object { $_.isDefault }) | Select-Object -First 1 }
-        if (-not $selected -and -not $previous) { $selected = @($script:ui.Selection.models) | Select-Object -First 1 }
-        if ($selected) {
-            $found = $false
-            foreach ($item in $modelBox.Items) { if ($item.Id -eq $selected.id) { $modelBox.SelectedItem = $item; $found = $true; break } }
-            if (-not $found) { $modelBox.SelectedIndex = -1 }
-        }
-        Select-AvailableEfforts
-        if ($selected) {
-            $script:ui.Selection.preferredModelId = '' # Later catalog refresh preserves the live selection.
-            $script:ui.Selection.preferredEffort = ''
-        }
-    }
-    $script:ui.Selection.updatingModels = $false
+    Apply-CodexModelCatalog -Snapshot $Snapshot
     $windows = @($Snapshot.windows | Where-Object { $null -ne $_ })
     Render-UsageCard $usageCards[0] $(if ($windows.Count -ge 1) { $windows[0] } else { $null }) 'Primary window'
     Render-UsageCard $usageCards[1] $(if ($windows.Count -ge 2) { $windows[1] } else { $null }) 'Secondary window'

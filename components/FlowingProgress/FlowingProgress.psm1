@@ -127,8 +127,7 @@ function Set-FlowingProgressViewColors {
     if ($Bar.IsDisposed) { return }
     foreach ($name in @('BaseTop','BaseBottom','Track','Outline')) {
         if (-not $Colors.ContainsKey($name) -or
-            [string]$Colors[$name] -notmatch '^#[0-9a-fA-F]{6}
-) {
+            [string]$Colors[$name] -notmatch '^#[0-9a-fA-F]{6}$') {
             throw "Invalid $name color; expected #RRGGBB."
         }
     }

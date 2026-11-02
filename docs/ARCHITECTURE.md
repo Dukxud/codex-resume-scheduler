@@ -86,6 +86,12 @@ The second-app test exercises all ten component imports, while separate acceptan
 - **Dashboard** owns visual controls, the pending run snapshot and its keyed index. `CodexUiPending.ps1` publishes the index and `CodexDashboard.ps1` renders only visible progress bars.
 - **Preferences** owns saved drafts and appearance configuration; event actions and lifecycle compose these controllers, rather than becoming reusable infrastructure.
 
-The boundaries are enforced by source-level dependency tests and isolated model-controller tests. Shared WinForms control objects in the application-specific presentation remain an intentional Windows desktop orchestration detail, **not** an exported component contract.
+Source-level dependency checks and isolated model-controller test sources document the intended boundaries. Shared WinForms control objects in the application-specific presentation remain an intentional Windows desktop orchestration detail, **not** an exported component contract.
 
 One-time task creation normalizes explicitly UTC timestamps to local Windows trigger times, rejects ambiguous/nonexistent daylight-saving local timestamps, and records real outcomes. Countdown arithmetic uses UTC instants even when timestamps are shown in local time.
+
+## Current adversarial source-level corrections
+
+Browse invalidation now targets the Async controller's work queue. The native WPF fallback path registers owned bars and supports in-place palette changes through a named template fill, while the reusable FlowingProgress module stores values without modifying caller Tag data. CodexData now receives the application directory explicitly, and scheduling acknowledges validated registration independently of later preference or refresh errors.
+
+No CI or Windows execution was used for this latest pass. Runtime validation of the changes remains necessary before merging. See ADVERSARIAL-SOURCE-REVIEW.md.

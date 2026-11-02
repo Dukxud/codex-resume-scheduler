@@ -66,7 +66,7 @@ $browse.Add_Click({
     if (Test-Path -LiteralPath $repoBox.Text -PathType Container) { $dialog.SelectedPath = $repoBox.Text }
     if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $root = Get-RepositoryRoot $dialog.SelectedPath
-        if ($root) { $script:ui.Selection.selectionGeneration++; $script:ui.Selection.dataQueued['selection'] = $false; $repoBox.Text = $root }
+        if ($root) { $script:ui.Selection.selectionGeneration++; $script:ui.Async.dataQueued['selection'] = $false; $repoBox.Text = $root }
         else { [System.Windows.Forms.MessageBox]::Show('Select a folder inside a Git repository.','Invalid folder') | Out-Null }
     }
     $dialog.Dispose()

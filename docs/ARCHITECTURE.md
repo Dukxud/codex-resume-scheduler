@@ -27,14 +27,14 @@ There are two layers:
 - CodexUiUsage.ps1 — short-lived quota-process and snapshot presentation.
 - CodexUiHistory.ps1 — user-visible persisted run outcomes.
 - CodexJobStore.ps1 — read-only payload/history discovery that excludes result records from repository searches.
-- CodexUiState.ps1 — explicit, separately owned selection, usage, preferences and dashboard contexts; reusable modules do not import this.
+- CodexUiState.ps1 — explicit, separately owned selection, usage, preferences, dashboard and asynchronous-dispatch contexts; reusable modules do not import this.
 - CodexUiRefresh.ps1 — coalesced background-operation dispatcher, delegating to the selection, pending and usage controllers.
 - CodexUiActions.ps1 — user actions, autosave and task creation.
 - CodexUiLifecycle.ps1 — window startup/shutdown and resource cleanup.
 - CodexDashboard.ps1 — standard/compact presentation and countdown display.
 - CodexAeroBar.ps1 — scheduler-specific colors, WebView2/WPF fallback and disposal.
 - CodexBarAppearance.ps1 — transactional appearance editor.
-- CodexFlowingBar.ps1 — native WPF fallback.
+- CodexFlowingBar.ps1 — Codex-specific color/theme adapter to the independent native WPF FlowingProgress module.
 
 ## Contract and data flow
 
@@ -62,7 +62,7 @@ New tasks use a separate fingerprinted runtime folder. Older tasks retain their 
 
 ## Adversarial clean-code pass
 
-The standalone worker no longer imports CodexData or references UI globals; its Git and account checks are explicit imports. The UI has a declared state owner grouped by responsibility rather than dozens of unowned script variables. ProgressHost owns the primary/fallback lifecycle, and the dashboard allocates one bar per **visible row**, never per queued task. `account/read` provides a hashed ChatGPT-email fallback when the rate-limit account identifier is absent; the service never persists or exposes the raw email. A multi-workspace switch under the same email cannot be distinguished without an authoritative backend account identifier; unattended retry still refuses completely unknown identities.
+The standalone worker no longer imports CodexData or references UI globals; its Git and account checks are explicit imports. The UI has a declared state owner grouped by responsibility rather than dozens of unowned script variables. ProgressHost owns the primary/fallback lifecycle, and the dashboard allocates one bar per **visible row**, never per queued task. `account/read.workspaceRouting.chatgptAccountId` provides experimental, workspace-specific identity if a rate-limit account ID is absent. Both paths use the same canonical hash, and contradictory IDs fail closed. Email-only identity is never accepted; two workspaces sharing an email must not be conflated.
 
 A queued retry is persisted as `deferred`, not `completed`. Removing an upcoming task unregisters it and records `cancelled`, while logs are retained for audit. Existing work may still be interrupted by Windows sign-out or sleeping, and real hardware/antivirus behavior remains outside CI.
 
@@ -75,3 +75,17 @@ Run-history files (`*.result.json`) are parsed independently of pending job payl
 The WebView2 module loads its native SDK by explicit path, leaves process `PATH` untouched, and retries dependency checks after failures. ProgressHost owns fallback controls without claiming caller `Control.Tag`.
 
 The second-app test exercises all ten component imports, while separate acceptance cases invoke generic scheduling operations and test real, packaged WebGL2 rendering with no Codex code. CI cannot establish real account operations, Bitdefender response or Windows Task Scheduler behavior on BLACK-PUDDLE.
+
+## Application-state responsibility contracts
+
+`CodexUiState.ps1` constructs the application-only context. The context is deliberately **not** a reusable module. It carries only state needed to coordinate application-specific controllers; consumers of the ten `components/` modules never import it.
+
+- **Selection** owns selected conversations, repository alternatives, model catalog and effort control. `CodexUiSelection.ps1` is the sole model-catalog reconciler; usage only calls `Apply-CodexModelCatalog` instead of mutating selection fields directly. An empty catalog clears stale model and effort controls and blocks scheduling.
+- **Usage** owns the short-lived query process, quota snapshots, and refresh state, through `CodexUiUsage.ps1`.
+- **Async** owns coalesced background jobs and queued requests. `CodexUiRefresh.ps1` handles dispatch, not domain-specific result rendering.
+- **Dashboard** owns visual controls, the pending run snapshot and its keyed index. `CodexUiPending.ps1` publishes the index and `CodexDashboard.ps1` renders only visible progress bars.
+- **Preferences** owns saved drafts and appearance configuration; event actions and lifecycle compose these controllers, rather than becoming reusable infrastructure.
+
+The boundaries are enforced by source-level dependency tests and isolated model-controller tests. Shared WinForms control objects in the application-specific presentation remain an intentional Windows desktop orchestration detail, **not** an exported component contract.
+
+One-time task creation normalizes explicitly UTC timestamps to local Windows trigger times, rejects ambiguous/nonexistent daylight-saving local timestamps, and records real outcomes. Countdown arithmetic uses UTC instants even when timestamps are shown in local time.

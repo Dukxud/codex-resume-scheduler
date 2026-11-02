@@ -8,7 +8,7 @@ $env:CODEX_BAR_RENDERER = 'wpf'
 $root = Split-Path -Parent $PSScriptRoot
 foreach ($spec in @(
     @('New-UsageCard','CodexUiForms.ps1'),
-    @('Render-UsageCard','CodexUiRefresh.ps1')
+    @('Render-UsageCard','CodexUiUsage.ps1')
 )) {
     $tokens = $null; $parseErrors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile(

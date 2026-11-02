@@ -8,7 +8,7 @@ const root=path.resolve(__dirname,'..');
 const read=file=>fs.readFileSync(path.join(root,file),'utf8');
 const modules=['AeroProgress','Countdown','SettingsStore','RuntimeBundle','OneTimeTasks',
   'GitRepository','JobOutcomes','WindowShell','ProgressHost','FlowingProgress'];
-const ui=['CodexUiForms.ps1','CodexUiRefresh.ps1','CodexUiActions.ps1','CodexUiLifecycle.ps1','CodexDashboard.ps1'];
+const ui=['CodexUiForms.ps1','CodexUiSelection.ps1','CodexUiPending.ps1','CodexUiUsage.ps1','CodexUiRefresh.ps1','CodexUiActions.ps1','CodexUiLifecycle.ps1','CodexDashboard.ps1'];
 test('every independently importable component is explicitly manifested and Codex-free',()=>{
  for(const name of modules){
    const source=read('components/'+name+'/'+name+'.psm1');

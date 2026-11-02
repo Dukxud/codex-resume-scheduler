@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $root 'CodexUiState.ps1')
 $script:ui = New-CodexUiState
-$gui = Get-Content -LiteralPath (Join-Path $root 'CodexUiRefresh.ps1') -Raw
+$gui = @('CodexUiRefresh.ps1','CodexUiSelection.ps1','CodexUiPending.ps1','CodexUiUsage.ps1') | ForEach-Object { Get-Content -LiteralPath (Join-Path $root $_) -Raw } | Out-String
 $data = Get-Content -LiteralPath (Join-Path $root 'CodexData.ps1') -Raw
 $tokens = $null; $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseInput($gui, [ref]$tokens, [ref]$parseErrors)

@@ -126,63 +126,6 @@ $autoResumeCheck.Size = [System.Drawing.Size]::new(520,21)
 $autoResumeCheck.Checked = if ($script:ui.Preferences.savedDraft -and $script:ui.Preferences.savedDraft.autoResume -is [bool]) { [bool]$script:ui.Preferences.savedDraft.autoResume } else { $true }
 $form.Controls.Add($autoResumeCheck)
 
-function Get-SelectedModel {
-    if ($modelBox.SelectedItem -and $modelBox.SelectedItem.Id) { return [string]$modelBox.SelectedItem.Id }
-    return ''
-}
-function Select-AvailableEfforts {
-    $model = Get-SelectedModel
-    $entry = @($script:ui.Selection.models | Where-Object { $_.id -ceq $model }) | Select-Object -First 1
-    $prior = [string]$effortBox.SelectedItem
-    $effortBox.Items.Clear()
-    if ($entry) {
-        foreach ($effort in @($entry.efforts | Where-Object { $_ -ne 'ultra' })) { [void]$effortBox.Items.Add([string]$effort) }
-        if ($model -eq $script:ui.Selection.preferredModelId -and $effortBox.Items.Contains($script:ui.Selection.preferredEffort)) { $effortBox.SelectedItem = $script:ui.Selection.preferredEffort }
-        elseif ($effortBox.Items.Contains($prior)) { $effortBox.SelectedItem = $prior }
-        elseif ($effortBox.Items.Contains([string]$entry.defaultEffort)) { $effortBox.SelectedItem = [string]$entry.defaultEffort }
-        elseif ($effortBox.Items.Count -gt 0) { $effortBox.SelectedIndex = 0 }
-    }
-    $schedule.Enabled = ($null -ne $entry -and $effortBox.SelectedIndex -ge 0)
-}
-
-
-# Launch the existing CodexUsage.js reader without blocking the Windows Forms
-# message loop. The UI polls only for process completion; no persistent service.
-function Start-UsageRead {
-    $node = (Get-Command node.exe -ErrorAction Stop).Source
-    $cliJs = Get-CodexCliJs
-    $helper = Join-Path $PSScriptRoot 'CodexUsage.js'
-    if (-not (Test-Path -LiteralPath $cliJs -PathType Leaf)) { throw 'Codex npm entrypoint not found. Update/install Codex via npm.' }
-    if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'CodexUsage.js is missing. Extract the complete release.' }
-    $start = [System.Diagnostics.ProcessStartInfo]::new()
-    $start.FileName = $node
-    [void]$start.ArgumentList.Add($helper)
-    [void]$start.ArgumentList.Add('--cli-js')
-    [void]$start.ArgumentList.Add($cliJs)
-    $chosen = Get-DashboardUsageModel
-    if ($chosen) { [void]$start.ArgumentList.Add('--model'); [void]$start.ArgumentList.Add($chosen) }
-    $start.RedirectStandardOutput = $true
-    $start.RedirectStandardError = $true
-    $start.UseShellExecute = $false
-    $start.CreateNoWindow = $true
-    $process = [System.Diagnostics.Process]::new()
-    $process.StartInfo = $start
-    try {
-        if (-not $process.Start()) { throw 'Could not start Codex usage reader.' }
-        $script:ui.Usage.usageRequestedModel = $chosen
-        return $process
-    } catch {
-        $process.Dispose()
-        throw
-    }
-}
-
-function Format-ResetTime {
-    param($Seconds)
-    if ($null -eq $Seconds) { return 'Reset time unavailable' }
-    return 'Resets ' + [DateTimeOffset]::FromUnixTimeSeconds([long]$Seconds).LocalDateTime.ToString('ddd MMM d, h:mm tt')
-}
-
 $separator = New-Object System.Windows.Forms.Label
 $separator.BorderStyle = 'Fixed3D'
 $separator.Location = [System.Drawing.Point]::new(18,309)

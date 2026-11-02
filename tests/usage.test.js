@@ -73,19 +73,38 @@ test('retry assessment includes the freshly verified account identity',()=>{
  assert.equal(decide(error,snapshot,now,17).accountId,'account-abc');
 });
 
-test('account/read email fallback is stable, private and distinguishes users',()=>{
- const a=identifyAccount({}, {account:{type:'chatgpt',email:' Example@Email.Test '}});
- const b=identifyAccount({}, {account:{type:'chatgpt',email:'example@email.test'}});
- const other=identifyAccount({}, {account:{type:'chatgpt',email:'different@email.test'}});
- assert.equal(a.accountId,b.accountId);
- assert.match(a.accountId,/^chatgpt-email-sha256:[0-9a-f]{64}$/);
- assert.notEqual(other.accountId,a.accountId);
- assert.equal(JSON.stringify(a).includes('example@'),false);
- assert.deepEqual(identifyAccount({}, {account:{type:'apiKey'}}),{accountId:null,accountIdentitySource:null});
- assert.deepEqual(identifyAccount({accountId:'workspace-1'}, {account:{type:'chatgpt',email:'example@email.test'}}),{accountId:'workspace-1',accountIdentitySource:'rate-limits-id'});
+test('workspace account ID is canonical across rate limits and routing sources',()=>{
+ const rate={accountId:'workspace-123'};
+ const routing={account:{type:'chatgpt',email:'person@example.test'},workspaceRouting:{chatgptAccountId:'workspace-123'}};
+ const fromRate=identifyAccount(rate,null);
+ const fromRouting=identifyAccount({},routing);
+ const both=identifyAccount(rate,routing);
+ assert.match(both.accountId,/^workspace-sha256:[0-9a-f]{64}$/);
+ assert.equal(fromRate.accountId,fromRouting.accountId);
+ assert.equal(fromRate.accountId,both.accountId);
+ assert.equal(both.accountIdentityStatus,'verified');
+ assert.equal(JSON.stringify(both).includes('person@'),false);
+ assert.equal(JSON.stringify(both).includes('workspace-123'),false);
 });
-test('real account/read handshake supplies identity when rateLimits omits accountId',async()=>{
+test('different workspaces with the same email never compare equal',()=>{
+ const email='shared@example.test';
+ const a=identifyAccount({}, {account:{type:'chatgpt',email},workspaceRouting:{chatgptAccountId:'workspace-a'}});
+ const b=identifyAccount({}, {account:{type:'chatgpt',email},workspaceRouting:{chatgptAccountId:'workspace-b'}});
+ assert.notEqual(a.accountId,b.accountId);
+});
+test('contradictory backend workspace IDs fail closed and never select one opportunistically',()=>{
+ const conflict=identifyAccount({accountId:'workspace-1'}, {workspaceRouting:{chatgptAccountId:'workspace-2'},account:{type:'chatgpt',email:'shared@example.test'}});
+ assert.deepEqual(conflict,{accountId:null,accountIdentitySource:null,accountIdentityStatus:'conflict'});
+});
+test('email-only and API-key identity cannot authorize unattended runs',()=>{
+ assert.deepEqual(identifyAccount({}, {account:{type:'chatgpt',email:'person@example.test'}}),
+   {accountId:null,accountIdentitySource:null,accountIdentityStatus:'unavailable'});
+ assert.deepEqual(identifyAccount({}, {account:{type:'apiKey'}}),
+   {accountId:null,accountIdentitySource:null,accountIdentityStatus:'unavailable'});
+});
+test('actual app-server handshake retrieves workspace identity',async()=>{
  const snapshot=await readCodexState(path.join(__dirname,'mock-app-server.js'),{catalog:false});
- assert.match(snapshot.accountId,/^chatgpt-email-sha256:[0-9a-f]{64}$/);
- assert.equal(snapshot.accountIdentitySource,'chatgpt-email');
+ assert.match(snapshot.accountId,/^workspace-sha256:[0-9a-f]{64}$/);
+ assert.equal(snapshot.accountIdentitySource,'workspace-routing');
+ assert.equal(snapshot.accountIdentityStatus,'verified');
 });

@@ -28,16 +28,27 @@ function normalizeModels(pages) {
 // Rate-limit accountId may be absent. account/read can supply a ChatGPT email;
 // hash it rather than storing or logging the address.
 function identifyAccount(rateResult, accountResult) {
-  const id = rateResult?.accountId;
-  if (typeof id === 'string' && id.trim()) {
-    return {accountId:id.trim(),accountIdentitySource:'rate-limits-id'};
+  // Only backend-selected workspace IDs establish safe unattended identity.
+  // Email identifies a person, not the currently selected ChatGPT workspace.
+  const id = value => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 256
+    ? value.trim() : null;
+  const rateId = id(rateResult?.accountId);
+  const routingId = id(accountResult?.workspaceRouting?.chatgptAccountId);
+  if (rateId && routingId && rateId !== routingId) {
+    return {accountId:null,accountIdentitySource:null,accountIdentityStatus:'conflict'};
   }
-  const account = accountResult?.account;
-  if (account?.type === 'chatgpt' && typeof account.email === 'string' && account.email.trim()) {
-    const hash = createHash('sha256').update('codex-chatgpt-identity-v1:' + account.email.trim().toLowerCase()).digest('hex');
-    return {accountId:'chatgpt-email-sha256:'+hash,accountIdentitySource:'chatgpt-email'};
+  const workspaceId = routingId || rateId;
+  if (!workspaceId) {
+    return {accountId:null,accountIdentitySource:null,accountIdentityStatus:'unavailable'};
   }
-  return {accountId:null,accountIdentitySource:null};
+  // Same canonical value regardless of which endpoint supplies the ID.
+  // Neither the raw workspace ID nor a person's email is persisted.
+  const hash = createHash('sha256').update('codex-workspace-v1:' + workspaceId).digest('hex');
+  return {
+    accountId:'workspace-sha256:'+hash,
+    accountIdentitySource:routingId ? 'workspace-routing' : 'rate-limits-id',
+    accountIdentityStatus:'verified'
+  };
 }
 function selectBucket(result, model) {
   const byId = result.rateLimitsByLimitId;
@@ -149,7 +160,7 @@ function readCodexState(cliJs, { model = null, timeoutMs = 18000, catalog = true
         catch(e){finish(e);}
       }
     });
-    send({id:requestId,method:'initialize',params:{clientInfo:{name:'codex_resume_scheduler',title:'Codex Resume Scheduler',version:'1.4.0'}}});
+    send({id:requestId,method:'initialize',params:{clientInfo:{name:'codex_resume_scheduler',title:'Codex Resume Scheduler',version:'1.16.0'},capabilities:{experimentalApi:true}}});
   });
 }
 function readRateLimits(cliJs, timeoutMs=18000) {return readCodexState(cliJs,{timeoutMs,catalog:false});}

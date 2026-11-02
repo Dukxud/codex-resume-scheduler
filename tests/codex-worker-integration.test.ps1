@@ -19,7 +19,7 @@ if(process.argv.includes('app-server')){
  rl.on('line',line=>{
   const m=JSON.parse(line);
   if(m.method==='initialize')process.stdout.write(JSON.stringify({id:m.id,result:{userAgent:'test'}})+'\n');
-  if(m.method==='account/read')process.stdout.write(JSON.stringify({id:m.id,result:{account:{type:'chatgpt',email:'worker@example.test'}}})+'\n');
+  if(m.method==='account/read')process.stdout.write(JSON.stringify({id:m.id,result:{account:{type:'chatgpt',email:'worker@example.test'},workspaceRouting:{chatgptAccountId:process.env.CODEX_STUB_ACCOUNT||'acct-1',backendOrigin:'https://chatgpt.com',accountRoutingOverride:'NO_CONSTRAINT'}}})+'\n');
   if(m.method==='model/list')process.stdout.write(JSON.stringify({id:m.id,result:{data:[{model:'test-model',displayName:'Mock',defaultReasoningEffort:'high',supportedReasoningEfforts:[{reasoningEffort:'high'}],isDefault:true}],nextCursor:null}})+'\n');
   if(m.method==='account/rateLimits/read')process.stdout.write(JSON.stringify({id:m.id,result:{accountId:process.env.CODEX_STUB_ACCOUNT||'acct-1',ordinaryUsageAllowed:true,rateLimits:{limitId:'test-model',normalModelSlug:'test-model',primary:{usedPercent:0,resetsAt:Math.floor(Date.now()/1000)+3600,windowDurationMins:300}}}})+'\n');
  });
@@ -43,6 +43,8 @@ exit /b %errorlevel%
     $repoRoot=([string](& git -C $repo rev-parse --show-toplevel)).Trim()
     $runtime=Publish-ImmutableRuntime -SourceDirectory $root -DestinationDirectory (Join-Path $temp 'runtimes') -RelativeFiles (Get-CodexRuntimeFiles)
     $fingerprint=$runtime.Fingerprint
+    $workspaceHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes('codex-workspace-v1:acct-1'))).ToLowerInvariant()
+    $expectedAccountIdentity='workspace-sha256:'+$workspaceHash
     $jobPath=Join-Path $temp 'job.json'
     $marker=Join-Path $temp 'executed.marker'
     $outcomePath=[IO.Path]::ChangeExtension($jobPath,'.result.json')
@@ -56,7 +58,7 @@ exit /b %errorlevel%
             sessionId='00000000-0000-0000-0000-000000000001'
             repo=$repoRoot;branch='feature';model='test-model';effort='high'
             access='read-only';message='Resume.';autoResume=$auto
-            retryAttempt=0;accountId='acct-1';runtimeFingerprint=$fingerprint
+            retryAttempt=0;accountId=$expectedAccountIdentity;runtimeFingerprint=$fingerprint
             log=(Join-Path $temp 'worker.log')
         } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $jobPath
         $psi=[Diagnostics.ProcessStartInfo]::new()

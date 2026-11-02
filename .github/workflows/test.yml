@@ -55,6 +55,9 @@ jobs:
       - name: Inspect persisted run history and job-file pollution
         shell: pwsh
         run: pwsh -NoProfile -File ./tests/codex-job-history.test.ps1
+      - name: Live packaged AeroProgress in an unrelated application
+        shell: pwsh
+        run: pwsh -NoProfile -STA -File ./tests/standalone-aero-consumer.test.ps1
       - name: Prove standalone components in a separate application
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/second-application-reuse.test.ps1

@@ -84,9 +84,14 @@ $cancelRun.Add_Click({
             [void](Write-JobOutcome -Path ([IO.Path]::ChangeExtension($payloadPath,'.result.json')) -Status 'cancelled' -Attempt ([int]$payload.retryAttempt) -Message 'Cancelled by the operator before execution.')
             Remove-Item -LiteralPath $payloadPath -Force -ErrorAction Stop
         }
-        Refresh-PendingList
         Request-UsageRefresh
-    } catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Cancellation failed') | Out-Null }
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show($_.Exception.Message,'Cancellation failed') | Out-Null
+    } finally {
+        # Task removal can succeed before a later file write fails. Always
+        # reconcile the displayed list with Windows Task Scheduler.
+        try { Refresh-PendingList } catch { Update-Status "Pending-list refresh failed: $($_.Exception.Message)" }
+    }
 })
 $recentResults.Add_Click({ Show-CodexRunHistoryDialog -Owner $form -Directory $appDir })
 $openFolder.Add_Click({
@@ -156,11 +161,16 @@ $schedule.Add_Click({
             if (-not $existing) { Remove-Item -LiteralPath $jobFilePath -Force -ErrorAction SilentlyContinue }
             throw
         }
+        # The validated Windows task already exists. A preference write or
+        # follow-up UI refresh failure must not report scheduling as failed.
         $script:ui.Preferences.settingsTimer.Stop()
-        Save-CurrentFormState
-        Refresh-PendingList
-        Request-UsageRefresh
-        Update-Status "Scheduled once for $($when.ToString('MMM dd, h:mm tt')): $name"
+        try { Save-CurrentFormState } catch {
+            Update-Status "Scheduled $name, but preferences were not saved: $($_.Exception.Message)"
+        }
+        try { Refresh-PendingList } catch {
+            Update-Status "Scheduled $name, but the task list could not refresh: $($_.Exception.Message)"
+        }
+        try { Request-UsageRefresh } catch { }
         [System.Windows.Forms.MessageBox]::Show("Scheduled $($when.ToString('MMM dd, yyyy h:mm tt')).`nSession: $sessionId`nBranch: $branch`nInstruction: $message",'Codex task scheduled') | Out-Null
     } catch {
         # A task may have been registered before a later check failed. Surface it,

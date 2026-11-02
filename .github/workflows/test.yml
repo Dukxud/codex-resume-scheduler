@@ -1,7 +1,9 @@
-name: Tests
+# Manual verification only. A merge or PR update must not start automated CI.
+# Production releases are deliberately disabled until separately authorized
+# after trusted signing and target-Windows acceptance.
+name: Tests (manual only)
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 jobs:
   validate:
     runs-on: windows-latest

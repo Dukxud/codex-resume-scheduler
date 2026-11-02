@@ -58,3 +58,17 @@ test('scheduled runtime snapshot excludes every GUI module',()=>{
  }
  assert.doesNotMatch(runtime,/CodexUiForms|CodexUiState|CodexDashboard|CodexData|AeroBar\.html/);
 });
+
+test('pending jobs never mix with result histories and countdowns do not scan pending list for every row',()=>{
+ const data=read('CodexData.ps1'),store=read('CodexJobStore.ps1'),dash=read('CodexDashboard.ps1');
+ assert.match(data,/Get-CodexJobPayloadFiles/);
+ assert.match(store,/\.result\\\.json/);
+ assert.match(store,/Get-CodexRunHistory/);
+ assert.match(dash,/pendingIndex/);
+ assert.doesNotMatch(dash,/pendingSnapshot\s*\|\s*Where-Object/);
+});
+test('run history is user-visible and retry linking is persistent',()=>{
+ assert.match(read('CodexUiForms.ps1'),/\$recentResults = Add-Button/);
+ assert.match(read('CodexUiActions.ps1'),/Show-CodexRunHistoryDialog/);
+ assert.match(read('CodexRunEngine.ps1'),/NextJob \(\[string\]\$nextJob\)/);
+});

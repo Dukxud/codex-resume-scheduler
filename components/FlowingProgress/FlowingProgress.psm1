@@ -108,4 +108,44 @@ function Set-FlowingProgressViewState {
     $Bar.Child.Value = if ($null -eq $value) { 0.0 } else { $value }
 }
 
-Export-ModuleMember -Function New-FlowingProgressView,Set-FlowingProgressViewState
+
+# Change the material on an existing ElementHost without replacing the host,
+# disturbing its progress value, or restarting its running animation.
+function Set-FlowingProgressViewColors {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][System.Windows.Forms.Integration.ElementHost]$Bar,
+        [Parameter(Mandatory)][hashtable]$Colors
+    )
+    if ($Bar.IsDisposed) { return }
+    foreach ($name in @('BaseTop','BaseBottom','Track','Outline')) {
+        if (-not $Colors.ContainsKey($name) -or
+            [string]$Colors[$name] -notmatch '^#[0-9a-fA-F]{6}
+) {
+            throw "Invalid $name color; expected #RRGGBB."
+        }
+    }
+    $progress = [System.Windows.Controls.ProgressBar]$Bar.Child
+    if (-not $progress) { throw 'FlowingProgress has no WPF progress child.' }
+    [void]$progress.ApplyTemplate()
+    $track = [System.Windows.Controls.Border]$progress.Template.FindName('PART_Track',$progress)
+    $indicator = [System.Windows.Controls.Border]$progress.Template.FindName('PART_Indicator',$progress)
+    if (-not $track -or -not $indicator) { throw 'FlowingProgress template surfaces are unavailable.' }
+    $interior = [System.Windows.Controls.Grid]$indicator.Child
+    $fill = [System.Windows.Controls.Border]$interior.Children[0]
+    $gradient = [System.Windows.Media.LinearGradientBrush]$fill.Background
+    if (-not $gradient -or $gradient.GradientStops.Count -lt 2) {
+        throw 'FlowingProgress gradient is unavailable.'
+    }
+    if ($gradient.IsFrozen) {
+        $gradient = $gradient.CloneCurrentValue()
+        $fill.Background = $gradient
+    }
+    $gradient.GradientStops[0].Color = [System.Windows.Media.ColorConverter]::ConvertFromString($Colors.BaseTop)
+    $gradient.GradientStops[1].Color = [System.Windows.Media.ColorConverter]::ConvertFromString($Colors.BaseBottom)
+    $converter = [System.Windows.Media.BrushConverter]::new()
+    $track.Background = $converter.ConvertFromString($Colors.Track)
+    $track.BorderBrush = $converter.ConvertFromString($Colors.Outline)
+}
+
+Export-ModuleMember -Function New-FlowingProgressView,Set-FlowingProgressViewState,Set-FlowingProgressViewColors

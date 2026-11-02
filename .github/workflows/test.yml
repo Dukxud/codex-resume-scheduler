@@ -49,6 +49,12 @@ jobs:
       - name: Independent reusable component tests
         shell: pwsh
         run: pwsh -NoProfile -File ./tests/reusable-components.test.ps1
+      - name: Independently exercise Windows Task Scheduler adapter
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/independent-onetime-task.test.ps1
+      - name: Inspect persisted run history and job-file pollution
+        shell: pwsh
+        run: pwsh -NoProfile -File ./tests/codex-job-history.test.ps1
       - name: Prove standalone components in a separate application
         shell: pwsh
         run: pwsh -NoProfile -STA -File ./tests/second-application-reuse.test.ps1

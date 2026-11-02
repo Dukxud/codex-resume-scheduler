@@ -23,6 +23,13 @@ try {
     Require ((Get-CountdownText -DueAt $now.AddMinutes(3) -Now $now) -eq '3m 0s') 'Countdown depends on Codex.'
     Require (Test-AeroProgressColor -Color '#1A2B3C') 'Aero module cannot load standalone.'
     Require ((Get-Command Remove-OneTimeTask -Module OneTimeTasks).Name -eq 'Remove-OneTimeTask') 'Task registration API incomplete.'
+    $independentRepo=Join-Path $app 'another-repository'
+    [void](New-Item -ItemType Directory -Path $independentRepo -Force)
+    & git -C $independentRepo init -b isolated --quiet
+    Require ($LASTEXITCODE -eq 0) 'Independent Git init failed.'
+    Require ((Get-GitRepositoryRoot -Path $independentRepo) -eq $independentRepo) 'Git root lookup requires Codex.'
+    Require ((Get-GitCurrentBranch -Path $independentRepo) -eq 'isolated') 'Git branch lookup requires Codex.'
+    Require ($null -eq (Get-GitRepositoryRoot -Path $app)) 'Unrelated folder was misclassified as a Git repository.'
     $scripts=Join-Path $app 'scripts'
     [void](New-Item -ItemType Directory -Path $scripts -Force)
     Set-Content -LiteralPath (Join-Path $scripts 'worker.ps1') -Value 'Write-Host example'
@@ -49,8 +56,12 @@ try {
         Require ($fallback.Bounds -eq $target -and -not $primary.Visible) 'Fallback cannot move independently.'
         Require ((Get-ProgressHostSurface -Primary $primary) -eq $fallback) 'Wrong active progress surface.'
         Require ($primary.Tag -eq 'Entirely unrelated application metadata') 'Generic fallback manager must not claim Tag.'
+        Reset-ProgressHostFallback -Primary $primary
+        Require ($fallback.IsDisposed -and (Get-ProgressHostSurface -Primary $primary) -eq $primary) 'Reset must release fallback and restore primary.'
+        $replacement=Repair-ProgressHost -Primary $primary -Failed $true -FallbackFactory $factory
+        Require ($replacement -and $replacement -ne $fallback) 'Recovery after reset must create a fresh control.'
         Remove-ProgressHost -Primary $primary
-        Require ($primary.IsDisposed -and $fallback.IsDisposed) 'Progress control ownership leak.'
+        Require ($primary.IsDisposed -and $fallback.IsDisposed -and $replacement.IsDisposed) 'Progress control ownership leak.'
     }finally{$form.Dispose()}
     Write-Host 'Independent consumer of ten standalone modules PASS.'
 }finally{

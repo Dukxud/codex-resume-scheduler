@@ -31,6 +31,10 @@ try{
     Require ($null -eq $fallbackHost.Tag) 'Unknown percentage must remain unknown after recovery.'
     Ensure-AeroFallback $bar
     Require ([object]::ReferenceEquals($fallbackHost,(Get-AeroProgressSurface $bar))) 'Recovery created duplicate controls.'
+    Update-AeroAppearance ([ordered]@{quota='violet';time='amber';finish=0;lighting=0;shimmer=100;speed=100;aero=$true})
+    $updatedFallback=Get-AeroProgressSurface $bar
+    Require ($updatedFallback -ne $fallbackHost -and $fallbackHost.IsDisposed) 'Appearance update did not recreate recovered bar.'
+    Require ($updatedFallback.Tag -eq $null) 'Appearance change must retain unknown percentage.'
     # Recovered bars must follow the real DataGridView layout and be destroyed
     # with their row; otherwise they remain stuck on screen after scrolling.
     $grid=[Windows.Forms.DataGridView]::new()

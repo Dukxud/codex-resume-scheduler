@@ -1,6 +1,6 @@
 # Codex Resume Scheduler — Windows PowerShell 7 / Windows Forms
 # WinForms UI, owner-approved Aero v3 progress bars with WPF fallback, and scheduled runner.
-# v1.14.0: reusable core, pinned runtimes and truthful task outcomes.
+# v1.16.0: canonical workspace identity, clean host boundaries and run history.
 [CmdletBinding()]
 param(
     [switch]$RunJob,

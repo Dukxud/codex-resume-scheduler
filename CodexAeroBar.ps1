@@ -188,7 +188,8 @@ function New-AeroProgressBar {
         [System.Windows.Forms.Control]$Parent,
         [int]$X,[int]$Y,[int]$Width,[int]$Height,
         [ValidateSet('quota','time')][string]$Kind,
-        [string]$Color=''
+        [string]$Color='',
+        [string]$UserDataDirectory=''
     )
     $chosen = if ($Color -and (Test-AeroProgressColor $Color)) {
         $Color
@@ -200,7 +201,7 @@ function New-AeroProgressBar {
         $view = New-AeroProgressView -Parent $Parent -X $X -Y $Y -Width $Width -Height $Height `
             -Color $chosen -AccessibleName $(if ($Kind -eq 'quota') { 'Usage remaining' } else { 'Time until scheduled run' }) `
             -SdkDirectory $script:aeroSdk -AssetPath $script:aeroAsset `
-            -UserDataDirectory (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CodexResumeScheduler/AeroWebView2')
+            -UserDataDirectory $(if ($UserDataDirectory) { [IO.Path]::GetFullPath($UserDataDirectory) } else { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CodexResumeScheduler/AeroWebView2' })
         # This Tag belongs only to the Codex adapter; AeroProgress never reads
         # or overwrites it, so independent applications may use their own Tag.
         $view.Tag = [pscustomobject]@{

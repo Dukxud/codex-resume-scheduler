@@ -56,12 +56,17 @@ function Count-VisualChanges([string]$pathA,[string]$pathB) {
     } finally { $a.Dispose();$b.Dispose() }
 }
 Require (Test-AeroRenderer) "Aero renderer unavailable: $script:aeroError"
+# A rendering acceptance test must not share the installed application's
+# persistent browser profile with an existing scheduler or another test.
+# Both bars deliberately share one unique profile to exercise multi-view reuse.
+$testUserData = Join-Path ([IO.Path]::GetTempPath()) ('codex-aero-render-' + [guid]::NewGuid().ToString('N'))
+Write-Host "WebView2 diagnostic: isolated profile $testUserData"
 $form = [System.Windows.Forms.Form]::new()
 $form.ClientSize = [System.Drawing.Size]::new(480,145)
 $form.StartPosition = 'Manual'
 try {
-    $quota = New-AeroProgressBar $form 15 20 400 17 'quota'
-    $run = New-AeroProgressBar $form 15 64 400 17 'time'
+    $quota = New-AeroProgressBar $form 15 20 400 17 'quota' -UserDataDirectory $testUserData
+    $run = New-AeroProgressBar $form 15 64 400 17 'time' -UserDataDirectory $testUserData
     Require ($quota.GetType().FullName -eq 'Microsoft.Web.WebView2.WinForms.WebView2') 'Quota was not WebView2.'
     Require ($run.GetType().FullName -eq 'Microsoft.Web.WebView2.WinForms.WebView2') 'Time was not WebView2.'
     Set-AeroProgress $quota 63.5
@@ -162,4 +167,9 @@ try {
 } finally {
     $form.Close()
     $form.Dispose()
+    # WebView2 process shutdown can lag disposal; failure to remove an isolated
+    # test profile must not conceal the renderer's actual acceptance outcome.
+    if (Test-Path -LiteralPath $testUserData) {
+        Remove-Item -LiteralPath $testUserData -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }

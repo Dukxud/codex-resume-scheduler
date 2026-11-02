@@ -43,3 +43,9 @@ The application-specific WinForms controllers still coordinate through shared ap
 6. A direct Windows acceptance checklist and an explicit release policy were added to the repository. The merge remains blocked until actual target-device evidence establishes functionality and security.
 
 No CI was run or inspected during this closeout. The newest changes have not been operationally verified, and PR #16 is intentionally left as an unmerged draft.
+
+## Local Windows acceptance finding — 2026-11-01
+
+On BLACK-PUDDLE, the pinned v1.16 candidate passed 35 of 36 local test files. The integrated two-bar Aero WebView2 rendering test failed **before navigation** with HRESULT 0x8007139F on both bars (CoreWebView2 remained null). The independent packaged Aero renderer succeeded with a unique user-data folder. Microsoft documents ERROR_INVALID_STATE when WebView2 environment options conflict with an existing browser process sharing a profile. This is evidence of a possible shared-profile conflict, not proof.
+
+The integrated renderer test now supplies a unique per-run user-data directory explicitly to both bars. This isolates the test from installed application profile state without changing production's default profile. A targeted local rerun must establish whether the failure is profile-specific; if the default production profile remains unusable, this source-only correction is insufficient. No CI tests were run.

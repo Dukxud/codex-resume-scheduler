@@ -21,7 +21,7 @@ try{
     $bar.Tag.Failure='Simulated WebView2 renderer process exit'
     $bar.Tag.Ready=$false
     Ensure-AeroFallback $bar
-    $fallbackHost=$bar.Tag.Fallback
+    $fallbackHost=Get-AeroProgressSurface $bar
     Require ($fallbackHost -is [Windows.Forms.Integration.ElementHost]) 'WPF recovery bar was not created.'
     Require (-not $bar.Visible -and $fallbackHost.Visible) 'Failed WebView must be hidden and WPF visible.'
     Require ([math]::Abs([double]$fallbackHost.Tag-62) -lt .001) 'Recovery lost last authoritative percentage.'
@@ -30,7 +30,7 @@ try{
     Set-AeroProgress $bar $null
     Require ($null -eq $fallbackHost.Tag) 'Unknown percentage must remain unknown after recovery.'
     Ensure-AeroFallback $bar
-    Require ([object]::ReferenceEquals($fallbackHost,$bar.Tag.Fallback)) 'Recovery created duplicate controls.'
+    Require ([object]::ReferenceEquals($fallbackHost,(Get-AeroProgressSurface $bar))) 'Recovery created duplicate controls.'
     # Recovered bars must follow the real DataGridView layout and be destroyed
     # with their row; otherwise they remain stuck on screen after scrolling.
     $grid=[Windows.Forms.DataGridView]::new()

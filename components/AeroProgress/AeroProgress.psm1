@@ -1,5 +1,9 @@
 # AeroProgress — reusable WinForms/WebView2 progress component.
 # No Codex, Task Scheduler, WPF or application settings dependencies.
+Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+$script:loadedSdk = $null
+$script:loaderHandle = [IntPtr]::Zero
 $script:supportCache = @{}
 
 function Test-AeroProgressColor {
@@ -8,35 +12,47 @@ function Test-AeroProgressColor {
 }
 
 function Test-AeroProgressSupport {
+    [CmdletBinding()]
     param([Parameter(Mandatory)][string]$SdkDirectory,
-          [Parameter(Mandatory)][string]$AssetPath)
+          [Parameter(Mandatory)][string]$AssetPath,
+          [switch]$Refresh)
     $sdk = [IO.Path]::GetFullPath($SdkDirectory)
     $asset = [IO.Path]::GetFullPath($AssetPath)
     $key = "$sdk/$asset"
-    if ($script:supportCache.ContainsKey($key)) { return $script:supportCache[$key] }
-    $result = [pscustomobject]@{ Available = $false; Reason = ''; AssetUri = $null }
-    foreach ($file in @(
+    $required=@(
         (Join-Path $sdk 'Microsoft.Web.WebView2.Core.dll'),
         (Join-Path $sdk 'Microsoft.Web.WebView2.WinForms.dll'),
-        (Join-Path $sdk 'WebView2Loader.dll'), $asset)) {
-        if (-not [IO.File]::Exists($file)) {
-            $result.Reason = "Missing Aero dependency: $([IO.Path]::GetFileName($file))"
-            $script:supportCache[$key] = $result
-            return $result
+        (Join-Path $sdk 'WebView2Loader.dll'),$asset)
+    # A support failure is not permanent: the user may install the runtime
+    # or repair its extracted files without restarting the application.
+    foreach($file in $required) {
+        if(-not [IO.File]::Exists($file)) {
+            return [pscustomobject]@{Available=$false;Reason="Missing Aero dependency: $([IO.Path]::GetFileName($file))";AssetUri=$null}
         }
     }
+    if(-not $Refresh -and $script:supportCache.ContainsKey($key)) {return $script:supportCache[$key]}
+    $result=[pscustomobject]@{Available=$false;Reason='';AssetUri=$null}
     try {
-        # WebView2Loader.dll resolves relative to this explicitly supplied SDK.
-        # This changes only the current process, never the system PATH.
-        if (($env:PATH -split ';') -notcontains $sdk) { $env:PATH = "$sdk;$env:PATH" }
-        Add-Type -Path (Join-Path $sdk 'Microsoft.Web.WebView2.Core.dll')
-        Add-Type -Path (Join-Path $sdk 'Microsoft.Web.WebView2.WinForms.dll')
-        $runtime = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::GetAvailableBrowserVersionString()
-        if (-not $runtime) { throw 'Microsoft Edge WebView2 Evergreen Runtime not installed' }
-        $result.AssetUri = [Uri]::new($asset)
-        $result.Available = $true
-    } catch { $result.Reason = $_.Exception.Message }
-    $script:supportCache[$key] = $result
+        # Load the native WebView2 loader by explicit filename instead of
+        # mutating PATH for the entire process and every other library.
+        if($script:loadedSdk -and $script:loadedSdk -ine $sdk) {
+            throw 'A different WebView2 SDK has already been loaded in this process.'
+        }
+        if(-not $script:loadedSdk) {
+            $script:loaderHandle=[System.Runtime.InteropServices.NativeLibrary]::Load((Join-Path $sdk 'WebView2Loader.dll'))
+            $script:loadedSdk=$sdk
+        }
+        Add-Type -Path (Join-Path $sdk 'Microsoft.Web.WebView2.Core.dll') -ErrorAction Stop
+        Add-Type -Path (Join-Path $sdk 'Microsoft.Web.WebView2.WinForms.dll') -ErrorAction Stop
+        $runtime=[Microsoft.Web.WebView2.Core.CoreWebView2Environment]::GetAvailableBrowserVersionString()
+        if(-not $runtime){throw 'Microsoft Edge WebView2 Evergreen Runtime not installed'}
+        $result.AssetUri=[Uri]::new($asset)
+        $result.Available=$true
+    } catch {
+        $result.Reason=$_.Exception.Message
+    }
+    if($result.Available){$script:supportCache[$key]=$result}
+    else{[void]$script:supportCache.Remove($key)}
     return $result
 }
 
@@ -64,7 +80,7 @@ function New-AeroProgressView {
     $view.AccessibleName = $AccessibleName
     $view.Tag = [pscustomobject]@{
         Percent = $null; Color = $Color; Kind = ''
-        Ready = $false; State = $null; Failure = $null; Fallback = $null
+        Ready = $false; State = $null; Failure = $null
         AllowedUri = $support.AssetUri.AbsoluteUri
     }
     $creation = [Microsoft.Web.WebView2.WinForms.CoreWebView2CreationProperties]::new()

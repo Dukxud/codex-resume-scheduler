@@ -5,7 +5,7 @@
     Author = 'Codex Resume Scheduler contributors'
     Description = 'Reusable WinForms progress surface recovery, layout and lifecycle.'
     PowerShellVersion = '7.0'
-    FunctionsToExport = @('Get-ProgressHostSurface','Repair-ProgressHost','Set-ProgressHostLayout','Remove-ProgressHost')
+    FunctionsToExport = @('Get-ProgressHostSurface','Repair-ProgressHost','Reset-ProgressHostFallback','Set-ProgressHostLayout','Remove-ProgressHost')
     CmdletsToExport = @()
     VariablesToExport = @()
     AliasesToExport = @()

@@ -58,13 +58,16 @@ function Update-AeroAppearance {
             continue
         }
         $bar.Tag.Color = [string]$Appearance[$bar.Tag.Kind]
-        Send-AeroState $bar
+        if ((Get-ProgressHostSurface -Primary $bar) -ne $bar) {
+            Reset-ProgressHostFallback -Primary $bar
+            Ensure-AeroFallback $bar
+        } else { Send-AeroState $bar }
     }
 }
 
 
 function Test-AeroRenderer {
-    if ($script:aeroChecked) { return $script:aeroAvailable }
+    if ($script:aeroChecked -and $script:aeroAvailable) { return $true }
     $script:aeroChecked = $true
     if ($env:CODEX_BAR_RENDERER -eq 'wpf') {
         $script:aeroError = 'WPF fallback explicitly selected.'
@@ -80,7 +83,7 @@ function Test-AeroRenderer {
 
 function Send-AeroState {
     param([System.Windows.Forms.Control]$Bar)
-    if (-not $Bar -or $Bar.IsDisposed -or $Bar.Tag.Fallback -or $Bar.Tag.Failure) { return }
+    if (-not $Bar -or $Bar.IsDisposed -or $Bar.Tag.Failure -or (Get-ProgressHostSurface -Primary $Bar) -ne $Bar) { return }
     # The module queues this state if WebView2 has not finished starting.
     Set-AeroProgressViewState -View $Bar -State @{
         type='set'
@@ -98,7 +101,7 @@ function Send-AeroState {
 # stays as the stable caller reference; its fallback is a WPF ElementHost.
 function Ensure-AeroFallback {
     param([System.Windows.Forms.Control]$Bar)
-    if (-not $Bar -or $Bar.IsDisposed -or -not $Bar.Tag.Failure -or $Bar.Tag.Fallback) { return }
+    if (-not $Bar -or $Bar.IsDisposed -or -not $Bar.Tag.Failure -or (Get-ProgressHostSurface -Primary $Bar) -ne $Bar) { return }
     $kind=[string]$Bar.Tag.Kind
     $color=if($Bar.Tag.Color){[string]$Bar.Tag.Color}else{[string]$script:aeroAppearance[$kind]}
     $factory={
@@ -106,7 +109,7 @@ function Ensure-AeroFallback {
         return New-FlowingProgressBar $parent $bounds.X $bounds.Y $bounds.Width $bounds.Height $kind -Color $color
     }.GetNewClosure()
     try {
-        $replacement=Repair-ProgressHost -Primary $Bar -FallbackFactory $factory
+        $replacement=Repair-ProgressHost -Primary $Bar -Failed ([bool]$Bar.Tag.Failure) -FallbackFactory $factory
         if($replacement){Set-FlowingProgress $replacement $Bar.Tag.Percent}
     } catch {
         $script:aeroError = "Aero recovery failed: $($_.Exception.Message)"
@@ -179,8 +182,10 @@ function Set-AeroProgress {
     $value = if ($null -eq $Percent) { $null } else { [double][math]::Clamp([double]$Percent,0,100) }
     if ($Bar.Tag.Percent -eq $value) { return }
     $Bar.Tag.Percent = $value
-    if ($Bar.Tag.Fallback) { Set-FlowingProgress $Bar.Tag.Fallback $value; return }
+    $active=Get-ProgressHostSurface -Primary $Bar
+    if ($active -ne $Bar) { Set-FlowingProgress $active $value; return }
     Ensure-AeroFallback $Bar
-    if ($Bar.Tag.Fallback) { Set-FlowingProgress $Bar.Tag.Fallback $value; return }
+    $active=Get-ProgressHostSurface -Primary $Bar
+    if ($active -ne $Bar) { Set-FlowingProgress $active $value; return }
     Send-AeroState $Bar
 }

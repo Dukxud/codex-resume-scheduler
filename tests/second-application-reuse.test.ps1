@@ -39,15 +39,16 @@ try {
         Require ($gloss.Child.Value -eq 37.5 -and $gloss.AccessibleName -eq 'Unrelated application progress') 'Standalone WPF animation requires Codex adapter.'
         $primary=[System.Windows.Forms.Panel]::new()
         $primary.Bounds=[System.Drawing.Rectangle]::new(8,80,240,20)
-        $primary.Tag=[pscustomobject]@{Failure='Simulated primary renderer failure';Fallback=$null}
+        $primary.Tag='Entirely unrelated application metadata'
         $form.Controls.Add($primary)
         $factory={param($parent,$bounds) return [System.Windows.Forms.Panel]::new()}
-        $fallback=Repair-ProgressHost -Primary $primary -FallbackFactory $factory
+        $fallback=Repair-ProgressHost -Primary $primary -Failed $true -FallbackFactory $factory
         Require ($fallback -is [System.Windows.Forms.Control] -and $fallback.Parent -eq $form) 'Fallback creation requires Codex.'
         $target=[System.Drawing.Rectangle]::new(25,90,290,24)
         Set-ProgressHostLayout -Primary $primary -Bounds $target -Visible $true
         Require ($fallback.Bounds -eq $target -and -not $primary.Visible) 'Fallback cannot move independently.'
         Require ((Get-ProgressHostSurface -Primary $primary) -eq $fallback) 'Wrong active progress surface.'
+        Require ($primary.Tag -eq 'Entirely unrelated application metadata') 'Generic fallback manager must not claim Tag.'
         Remove-ProgressHost -Primary $primary
         Require ($primary.IsDisposed -and $fallback.IsDisposed) 'Progress control ownership leak.'
     }finally{$form.Dispose()}

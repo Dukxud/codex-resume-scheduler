@@ -6,6 +6,7 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName WindowsFormsIntegration
+$script:progressValues=[System.Runtime.CompilerServices.ConditionalWeakTable[System.Windows.Forms.Integration.ElementHost,System.Object]]::new()
 
 function New-FlowingProgressView {
     param(
@@ -91,26 +92,32 @@ function New-FlowingProgressView {
     $elementHost.BackColor = $Parent.BackColor
     $elementHost.Child = $progress
     $elementHost.AccessibleName = $AccessibleName
-    $elementHost.Tag = $null # null means no accepted percentage; draw an empty track.
     $Parent.Controls.Add($elementHost)
     return $elementHost
 }
 
-function Set-FlowingProgressViewState {
-    param(
-        [System.Windows.Forms.Integration.ElementHost]$Bar,
-        $Percent
-    )
-    $value = if ($null -eq $Percent) { $null }
-             else { [double][math]::Clamp([double]$Percent,0,100) }
-    if ($Bar.Tag -eq $value) { return }
-    $Bar.Tag = $value
-    $Bar.Child.Value = if ($null -eq $value) { 0.0 } else { $value }
+function Get-FlowingProgressViewValue {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][System.Windows.Forms.Integration.ElementHost]$Bar)
+    $saved=[object]$null
+    if($script:progressValues.TryGetValue($Bar,[ref]$saved)) { return $saved.Percent }
+    return $null
 }
 
+function Set-FlowingProgressViewState {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][System.Windows.Forms.Integration.ElementHost]$Bar,$Percent)
+    if($Bar.IsDisposed){return}
+    $value=if($null -eq $Percent){$null}else{[double][math]::Clamp([double]$Percent,0,100)}
+    $existing=[object]$null
+    if($script:progressValues.TryGetValue($Bar,[ref]$existing) -and $existing.Percent -eq $value){return}
+    [void]$script:progressValues.Remove($Bar)
+    $script:progressValues.Add($Bar,[pscustomobject]@{Percent=$value})
+    # Host.Tag remains entirely caller-owned; the progress state is private
+    # to this module and is released when the ElementHost is collected.
+    $Bar.Child.Value=if($null -eq $value){0.0}else{$value}
+}
 
-# Change the material on an existing ElementHost without replacing the host,
-# disturbing its progress value, or restarting its running animation.
 function Set-FlowingProgressViewColors {
     [CmdletBinding()]
     param(
@@ -148,4 +155,4 @@ function Set-FlowingProgressViewColors {
     $track.BorderBrush = $converter.ConvertFromString($Colors.Outline)
 }
 
-Export-ModuleMember -Function New-FlowingProgressView,Set-FlowingProgressViewState,Set-FlowingProgressViewColors
+Export-ModuleMember -Function New-FlowingProgressView,Get-FlowingProgressViewValue,Set-FlowingProgressViewState,Set-FlowingProgressViewColors

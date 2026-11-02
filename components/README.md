@@ -65,6 +65,12 @@ See [AeroProgress](AeroProgress/README.md) for a complete standalone animated Wi
 
 Unit and Windows GUI integration checks live under tests. The app package and standalone components package share exactly the same module sources.
 
+## Host and threading prerequisites
+
+The reusable Windows Forms and Windows Presentation Foundation components (`WindowShell`, `AeroProgress`, `FlowingProgress`, `ProgressHost`) must run on **Windows with a single-threaded apartment (STA) UI thread** and a functioning message loop. Independent tests launch them with `pwsh -STA`. The Aero view also needs the Microsoft Edge WebView2 runtime plus the locally packaged WebView2 SDK and HTML shader. These components are not language-independent or headless services; they can be transplanted into other Windows desktop applications that supply a compatible host.
+
+`OneTimeTasks` requires Windows Task Scheduler and registers tasks for the signed-in interactive desktop user. `Countdown`, `SettingsStore`, `RuntimeBundle`, `GitRepository`, and `JobOutcomes` require PowerShell 7 and their stated external dependencies (for GitRepository, Git), but not a UI thread.
+
 ## Renderer host ownership
 
 `Repair-ProgressHost -Primary <control> -Failed $true -FallbackFactory <scriptblock>` creates a generic fallback when the host's renderer has failed. The host—not the library—determines failure. `Get-ProgressHostSurface` returns the active view, `Set-ProgressHostLayout` updates it, `Reset-ProgressHostFallback` frees the fallback while retaining the primary, and `Remove-ProgressHost` disposes both. The host is free to use `Control.Tag` for unrelated information.

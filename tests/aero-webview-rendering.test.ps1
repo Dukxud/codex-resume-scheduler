@@ -10,7 +10,7 @@ function Require($ok,[string]$what) { if (-not $ok) { throw $what } }
 function PumpUntil([scriptblock]$condition,[int]$seconds=25) {
     $deadline = (Get-Date).AddSeconds($seconds)
     while (-not (& $condition)) {
-        if ((Get-Date) -gt $deadline) { throw "Timed out awaiting WebView2 rendering: $script:aeroError; quotaReady=$($quota.Tag.Ready); runReady=$($run.Tag.Ready); quotaCore=$($null -ne $quota.CoreWebView2); runCore=$($null -ne $run.CoreWebView2); quotaFailure=$($quota.Tag.Failure); runFailure=$($run.Tag.Failure)" }
+        if ((Get-Date) -gt $deadline) { throw "Timed out awaiting WebView2 rendering: $script:aeroError; quotaReady=$((Get-AeroProgressViewStatus -View $quota).Ready); runReady=$((Get-AeroProgressViewStatus -View $run).Ready); quotaCore=$($null -ne $quota.CoreWebView2); runCore=$($null -ne $run.CoreWebView2); quotaFailure=$((Get-AeroProgressViewStatus -View $quota).Failure); runFailure=$((Get-AeroProgressViewStatus -View $run).Failure)" }
         [System.Windows.Forms.Application]::DoEvents()
         Start-Sleep -Milliseconds 50
     }
@@ -67,7 +67,7 @@ try {
     Set-AeroProgress $quota 63.5
     Set-AeroProgress $run 24
     $form.Show()
-    PumpUntil { $quota.Tag.Ready -and $run.Tag.Ready }
+    PumpUntil { (Get-AeroProgressViewStatus -View $quota).Ready -and (Get-AeroProgressViewStatus -View $run).Ready }
     PumpUntil {
         $q = Evaluate $quota 'window.aeroBarProof?.getTarget()'
         $r = Evaluate $run 'window.aeroBarProof?.getTarget()'

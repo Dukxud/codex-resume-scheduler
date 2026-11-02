@@ -6,7 +6,7 @@ $root=Split-Path -Parent $PSScriptRoot
 $manifest=Join-Path $root 'components/AeroProgress/AeroProgress.psd1'
 $module=Import-Module $manifest -PassThru -Force -ErrorAction Stop
 if($module.Name -ne 'AeroProgress'){throw 'Unexpected module identity.'}
-$expected=@('Test-AeroProgressColor','Test-AeroProgressSupport','New-AeroProgressView','Set-AeroProgressViewState')
+$expected=@('Test-AeroProgressColor','Test-AeroProgressSupport','New-AeroProgressView','Set-AeroProgressViewState','Get-AeroProgressViewStatus')
 foreach($cmd in $expected){
   if(-not (Get-Command $cmd -Module AeroProgress -ErrorAction SilentlyContinue)){throw "Reusable API missing: $cmd"}
 }

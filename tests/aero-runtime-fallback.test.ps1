@@ -19,7 +19,6 @@ try{
     $form.Show()
     [Windows.Forms.Application]::DoEvents()
     $bar.Tag.Failure='Simulated WebView2 renderer process exit'
-    $bar.Tag.Ready=$false
     Ensure-AeroFallback $bar
     $fallbackHost=Get-AeroProgressSurface $bar
     Require ($fallbackHost -is [Windows.Forms.Integration.ElementHost]) 'WPF recovery bar was not created.'

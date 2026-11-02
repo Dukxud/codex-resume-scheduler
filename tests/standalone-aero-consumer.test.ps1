@@ -32,14 +32,19 @@ try {
     $form=[System.Windows.Forms.Form]::new()
     $form.ClientSize=[System.Drawing.Size]::new(460,110)
     $view=New-AeroProgressView -Parent $form -SdkDirectory $sdk -AssetPath $asset -UserDataDirectory (Join-Path $temp 'webdata') -X 15 -Y 30 -Width 400 -Height 17 -Color 'violet' -AccessibleName 'Standalone second application'
+    # An unrelated host owns Tag without interfering with private Aero state.
+    $view.Tag = [pscustomobject]@{ Owner='UnrelatedDesktopApp'; Ticket=19 }
     Set-AeroProgressViewState -View $view -State @{type='set';value=.37;color='violet';finish=1;lighting=1;shimmer=1.2;speed=1.0;aero=$true}
+    if ($view.Tag.Owner -ne 'UnrelatedDesktopApp' -or $view.Tag.Ticket -ne 19) { throw 'AeroProgress overwrote consumer-owned Control.Tag.' }
+    $initialStatus=Get-AeroProgressViewStatus -View $view
+    if ([math]::Abs($initialStatus.Value-.37) -gt .001) { throw 'Aero status did not retain its own progress value.' }
     $form.Show()
     $deadline=(Get-Date).AddSeconds(25)
-    while(-not $view.Tag.Ready -and (Get-Date) -lt $deadline){
+    while(-not (Get-AeroProgressViewStatus -View $view).Ready -and (Get-Date) -lt $deadline){
         [System.Windows.Forms.Application]::DoEvents()
         Start-Sleep -Milliseconds 40
     }
-    if(-not $view.Tag.Ready){throw "Standalone WebView2 navigation failed: $($view.Tag.Failure)"}
+    if(-not (Get-AeroProgressViewStatus -View $view).Ready){throw "Standalone WebView2 navigation failed: $((Get-AeroProgressViewStatus -View $view).Failure)"}
     $proof=$null
     while(-not $proof -and (Get-Date) -lt $deadline){
         [System.Windows.Forms.Application]::DoEvents()

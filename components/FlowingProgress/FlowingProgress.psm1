@@ -35,7 +35,7 @@ function New-FlowingProgressView {
         <Border x:Name="PART_Indicator" CornerRadius="8" ClipToBounds="True"
                 HorizontalAlignment="Left">
           <Grid ClipToBounds="True">
-            <Border CornerRadius="8">
+            <Border x:Name="FlowFill" CornerRadius="8">
               <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                   <GradientStop Color="__TOP__" Offset="0"/>
@@ -136,10 +136,8 @@ function Set-FlowingProgressViewColors {
     if (-not $progress) { throw 'FlowingProgress has no WPF progress child.' }
     [void]$progress.ApplyTemplate()
     $track = [System.Windows.Controls.Border]$progress.Template.FindName('PART_Track',$progress)
-    $indicator = [System.Windows.Controls.Border]$progress.Template.FindName('PART_Indicator',$progress)
-    if (-not $track -or -not $indicator) { throw 'FlowingProgress template surfaces are unavailable.' }
-    $interior = [System.Windows.Controls.Grid]$indicator.Child
-    $fill = [System.Windows.Controls.Border]$interior.Children[0]
+    $fill = [System.Windows.Controls.Border]$progress.Template.FindName('FlowFill',$progress)
+    if (-not $track -or -not $fill) { throw 'FlowingProgress template surfaces are unavailable.' }
     $gradient = [System.Windows.Media.LinearGradientBrush]$fill.Background
     if (-not $gradient -or $gradient.GradientStops.Count -lt 2) {
         throw 'FlowingProgress gradient is unavailable.'

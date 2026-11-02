@@ -47,6 +47,7 @@ try {
     $refreshRuns = New-TestControl panel 18 774 154 31
     $cancelRun = New-TestControl panel 185 774 154 31
     $openFolder = New-TestControl panel 352 774 154 31
+    $recentResults = New-TestControl panel 520 774 158 31
     $status = New-TestControl label 18 823 880 25
     $script:ui.Preferences.uiSettings = $null
     $script:ui.Dashboard.pendingSnapshot = @()

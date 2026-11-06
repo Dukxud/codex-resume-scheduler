@@ -138,7 +138,25 @@ try {
                 Select-Object -First 8)){
             $name=[string]$task.Name
             if($name -cmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}$'){
-                if($task.ExecutionMode -eq 'terminal'){
+                if($task.ExecutionMode -eq 'shared'){
+                    $statePath=Join-Path $appDir ($name+'.shared-state.json')
+                    $state=$null
+                    if(Test-Path -LiteralPath $statePath -PathType Leaf){
+                        $info=Get-Item -LiteralPath $statePath -ErrorAction Stop
+                        if($info.Length -gt 262144){throw 'Shared controller state exceeds display limit.'}
+                        $state=Get-Content -LiteralPath $statePath -Raw -ErrorAction Stop |
+                            ConvertFrom-Json -ErrorAction Stop
+                    }
+                    $waiting=$state -and $state.status -eq 'waiting'
+                    $activities[$name]=@{
+                        Available=($null -ne $state)
+                        Summary=if($waiting){'Codex is asking a question — answer here'}elseif($state){'Shared Codex: '+[string]$state.status}else{'Starting shared Codex controller'}
+                        Shared=$state
+                        Recent=@();Timeline=@();StartedAt=$null
+                        UpdatedAt=if($state){[string]$state.updatedAt}else{$null}
+                        CompletedCommands=0;FileChanges=0
+                    }
+                }elseif($task.ExecutionMode -eq 'terminal'){
                     # The TUI owns its real console; it does not emit the
                     # background JSONL format. Never fabricate live events.
                     $activities[$name]=@{
@@ -211,8 +229,8 @@ try {
         'schedule' {
             if($null -ne $request.autoResumeOnLimit -and $request.autoResumeOnLimit -isnot [bool]){throw 'Invalid automatic-continuation option.'}
             $executionMode=if($request.executionMode){[string]$request.executionMode}else{'background'}
-            if($executionMode -cnotin @('terminal','background')){throw 'Invalid execution mode.'}
-            if($executionMode -eq 'terminal' -and $request.autoResumeOnLimit -eq $true){
+            if($executionMode -cnotin @('terminal','background','shared')){throw 'Invalid execution mode.'}
+            if($executionMode -in @('terminal','shared') -and $request.autoResumeOnLimit -eq $true){
                 throw 'Automatic quota continuation requires Background execution.'
             }
             $sessionId=[string]$request.sessionId
@@ -296,6 +314,226 @@ try {
             }
             $result=@{name=$name;status='Scheduled'}
         }
+        'sharedAnswer' {
+            $name=[string]$request.name
+            $questionId=[string]$request.questionId
+            if($name -cnotmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}
+            $name=[string]$request.name
+            if($name -cnotmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}$'){throw 'Invalid Scheduler task name.'}
+            Remove-OneTimeTask -Name $name -OnlyBeforeStart
+            $warning=''
+            $payloadPath=Join-Path $appDir ($name+'.json')
+            if(Test-Path -LiteralPath $payloadPath -PathType Leaf){
+                try {
+                    [void](Write-JobOutcome -Path ([IO.Path]::ChangeExtension($payloadPath,'.result.json')) -Status 'cancelled' -Message 'Cancelled by operator before execution.')
+                    Remove-Item -LiteralPath $payloadPath -Force -ErrorAction Stop
+                }catch{$warning=$_.Exception.Message}
+            }
+            $result=@{name=$name;status='Cancelled';warning=$warning}
+        }
+        'evidence' {
+            $name=[string]$request.name
+            if($name -cnotmatch '^(?:CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}|BP[0-9]+-Codex-(?:Resume|Test))$'){
+                throw 'Invalid history identifier.'
+            }
+            $result=Get-CodexRunEvidence -Directory $appDir -Name $name
+        }
+        'hide' {
+            $name=[string]$request.name
+            Hide-CodexRunRecord -Directory $appDir -Name $name
+            $result=@{hidden=$name}
+        }
+        'save' {
+            $draft=$request.draft
+            if(-not $draft){throw 'No draft supplied.'}
+            $access=[string]$draft.access
+            if($access -cnotin @('workspace-write','read-only','yolo')){throw 'Invalid access mode.'}
+            if($null -ne $draft.autoResumeOnLimit -and $draft.autoResumeOnLimit -isnot [bool]){throw 'Invalid saved quota continuation option.'}
+            $executionMode=if($draft.executionMode){[string]$draft.executionMode}else{'background'}
+            if($executionMode -cnotin @('background','terminal','shared')){throw 'Invalid saved execution mode.'}
+            if($executionMode -in @('terminal','shared') -and $draft.autoResumeOnLimit -eq $true){
+                throw 'Automatic quota continuation requires Background execution.'
+            }
+            foreach($flag in @('microMode','alwaysOnTop')){
+                if($null -ne $request.$flag -and $request.$flag -isnot [bool]){throw "Invalid window preference: $flag"}
+            }
+            $previous=Read-CodexUiSettings $appDir
+            $safeDraft=[pscustomobject]@{
+                sessionId=[string]$draft.sessionId;repo=[string]$draft.repo
+                model=[string]$draft.model;effort=[string]$draft.effort
+                access=$access;message=[string]$draft.message;runAt=[string]$draft.runAt
+                executionMode=$executionMode
+                autoResumeOnLimit=($draft.autoResumeOnLimit -eq $true)
+            }
+            $appearance=if($request.barAppearance){$request.barAppearance}elseif($previous){$previous.barAppearance}else{$null}
+            if($appearance){
+                $validColors=@('green','blue','cyan','violet','amber','red')
+                foreach($kind in @('quota','weekly','time','working')){
+                    $color=[string]$appearance.$kind
+                    if($color -cnotin $validColors -and $color -cnotmatch '^#[0-9a-fA-F]{6}$'){
+                        throw "Invalid appearance color for $kind."
+                    }
+                }
+                foreach($kind in @('finish','lighting')){
+                    if($appearance.$kind -notin @(0,1,2)){throw "Invalid appearance $kind."}
+                }
+                if($appearance.shimmer -isnot [int] -and $appearance.shimmer -isnot [long]){throw 'Reflection strength must be integral.'}
+                if([int]$appearance.shimmer -lt 0 -or [int]$appearance.shimmer -gt 200){throw 'Invalid reflection strength.'}
+                if($appearance.speed -isnot [int] -and $appearance.speed -isnot [long]){throw 'Reflection speed must be integral.'}
+                if([int]$appearance.speed -lt 25 -or [int]$appearance.speed -gt 300){throw 'Invalid reflection speed.'}
+                if($appearance.aero -isnot [bool]){throw 'Invalid Aero Liquid setting.'}
+            }
+            $settings=[pscustomobject]@{
+                version=1;lastAccess=$access
+                compactMode=($request.compactMode -eq $true -or $request.microMode -eq $true)
+                microMode=($request.microMode -eq $true)
+                alwaysOnTop=($request.alwaysOnTop -eq $true)
+                barAppearance=$appearance
+                draft=$safeDraft
+            }
+            Write-CodexUiSettings -Directory $appDir -State $settings
+            $result=@{saved=$true}
+        }
+        'browse' {
+            Add-Type -AssemblyName System.Windows.Forms
+            $dialog=[Windows.Forms.FolderBrowserDialog]::new()
+            $dialog.Description='Select the Git repository for this conversation'
+            try {
+                $result=if($dialog.ShowDialog() -eq [Windows.Forms.DialogResult]::OK){
+                    $root=Get-RepositoryRoot ([string]$dialog.SelectedPath)
+                    if(-not $root){throw 'Select a folder inside an existing Git repository.'}
+                    @{path=[string]$root}
+                }else{@{path=''}}
+            }finally{$dialog.Dispose()}
+        }
+    }
+    [Console]::Out.WriteLine((@{ok=$true;result=$result} | ConvertTo-Json -Depth 20 -Compress))
+} catch {
+    [Console]::Out.WriteLine((@{ok=$false;error=$_.Exception.Message} | ConvertTo-Json -Depth 6 -Compress))
+    exit 1
+}
+){
+                throw 'Invalid shared job name.'
+            }
+            if($questionId -cnotmatch '^[a-zA-Z0-9_-]{1,128}
+            $name=[string]$request.name
+            if($name -cnotmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}$'){throw 'Invalid Scheduler task name.'}
+            Remove-OneTimeTask -Name $name -OnlyBeforeStart
+            $warning=''
+            $payloadPath=Join-Path $appDir ($name+'.json')
+            if(Test-Path -LiteralPath $payloadPath -PathType Leaf){
+                try {
+                    [void](Write-JobOutcome -Path ([IO.Path]::ChangeExtension($payloadPath,'.result.json')) -Status 'cancelled' -Message 'Cancelled by operator before execution.')
+                    Remove-Item -LiteralPath $payloadPath -Force -ErrorAction Stop
+                }catch{$warning=$_.Exception.Message}
+            }
+            $result=@{name=$name;status='Cancelled';warning=$warning}
+        }
+        'evidence' {
+            $name=[string]$request.name
+            if($name -cnotmatch '^(?:CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}|BP[0-9]+-Codex-(?:Resume|Test))$'){
+                throw 'Invalid history identifier.'
+            }
+            $result=Get-CodexRunEvidence -Directory $appDir -Name $name
+        }
+        'hide' {
+            $name=[string]$request.name
+            Hide-CodexRunRecord -Directory $appDir -Name $name
+            $result=@{hidden=$name}
+        }
+        'save' {
+            $draft=$request.draft
+            if(-not $draft){throw 'No draft supplied.'}
+            $access=[string]$draft.access
+            if($access -cnotin @('workspace-write','read-only','yolo')){throw 'Invalid access mode.'}
+            if($null -ne $draft.autoResumeOnLimit -and $draft.autoResumeOnLimit -isnot [bool]){throw 'Invalid saved quota continuation option.'}
+            $executionMode=if($draft.executionMode){[string]$draft.executionMode}else{'background'}
+            if($executionMode -cnotin @('background','terminal','shared')){throw 'Invalid saved execution mode.'}
+            if($executionMode -in @('terminal','shared') -and $draft.autoResumeOnLimit -eq $true){
+                throw 'Automatic quota continuation requires Background execution.'
+            }
+            foreach($flag in @('microMode','alwaysOnTop')){
+                if($null -ne $request.$flag -and $request.$flag -isnot [bool]){throw "Invalid window preference: $flag"}
+            }
+            $previous=Read-CodexUiSettings $appDir
+            $safeDraft=[pscustomobject]@{
+                sessionId=[string]$draft.sessionId;repo=[string]$draft.repo
+                model=[string]$draft.model;effort=[string]$draft.effort
+                access=$access;message=[string]$draft.message;runAt=[string]$draft.runAt
+                executionMode=$executionMode
+                autoResumeOnLimit=($draft.autoResumeOnLimit -eq $true)
+            }
+            $appearance=if($request.barAppearance){$request.barAppearance}elseif($previous){$previous.barAppearance}else{$null}
+            if($appearance){
+                $validColors=@('green','blue','cyan','violet','amber','red')
+                foreach($kind in @('quota','weekly','time','working')){
+                    $color=[string]$appearance.$kind
+                    if($color -cnotin $validColors -and $color -cnotmatch '^#[0-9a-fA-F]{6}$'){
+                        throw "Invalid appearance color for $kind."
+                    }
+                }
+                foreach($kind in @('finish','lighting')){
+                    if($appearance.$kind -notin @(0,1,2)){throw "Invalid appearance $kind."}
+                }
+                if($appearance.shimmer -isnot [int] -and $appearance.shimmer -isnot [long]){throw 'Reflection strength must be integral.'}
+                if([int]$appearance.shimmer -lt 0 -or [int]$appearance.shimmer -gt 200){throw 'Invalid reflection strength.'}
+                if($appearance.speed -isnot [int] -and $appearance.speed -isnot [long]){throw 'Reflection speed must be integral.'}
+                if([int]$appearance.speed -lt 25 -or [int]$appearance.speed -gt 300){throw 'Invalid reflection speed.'}
+                if($appearance.aero -isnot [bool]){throw 'Invalid Aero Liquid setting.'}
+            }
+            $settings=[pscustomobject]@{
+                version=1;lastAccess=$access
+                compactMode=($request.compactMode -eq $true -or $request.microMode -eq $true)
+                microMode=($request.microMode -eq $true)
+                alwaysOnTop=($request.alwaysOnTop -eq $true)
+                barAppearance=$appearance
+                draft=$safeDraft
+            }
+            Write-CodexUiSettings -Directory $appDir -State $settings
+            $result=@{saved=$true}
+        }
+        'browse' {
+            Add-Type -AssemblyName System.Windows.Forms
+            $dialog=[Windows.Forms.FolderBrowserDialog]::new()
+            $dialog.Description='Select the Git repository for this conversation'
+            try {
+                $result=if($dialog.ShowDialog() -eq [Windows.Forms.DialogResult]::OK){
+                    $root=Get-RepositoryRoot ([string]$dialog.SelectedPath)
+                    if(-not $root){throw 'Select a folder inside an existing Git repository.'}
+                    @{path=[string]$root}
+                }else{@{path=''}}
+            }finally{$dialog.Dispose()}
+        }
+    }
+    [Console]::Out.WriteLine((@{ok=$true;result=$result} | ConvertTo-Json -Depth 20 -Compress))
+} catch {
+    [Console]::Out.WriteLine((@{ok=$false;error=$_.Exception.Message} | ConvertTo-Json -Depth 6 -Compress))
+    exit 1
+}
+){
+                throw 'Invalid Codex question identity.'
+            }
+            $task=Get-ScheduledTask -TaskName $name -ErrorAction Stop
+            if($task.State -ne 'Running'){throw 'This Codex run is no longer active.'}
+            $jobPath=Join-Path $appDir ($name+'.json')
+            $job=Get-Content -LiteralPath $jobPath -Raw -ErrorAction Stop |
+                ConvertFrom-Json -ErrorAction Stop
+            if([string]$job.executionMode -cne 'shared'){
+                throw 'This run does not use the shared controller.'
+            }
+            $answer=$request.answer | ConvertTo-Json -Depth 15 -Compress
+            if([Text.Encoding]::UTF8.GetByteCount($answer) -gt 32768){
+                throw 'Question response is too large.'
+            }
+            $client=Join-Path $source 'components/SharedCodex/SharedClient.js'
+            $lines=@($answer | & (Get-Command node.exe -ErrorAction Stop).Source $client $jobPath answer $questionId)
+            if($LASTEXITCODE -ne 0 -or -not $lines){
+                throw 'Shared controller refused or could not deliver the answer.'
+            }
+            $answerResult=($lines | Select-Object -Last 1) | ConvertFrom-Json -ErrorAction Stop
+            if($answerResult.ok -ne $true){throw 'Shared controller did not acknowledge the answer.'}
+            $result=@{accepted=$true}
+        }
         'cancel' {
             $name=[string]$request.name
             if($name -cnotmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}$'){throw 'Invalid Scheduler task name.'}
@@ -329,8 +567,8 @@ try {
             if($access -cnotin @('workspace-write','read-only','yolo')){throw 'Invalid access mode.'}
             if($null -ne $draft.autoResumeOnLimit -and $draft.autoResumeOnLimit -isnot [bool]){throw 'Invalid saved quota continuation option.'}
             $executionMode=if($draft.executionMode){[string]$draft.executionMode}else{'background'}
-            if($executionMode -cnotin @('background','terminal')){throw 'Invalid saved execution mode.'}
-            if($executionMode -eq 'terminal' -and $draft.autoResumeOnLimit -eq $true){
+            if($executionMode -cnotin @('background','terminal','shared')){throw 'Invalid saved execution mode.'}
+            if($executionMode -in @('terminal','shared') -and $draft.autoResumeOnLimit -eq $true){
                 throw 'Automatic quota continuation requires Background execution.'
             }
             foreach($flag in @('microMode','alwaysOnTop')){

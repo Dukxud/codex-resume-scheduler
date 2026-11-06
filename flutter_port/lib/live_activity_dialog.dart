@@ -21,6 +21,18 @@ class _LiveActivityDialogState extends State<LiveActivityDialog> {
 
   String get _name => stringField(widget.run, 'Name');
 
+  Future<void> _answerShared(String id, Map<String, dynamic> answer) async {
+    try {
+      await widget.controller.adapter.call('sharedAnswer', {
+        'name': _name, 'questionId': id, 'answer': answer,
+      });
+      await widget.controller.poll();
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Codex did not accept the answer: $error')));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -86,7 +98,11 @@ class _LiveActivityDialogState extends State<LiveActivityDialog> {
       stringField(current, 'Status') == 'Running' ? current : null;
     final status = _stateLabel(current, history);
     final nativeTerminal = stringField(widget.run, 'ExecutionMode') == 'terminal';
+    final sharedMode = stringField(widget.run, 'ExecutionMode') == 'shared';
     final activity = _lastActivity;
+    final rawShared = field(activity, 'Shared');
+    final shared = rawShared is Map
+      ? Map<String, dynamic>.from(rawShared) : <String, dynamic>{};
     final recent = field(activity, 'Recent');
     final structured = recordList(field(activity, 'Timeline'));
     final timeline = structured.isNotEmpty ? structured : [
@@ -168,6 +184,11 @@ class _LiveActivityDialogState extends State<LiveActivityDialog> {
                 '${edits is num ? edits : 0} file-change events (recent)',
                 style: const TextStyle(
                   color: DeckColor.subtle, fontSize: 10.5)),
+              if (sharedMode) ...[
+                const SizedBox(height: 12),
+                SharedQuestionsPanel(state: shared, onAnswer: _answerShared),
+                const SizedBox(height: 12),
+              ],
               const SizedBox(height: 14),
               Row(children: [
                 const Expanded(child: Text('RECENT MILESTONES',

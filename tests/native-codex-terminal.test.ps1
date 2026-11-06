@@ -5,6 +5,10 @@ $tokens=$null;$errors=$null
 [void][Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ('Native terminal probe PowerShell syntax invalid: ' + ($errors -join '; '))}
 . $path
+$scriptText=Get-Content -LiteralPath $path -Raw
+if($scriptText -notmatch 'OpenSaved' -or $scriptText -notmatch 'Assert-NoScheduledConversationOwner'){
+    throw 'Saved-conversation preview omitted the owner safety gate.'
+}
 $id='11111111-2222-3333-4444-555555555555'
 $argsList=@(Get-ContinuumTerminalArguments -Codex 'C:\Program Files\Codex\codex.cmd' -SessionId $id -Repository 'C:\QA\Project Alpha')
 if($argsList -ccontains 'fork' -or $argsList -ccontains 'exec' -or

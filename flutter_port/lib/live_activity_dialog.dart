@@ -68,6 +68,18 @@ class _LiveActivityDialogState extends State<LiveActivityDialog> {
     await _loadInteractive();
   }
 
+  Future<void> _messageOwner(String text) async {
+    await widget.controller.adapter.call('interactiveMessage', {
+      'name': _name, 'text': text,
+    });
+    await _loadInteractive();
+  }
+
+  Future<void> _finishOwner() async {
+    await widget.controller.adapter.call('interactiveFinish', {'name': _name});
+    await _loadInteractive();
+  }
+
   Future<void> _steerOwner(String text) async {
     await widget.controller.adapter.call('interactiveSteer', {
       'name': _name, 'text': text,
@@ -184,6 +196,8 @@ class _LiveActivityDialogState extends State<LiveActivityDialog> {
                   snapshot: _sharedOwner!,
                   onReply: _replyToOwner,
                   onSteer: _steerOwner,
+                  onMessage: _messageOwner,
+                  onFinish: _finishOwner,
                 ),
               Wrap(spacing: 9, runSpacing: 7, children: [
                 _metric('STATUS', status, active != null

@@ -30,4 +30,16 @@ $rejected=$false
 try{[void](Quote-ContinuumArgument 'test"inject')}
 catch{$rejected=$true}
 if(-not $rejected){throw 'Untrusted quote accepted in terminal command.'}
-Write-Host 'Native Codex TUI preview: parser, exact-session resume, safe Windows argument encoding PASS.' -ForegroundColor Green
+$fallback=Get-ContinuumDefaultTerminalScript -Codex 'C:\Program Files\Codex\codex.cmd' -SessionId $id -Repository 'C:\QA\Project Alpha'
+if($fallback -notmatch [regex]::Escape("'C:\Program Files\Codex\codex.cmd'") -or
+   $fallback -notmatch [regex]::Escape("Set-Location -LiteralPath 'C:\QA\Project Alpha'") -or
+   $fallback -notmatch [regex]::Escape("resume '$id'") -or
+   $fallback -match '\bfork\b|\bexec\b'){
+   throw 'Default-console fallback did not preserve the native TUI, identity or quoting.'
+}
+$apostrophe=Get-ContinuumDefaultTerminalScript -Codex 'C:\QA\It''s Tool\codex.cmd' -SessionId $id -Repository 'C:\QA\It''s Repo'
+if($apostrophe -notmatch [regex]::Escape("'C:\QA\It''s Repo'") -or
+   $apostrophe -notmatch [regex]::Escape("'C:\QA\It''s Tool\codex.cmd'")){
+   throw 'Default-console fallback lost literal apostrophe escaping.'
+}
+Write-Host 'Native Codex TUI preview: parser, exact-session resume, safe Windows Terminal and default-console argument encoding PASS.' -ForegroundColor Green

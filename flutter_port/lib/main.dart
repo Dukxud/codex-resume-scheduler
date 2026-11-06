@@ -19,6 +19,7 @@ part 'dashboard_workbench.dart';
 part 'dashboard_monitor.dart';
 part 'dashboard_micro.dart';
 part 'live_activity_dialog.dart';
+part 'shared_questions.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

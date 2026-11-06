@@ -55,6 +55,8 @@ class SharedController {
     this.protocol=null;
     this.turnId=null;
     this.ended=false;
+    this.pendingCompletion=null;
+    this.serverExited=false;
   }
   snapshot() {
     return {name:this.name,sessionId:this.job.sessionId,status:this.status,
@@ -136,14 +138,21 @@ class SharedController {
         if(msg.method==="item/agentMessage/delta" && typeof msg.params?.delta==="string"){
           this.append(msg.params.delta);
         }else if(msg.method==="turn/completed"){
-          if(msg.params?.turn?.id!==this.turnId)return;
-          this.status=msg.params.turn.status==="completed"?"completed":"failed";
+          const ended=msg.params?.turn;
+          if(!ended?.id)return;
+          // A very short turn may complete before its turn/start response
+          // reaches us. Reconcile after receiving the authoritative ID.
+          if(!this.turnId){this.pendingCompletion=ended;return;}
+          if(ended.id!==this.turnId)return;
+          this.status=ended.status==="completed"?"completed":"failed";
           this.ended=true;this.publish();
         }
       });
-      let rejectExit;
-      const exited=new Promise((resolve,reject)=>{rejectExit=reject;this.codex.once("exit",()=>resolve());});
-      this.codex.once("error",rejectExit);
+      this.codex.once("exit",()=>{this.serverExited=true;});
+      this.codex.once("error",error=>{
+        this.serverExited=true;
+        this.append("Codex App Server transport failed.");
+      });
       this.codex.stderr.on("data",()=>{}); // Never log potentially sensitive stderr.
       const initialized=await this.protocol.request("initialize",{
         clientInfo:{name:"continuum_shared",title:"Continuum Shared Session",version:"0.1.0"},
@@ -166,13 +175,18 @@ class SharedController {
       });
       this.turnId=result?.turn?.id;
       if(!this.turnId)throw new Error("Codex did not return a turn identity.");
-      this.status=this.protocol.questions.size?"waiting":"running";
+      if(this.pendingCompletion && this.pendingCompletion.id===this.turnId){
+        this.status=this.pendingCompletion.status==="completed"?"completed":"failed";
+        this.ended=true;
+      }else{
+        this.status=this.protocol.questions.size?"waiting":"running";
+      }
       this.publish();
       // Preserve worker ownership until turn/completed; never interpret
       // turn/start acknowledgment or app-server disconnect as success.
       while(!this.ended){
-        await Promise.race([new Promise(resolve=>setTimeout(resolve,200)),exited]);
-        if(this.codex.exitCode!==null)throw new Error("Codex server disconnected before turn completion.");
+        await new Promise(resolve=>setTimeout(resolve,200));
+        if(this.serverExited)throw new Error("Codex server disconnected before turn completion.");
       }
       return this.status==="completed"?0:1;
     }catch(error){

@@ -106,7 +106,7 @@ class InteractiveOwner extends EventEmitter {
       this.event({type:'notification',method:m.method,params:m.params});
     }else if(m.method==='turn/completed'){
       this.turnStatus=m.params?.turn?.status||'unknown';
-      this.phase=this.turnStatus==='completed'?'completed':'failed';
+      this.phase=this.turnStatus==='completed'?'awaitingUser':'failed';
       this.prompts.clear();
       this.event({type:'turnCompleted',params:m.params});
     }else if(m.method==='turn/started'){
@@ -177,6 +177,34 @@ class InteractiveOwner extends EventEmitter {
     }catch(error){
       this.terminate(error);throw error;
     }
+  }
+  async message(text){
+    if(this.closed||this.phase!=='awaitingUser'||this.prompts.size)
+      throw Error('Codex has not finished its previous turn');
+    if(typeof text!=='string'||!text.trim()||text.length>16000)
+      throw Error('Invalid next user message');
+    this.phase='startingTurn';
+    try{
+      const turn=await this.call('turn/start',{
+        threadId:this.run.sessionId,
+        input:[{type:'text',text}],
+        cwd:this.run.cwd,model:this.run.model,effort:this.run.effort,
+        approvalPolicy:'on-request',sandboxPolicy:policy(this.run.access),
+      });
+      if(!turn.turn?.id)throw Error('Codex did not return a new turn identity');
+      this.turnId=turn.turn.id;
+      this.turnStatus=null;
+      this.phase=this.prompts.size?'awaitingInput':'running';
+      this.event({type:'nextTurn',turnId:this.turnId});
+    }catch(error){
+      this.phase='failed';this.event({type:'turnStartFailed',reason:error.message});
+      throw error;
+    }
+  }
+  finish(){
+    if(this.closed||this.phase!=='awaitingUser'||this.prompts.size)
+      throw Error('Cannot finish an active or unanswered Codex turn');
+    this.phase='finishing';this.event({type:'finishRequested'});
   }
   async steer(text){
     if(this.closed||this.phase!=='running'||!this.turnId)

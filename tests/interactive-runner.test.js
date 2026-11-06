@@ -72,7 +72,8 @@ test('scheduled owner remains alive through prompt, supports reconnect, then exi
     }});
     await waitFor(async()=>{
       const value=await transact({descriptor:control,action:'snapshot'});
-      return value.phase==='awaitingUser';
+      return value.phase==='awaitingUser' &&
+        value.events.some(event=>event.type==='nextTurn');
     });
     await transact({descriptor:control,action:'finish'});
     assert.equal(await finish(child),0,errors.join(''));

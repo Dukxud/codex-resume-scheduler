@@ -7,8 +7,8 @@ const net=require('node:net');
 
 function parseArgs(args){
   if(args.length<3||args[0]!=='--descriptor'||!args[1]||args[2]!=='--action')
-    throw Error('Expected --descriptor FILE --action snapshot|respond|steer|follow');
-  if(!['snapshot','respond','steer','follow'].includes(args[3])||args.length!==4)
+    throw Error('Expected --descriptor FILE --action snapshot|respond|steer|message|finish|follow');
+  if(!['snapshot','respond','steer','message','finish','follow'].includes(args[3])||args.length!==4)
     throw Error('Unsupported mirror operation');
   return {descriptor:args[1],action:args[3]};
 }
@@ -31,6 +31,7 @@ function transact({descriptor,action,payload=null,timeoutMs=5000}){
     sock.on('connect',()=>sock.write(JSON.stringify({kind:'hello',secret:d.secret})+'\n'));
     sock.on('error',error=>finish(Error('Existing owner is unavailable: '+error.code)));
     sock.on('close',()=>{if(!done)finish(Error('Existing owner closed the connection'))});
+    sock.setEncoding('utf8');
     sock.on('data',data=>{
       buf+=data.toString();
       if(Buffer.byteLength(buf)>4*1024*1024)return finish(Error('Mirror response too large'));
@@ -66,7 +67,7 @@ async function readStdin(){
 }
 async function main(args){
   const {descriptor,action}=parseArgs(args);
-  const payload=action==='respond'||action==='steer'?await readStdin():null;
+  const payload=['respond','steer','message'].includes(action)?await readStdin():null;
   const response=await transact({descriptor,action,payload});
   process.stdout.write(JSON.stringify({ok:true,result:response})+'\n');
 }

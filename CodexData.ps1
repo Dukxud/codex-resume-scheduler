@@ -241,7 +241,7 @@ function Get-UpcomingCodexTasks {
                 $session = [string]$job.sessionId
                 $repo = [string]$job.repo
                 $model = [string]$job.model
-                if($job.executionMode -eq 'terminal'){$executionMode='terminal'}
+                if([string]$job.executionMode -in @('terminal','shared')){$executionMode=[string]$job.executionMode}
                 if ([string]$job.createdAt -match '^\d{9,12}$') { $createdAt = [long]$job.createdAt }
                 $quotaContinuation = $job.continuationPolicy.mode -ceq 'quota-only' -and
                     [string]$job.retryAttempt -match '^[1-3]$'

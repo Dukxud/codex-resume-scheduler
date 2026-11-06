@@ -78,7 +78,7 @@ test('single Codex process; multiple viewers; question replay and explicit answe
       b.send({kind:'respond',id:prompt.id,response:{decision:'accept'}});
       await b.waitFor(m=>m.kind==='ack'&&m.id===prompt.id);
       await a.waitFor(m=>m.kind==='event'&&m.event.type==='turnCompleted');
-      assert.equal(owner.snapshot().phase,'completed');
+      assert.equal(owner.snapshot().phase,'awaitingUser');
       assert.equal(launches,1,'viewers do not spawn additional writers');
       a.send({kind:'respond',id:prompt.id,response:{decision:'accept'}});
       await a.waitFor(m=>m.kind==='rejected');

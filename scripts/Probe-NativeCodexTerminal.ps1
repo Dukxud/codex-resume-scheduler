@@ -28,6 +28,23 @@ function Get-ContinuumTerminalArguments {
    (Quote-ContinuumArgument $Codex),'-C',(Quote-ContinuumArgument $Repository),
    'resume',$SessionId)
 }
+function Quote-ContinuumPowerShellLiteral {
+ param([Parameter(Mandatory)][string]$Value)
+ if($Value.IndexOfAny([char[]]@([char]0,[char]10,[char]13)) -ge 0){
+   throw 'Unsupported control character in terminal argument.'
+ }
+ return "'" + $Value.Replace("'","''") + "'"
+}
+function Get-ContinuumDefaultTerminalScript {
+ param([string]$Codex,[string]$SessionId,[string]$Repository)
+ # Reuse the exact-session and absolute-directory validation of the
+ # Windows Terminal command before constructing the PowerShell fallback.
+ [void](Get-ContinuumTerminalArguments -Codex $Codex -SessionId $SessionId -Repository $Repository)
+ $directory=Quote-ContinuumPowerShellLiteral $Repository
+ $program=Quote-ContinuumPowerShellLiteral $Codex
+ $identity=Quote-ContinuumPowerShellLiteral $SessionId
+ return "Set-Location -LiteralPath $directory; & $program -C $directory resume $identity"
+}
 function Assert-NoScheduledConversationOwner {
  param([string]$SessionId,[string]$Directory)
  foreach($task in @(Get-ScheduledTask -ErrorAction Stop | Where-Object {
@@ -47,6 +64,7 @@ function Assert-NoScheduledConversationOwner {
 }
 $codexCommand=Get-Command codex.cmd -ErrorAction SilentlyContinue
 $terminalCommand=Get-Command wt.exe -ErrorAction SilentlyContinue
+$powerShellExecutable=Join-Path $PSHOME 'pwsh.exe'
 $version=$null
 if($codexCommand){
  $version=(& $codexCommand.Source --version 2>$null | Select-Object -First 1)
@@ -56,7 +74,10 @@ $check=[ordered]@{
  CodexCli=if($codexCommand){$codexCommand.Source}else{$null}
  CodexVersion=$version
  WindowsTerminal=if($terminalCommand){$terminalCommand.Source}else{$null}
- SupportedForPreview=($null -ne $codexCommand -and $null -ne $terminalCommand -and [bool]$version)
+ DefaultTerminalHost=$powerShellExecutable
+ LaunchMethod=if($terminalCommand){'Windows Terminal'}else{'Windows default console application'}
+ SupportedForPreview=($null -ne $codexCommand -and [bool]$version -and
+    ($null -ne $terminalCommand -or (Test-Path -LiteralPath $powerShellExecutable -PathType Leaf)))
  RunningOwnerCanBeAttached=$false
 }
 if(-not $Open -and -not $OpenSaved){[pscustomobject]$check;return}
@@ -70,13 +91,27 @@ if($OpenSaved){
  $Repository=[string]$saved.draft.repo
  if(-not $SessionId -or -not $Repository){throw 'Select a conversation and repository in Continuum first.'}
 }
-if(-not $check.SupportedForPreview){throw 'Codex CLI and Windows Terminal are required.'}
+if(-not $codexCommand){throw 'Codex CLI not found: codex.cmd is not available on this PowerShell PATH.'}
+if(-not $version){throw 'Codex CLI was found, but codex --version did not succeed.'}
+if(-not $check.SupportedForPreview){throw 'No supported terminal host: neither wt.exe nor PowerShell 7 is available.'}
 $root=(& git -C $Repository rev-parse --show-toplevel 2>$null | Select-Object -First 1)
 if($LASTEXITCODE -ne 0 -or -not $root){throw 'Selected directory is not a Git repository.'}
 $full=[IO.Path]::GetFullPath($Repository).TrimEnd([char[]]@('/','\'))
 $actual=[IO.Path]::GetFullPath([string]$root).TrimEnd([char[]]@('/','\'))
 if($full -ine $actual){throw 'Provide the verified repository root, not a subfolder.'}
 Assert-NoScheduledConversationOwner -SessionId $SessionId -Directory (Join-Path $env:LOCALAPPDATA 'CodexResumeScheduler')
-$argsList=Get-ContinuumTerminalArguments -Codex $codexCommand.Source -SessionId $SessionId -Repository $actual
-[void](Start-Process -FilePath $terminalCommand.Source -ArgumentList ($argsList -join ' ') -PassThru -ErrorAction Stop)
-Write-Host 'Native Codex TUI launch requested for the original conversation. No prompt submitted.' -ForegroundColor Green
+if($terminalCommand){
+  $argsList=Get-ContinuumTerminalArguments -Codex $codexCommand.Source -SessionId $SessionId -Repository $actual
+  [void](Start-Process -FilePath $terminalCommand.Source -ArgumentList ($argsList -join ' ') -PassThru -ErrorAction Stop)
+  Write-Host 'Codex TUI requested in Windows Terminal.' -ForegroundColor Green
+}else{
+  # Windows Terminal is optional. Opening a new console process uses the
+  # terminal application configured by Windows; it retains the normal
+  # PowerShell profile and Codex TUI, not a raw-log viewer.
+  $script=Get-ContinuumDefaultTerminalScript -Codex $codexCommand.Source -SessionId $SessionId -Repository $actual
+  $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
+  [void](Start-Process -FilePath $powerShellExecutable -WorkingDirectory $actual -ArgumentList @(
+    '-NoLogo','-NoExit','-EncodedCommand',$encoded) -PassThru -ErrorAction Stop)
+  Write-Host 'Codex TUI requested in the Windows default console application (wt.exe alias not found).' -ForegroundColor Green
+}
+Write-Host 'Original conversation requested; no prompt submitted and no fork.' -ForegroundColor Green

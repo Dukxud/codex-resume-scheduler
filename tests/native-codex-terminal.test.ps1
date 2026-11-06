@@ -9,6 +9,20 @@ $scriptText=Get-Content -LiteralPath $path -Raw
 if($scriptText -notmatch 'OpenSaved' -or $scriptText -notmatch 'Assert-NoScheduledConversationOwner'){
     throw 'Saved-conversation preview omitted the owner safety gate.'
 }
+# Blank/failed CLI version reporting is diagnostic only: a detected
+# executable plus a terminal host is enough to attempt native TUI launch.
+if(-not (Test-ContinuumPreviewReadiness -CliPresent $true -WindowsTerminalPresent $true -PowerShellPresent $false)){
+ throw 'A detected Codex executable with Windows Terminal must permit a preview attempt.'
+}
+if(-not (Test-ContinuumPreviewReadiness -CliPresent $true -WindowsTerminalPresent $false -PowerShellPresent $true)){
+ throw 'Default-terminal fallback must permit a preview attempt without wt.exe.'
+}
+if((Test-ContinuumPreviewReadiness -CliPresent $false -WindowsTerminalPresent $true -PowerShellPresent $true)){
+ throw 'A missing Codex executable was incorrectly accepted.'
+}
+if((Test-ContinuumPreviewReadiness -CliPresent $true -WindowsTerminalPresent $false -PowerShellPresent $false)){
+ throw 'Missing terminal hosts were incorrectly accepted.'
+}
 $id='11111111-2222-3333-4444-555555555555'
 $argsList=@(Get-ContinuumTerminalArguments -Codex 'C:\Program Files\Codex\codex.cmd' -SessionId $id -Repository 'C:\QA\Project Alpha')
 if($argsList -ccontains 'fork' -or $argsList -ccontains 'exec' -or

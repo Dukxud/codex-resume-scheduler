@@ -76,7 +76,7 @@ async function main(){
  const [jobPath,action,id,payload]=process.argv.slice(2);
  if(!jobPath||!["status","answer","follow"].includes(action))throw new Error("Usage: SharedClient JOB.json status|answer ID JSON|follow");
  if(action==="follow"){await interactive(jobPath);return;}
- const result=action==="answer"?JSON.parse(payload||"null"):undefined;
+ const result=action==="answer"?JSON.parse(payload||fs.readFileSync(0,"utf8")):undefined;
  const response=await query(jobPath,action,id,result);
  process.stdout.write(JSON.stringify(response)+"\n");
 }

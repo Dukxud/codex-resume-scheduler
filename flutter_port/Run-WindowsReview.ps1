@@ -20,6 +20,8 @@ try{
     if($LASTEXITCODE -ne 0){throw 'Live Windows bridge integration failed.'}
     & $flutter.Source create --platforms=windows --project-name codex_resume_flutter .
     if($LASTEXITCODE -ne 0){throw 'Flutter Windows runner generation failed.'}
+    & pwsh -NoProfile -File (Join-Path $project 'Apply-WindowsIcon.ps1')
+    if($LASTEXITCODE -ne 0){throw 'Windows icon application failed.'}
     & $flutter.Source pub get
     if($LASTEXITCODE -ne 0){throw 'Flutter dependencies failed.'}
     & $flutter.Source analyze --no-fatal-infos

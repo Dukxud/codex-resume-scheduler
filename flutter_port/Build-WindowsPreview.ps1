@@ -32,6 +32,8 @@ try{
     if($LASTEXITCODE -ne 0){throw 'Live Windows bridge integration failed.'}
     & $flutter.Source create --platforms=windows --project-name codex_resume_flutter .
     if($LASTEXITCODE -ne 0){throw 'Flutter Windows runner creation failed.'}
+    & pwsh -NoProfile -File (Join-Path $project 'Apply-WindowsIcon.ps1')
+    if($LASTEXITCODE -ne 0){throw 'Windows icon application failed.'}
     & $flutter.Source pub get
     if($LASTEXITCODE -ne 0){throw 'Flutter dependencies failed.'}
     & $flutter.Source analyze --no-fatal-infos
@@ -42,9 +44,13 @@ try{
     if($LASTEXITCODE -ne 0){throw 'Flutter release build failed.'}
 }finally{Pop-Location}
 }
+& pwsh -NoProfile -File (Join-Path $project 'Apply-WindowsIcon.ps1') -VerifyOnly
+if($LASTEXITCODE -ne 0){throw 'Windows icon missing from generated runner.'}
 $release=Join-Path $project 'build\windows\x64\runner\Release'
 $exe=Join-Path $release 'codex_resume_flutter.exe'
 if(-not (Test-Path -LiteralPath $exe -PathType Leaf)){throw 'Flutter executable is missing.'}
+& pwsh -NoProfile -File (Join-Path $root 'tests/flutter-window-icon.test.ps1') -Executable $exe
+if($LASTEXITCODE -ne 0){throw 'Packaged executable lacks Continuum icon.'}
 foreach($required in @('flutter_windows.dll','data')){
     if(-not (Test-Path -LiteralPath (Join-Path $release $required))){
         throw "Flutter release payload incomplete: $required"

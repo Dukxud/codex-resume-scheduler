@@ -22,10 +22,10 @@ foreach($relative in @('pubspec.yaml','lib/main.dart','lib/aero_bar.dart',
         'lib/bridge.dart','lib/scheduler_controller.dart','lib/dashboard_skin.dart','lib/dashboard_frame.dart',
         'lib/dashboard_workbench.dart','lib/dashboard_monitor.dart','lib/date_labels.dart','lib/desktop_window.dart',
         'lib/aero_appearance.dart','lib/appearance_dialog.dart','test/appearance_test.dart','test/widget_test.dart',
-        'test/logic_test.dart','test/aero_static_test.dart','test/window_mode_test.dart','test/windows_adapter_integration_test.dart','test/parity_capture_test.dart','Build-WindowsPreview.ps1','Run-WindowsReview.ps1','README.md')){
+        'test/logic_test.dart','test/aero_static_test.dart','test/window_mode_test.dart','test/windows_adapter_integration_test.dart','test/parity_capture_test.dart','Build-WindowsPreview.ps1','Run-WindowsReview.ps1','Apply-WindowsIcon.ps1','assets/continuum_icon.ico','README.md')){
     if(-not (Test-Path -LiteralPath (Join-Path $folder $relative) -PathType Leaf)){throw "Missing Flutter file: $relative"}
 }
-foreach($relative in @('Run-WindowsReview.ps1','Build-WindowsPreview.ps1','../tests/flutter-port-bridge.test.ps1')){
+foreach($relative in @('Run-WindowsReview.ps1','Build-WindowsPreview.ps1','../tests/flutter-port-bridge.test.ps1','../tests/flutter-window-icon.test.ps1','Apply-WindowsIcon.ps1')){
     $path=Join-Path $folder $relative
     $pTokens=$null;$pErrors=$null
     [void][System.Management.Automation.Language.Parser]::ParseFile($path,[ref]$pTokens,[ref]$pErrors)
@@ -70,5 +70,14 @@ $pubspec=Get-Content -LiteralPath (Join-Path $folder 'pubspec.yaml') -Raw
 if(-not $pubspec.Contains('shaders/aero_liquid.frag') -or -not $pubspec.Contains('assets/native/')) {
     throw 'Shader or native sprites not packaged.'
 }
+$nativeIcon=Join-Path $folder 'assets/continuum_icon.ico'
+$nativeHash=(Get-FileHash -LiteralPath $nativeIcon -Algorithm SHA256).Hash
+if($nativeHash -cne '1098CDBCDD8B89E5B6E657676B3881CFE2D22C2D5F19114AC1B27ACBF9D5FD56'){
+    throw 'Pinned native Continuum icon changed.'
+}
+$installer=Get-Content -LiteralPath (Join-Path $folder 'Apply-WindowsIcon.ps1') -Raw
+if(-not $installer.Contains('WM_SETICON, ICON_SMALL') -or
+   -not $installer.Contains('resources/app_icon.ico') -or
+   -not $installer.Contains('VerifyOnly')){throw 'Native titlebar icon enforcement missing.'}
 Write-Host 'Flutter bridge, approved Aero optics and exact Windows pixels PASS.'
 

@@ -47,8 +47,9 @@ class OwnerMirror {
     const client={socket,authorized:false,buffer:''};
     this.connections.add(client);
     const timer=setTimeout(()=>{if(!client.authorized)socket.destroy()},3000);
+    socket.setEncoding('utf8');
     socket.on('data',chunk=>{
-      client.buffer+=chunk.toString('utf8');
+      client.buffer+=chunk;
       if(Buffer.byteLength(client.buffer)>MAX_CLIENT_MESSAGE){socket.destroy();return}
       let index;
       while((index=client.buffer.indexOf('\n'))>=0){
@@ -70,6 +71,18 @@ class OwnerMirror {
             this.write(client,{kind:'ack',id:String(message.id)});
           }catch(error){
             this.write(client,{kind:'rejected',id:String(message.id),reason:error.message});
+          }
+        }else if(message.kind==='message'){
+          this.owner.message(message.text).then(
+            ()=>this.write(client,{kind:'ack',action:'message'}),
+            error=>this.write(client,{kind:'rejected',action:'message',reason:error.message}),
+          );
+        }else if(message.kind==='finish'){
+          try{
+            this.owner.finish();
+            this.write(client,{kind:'ack',action:'finish'});
+          }catch(error){
+            this.write(client,{kind:'rejected',action:'finish',reason:error.message});
           }
         }else if(message.kind==='steer'){
           // Explicit human input, routed to the existing active turn only.

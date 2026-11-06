@@ -163,7 +163,7 @@ class SharedController {
       const resumed=await this.protocol.request("thread/resume",{
         threadId:this.job.sessionId,cwd:this.job.repo,model:this.job.model,
         approvalPolicy:this.job.access==="yolo"?"never":"on-request",
-        sandbox:sandboxFor(this.job.access)
+        sandbox:this.job.access==='yolo'?'danger-full-access':this.job.access
       });
       if(resumed?.thread?.id!==this.job.sessionId)throw new Error("Codex resumed unexpected conversation.");
       const result=await this.protocol.request("turn/start",{

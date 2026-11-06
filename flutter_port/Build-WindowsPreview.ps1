@@ -61,7 +61,7 @@ try{
         if(-not (Test-Path -LiteralPath $from -PathType Leaf)){throw "Required worker file missing: $relative"}
         Copy-Item -LiteralPath $from -Destination (Join-Path $destination $relative) -ErrorAction Stop
     }
-    $componentNames=@('RuntimeBundle','OneTimeTasks','GitRepository','JobOutcomes','SettingsStore')
+    $componentNames=@('RuntimeBundle','OneTimeTasks','GitRepository','JobOutcomes','SettingsStore','SharedCodex')
     foreach($component in $componentNames){
         $source=Join-Path $root "components/$component"
         $target=Join-Path $destination "components/$component"

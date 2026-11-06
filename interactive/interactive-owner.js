@@ -10,6 +10,8 @@ const PROMPTS=new Set([
   'item/commandExecution/requestApproval',
   'item/fileChange/requestApproval',
   'item/tool/requestUserInput',
+  'tool/requestUserInput',
+  'item/permissions/requestApproval',
   'mcpServer/elicitation/request',
 ]);
 const MAX_PENDING=16;
@@ -40,7 +42,7 @@ class InteractiveOwner extends EventEmitter {
     this.cliJs=cliJs;this.spawnChild=spawnChild;this.timeoutMs=timeoutMs;
     this.child=null;this.started=false;this.closed=false;this.phase='idle';
     this.nextId=1;this.requests=new Map();this.prompts=new Map();
-    this.history=[];this.run=null;this.turnId=null;
+    this.history=[];this.run=null;this.turnId=null;this.turnStatus=null;
   }
   event(message){
     if(this.closed && message.type!=='closed')return;
@@ -97,8 +99,16 @@ class InteractiveOwner extends EventEmitter {
       this.event({type:'prompt',id:key,method:m.method,params:m.params});
       return;
     }
-    if(m.method==='turn/completed'){
-      this.phase='completed';this.event({type:'turnCompleted',params:m.params});
+    if(m.method==='serverRequest/resolved'){
+      const key=String(m.params?.requestId??'');
+      if(this.prompts.delete(key))this.event({type:'promptResolved',id:key});
+      if(this.prompts.size===0&&this.phase==='awaitingInput')this.phase='running';
+      this.event({type:'notification',method:m.method,params:m.params});
+    }else if(m.method==='turn/completed'){
+      this.turnStatus=m.params?.turn?.status||'unknown';
+      this.phase=this.turnStatus==='completed'?'completed':'failed';
+      this.prompts.clear();
+      this.event({type:'turnCompleted',params:m.params});
     }else if(m.method==='turn/started'){
       this.phase='running';this.event({type:'turnStarted',params:m.params});
     }else{
@@ -112,6 +122,13 @@ class InteractiveOwner extends EventEmitter {
     const entry=this.prompts.get(String(id));
     if(!entry)throw Error('No matching unresolved Codex question');
     if(this.closed)throw Error('Codex owner is no longer running');
+    if(entry.params?.threadId && entry.params.threadId!==this.run?.sessionId)
+      throw Error('Codex prompt belongs to a different conversation');
+    if(entry.params?.turnId && this.turnId && entry.params.turnId!==this.turnId)
+      throw Error('Codex prompt belongs to a different turn');
+    if(['item/commandExecution/requestApproval','item/fileChange/requestApproval'].includes(entry.method) &&
+       !['accept','acceptForSession','decline','cancel'].includes(response.decision))
+      throw Error('Unrecognized approval decision; advanced approvals are not yet supported.');
     this.send({id:entry.id,result:response});
     this.prompts.delete(String(id));
     if(this.prompts.size===0)this.phase='running';
@@ -119,7 +136,7 @@ class InteractiveOwner extends EventEmitter {
   }
   snapshot(){
     return {
-      phase:this.phase,sessionId:this.run?.sessionId||null,turnId:this.turnId,
+      phase:this.phase,sessionId:this.run?.sessionId||null,turnId:this.turnId,turnStatus:this.turnStatus,
       pending:[...this.prompts].map(([id,p])=>({id,method:p.method,params:p.params})),
       events:this.history.slice(),
     };
@@ -160,6 +177,18 @@ class InteractiveOwner extends EventEmitter {
     }catch(error){
       this.terminate(error);throw error;
     }
+  }
+  async steer(text){
+    if(this.closed||this.phase!=='running'||!this.turnId)
+      throw Error('No active Codex turn can accept steering');
+    if(typeof text!=='string'||!text.trim()||text.length>16000)
+      throw Error('Invalid user message');
+    const response=await this.call('turn/steer',{
+      threadId:this.run.sessionId,expectedTurnId:this.turnId,
+      input:[{type:'text',text}],
+    });
+    if(response.turnId!==this.turnId)throw Error('Codex returned a different active turn');
+    this.event({type:'steered',turnId:this.turnId});
   }
   terminate(error){
     if(this.closed)return;

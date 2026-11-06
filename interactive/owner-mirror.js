@@ -71,6 +71,12 @@ class OwnerMirror {
           }catch(error){
             this.write(client,{kind:'rejected',id:String(message.id),reason:error.message});
           }
+        }else if(message.kind==='steer'){
+          // Explicit human input, routed to the existing active turn only.
+          this.owner.steer(message.text).then(
+            ()=>this.write(client,{kind:'ack',action:'steer'}),
+            error=>this.write(client,{kind:'rejected',action:'steer',reason:error.message}),
+          );
         }else{
           this.write(client,{kind:'rejected',reason:'Unsupported mirror action'});
         }

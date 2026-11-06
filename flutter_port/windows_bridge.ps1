@@ -2,7 +2,7 @@
 # The existing verified worker owns all execution and account safety checks.
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('load','labels','pending','usage','select','schedule','cancel','evidence','hide','save','browse','interactiveStatus','interactiveRespond','interactiveSteer')][string]$Action,
+    [Parameter(Mandatory)][ValidateSet('load','labels','pending','usage','select','schedule','cancel','evidence','hide','save','browse','interactiveStatus','interactiveRespond','interactiveSteer','interactiveMessage','interactiveFinish')][string]$Action,
     [string]$Payload = ''
 )
 $ErrorActionPreference='Stop'
@@ -327,6 +327,16 @@ try {
             $result=Invoke-InteractiveOwnerClient -Name ([string]$request.name) -Operation 'respond' -InputData @{
                 kind='respond';id=[string]$request.id;response=$request.response
             }
+        }
+        'interactiveMessage' {
+            $text=[string]$request.text
+            if(-not $text.Trim() -or $text.Length -gt 16000){throw 'Invalid reply to Codex.'}
+            $result=Invoke-InteractiveOwnerClient -Name ([string]$request.name) -Operation 'message' -InputData @{
+                kind='message';text=$text
+            }
+        }
+        'interactiveFinish' {
+            $result=Invoke-InteractiveOwnerClient -Name ([string]$request.name) -Operation 'finish'
         }
         'interactiveSteer' {
             $text=[string]$request.text

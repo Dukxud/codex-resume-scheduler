@@ -1,0 +1,30 @@
+name: Native Codex TUI feasibility spike
+
+on:
+  push:
+    branches:
+      - spike/native-interactive-codex
+    paths:
+      - scripts/Probe-NativeCodexTerminal.ps1
+      - tests/native-codex-terminal.test.ps1
+      - docs/interactive-codex.md
+      - .github/workflows/native-terminal-spike.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-terminal-spike
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-2022
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and validate native TUI probe without running Codex
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -File ./tests/native-codex-terminal.test.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Native terminal probe test failed.' }

@@ -1,4 +1,4 @@
-name: Shared Codex owner prototype (bounded)
+name: Shared Codex owner integration (bounded)
 
 on:
   push:
@@ -6,26 +6,69 @@ on:
     paths:
       - 'components/SharedCodex/**'
       - 'tests/shared-codex-*.test.js'
+      - 'CodexData.ps1'
+      - 'CodexRunEngine.ps1'
+      - 'flutter_port/**'
       - '.github/workflows/shared-session-prototype.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: shared-codex-owner-prototype
+  group: shared-codex-owner-integration
   cancel-in-progress: true
 
 jobs:
   windows:
     runs-on: windows-2022
-    timeout-minutes: 5
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Verify shared protocol and interactive owner end-to-end against fake App Server
+      - name: Test one interactive owner, question/answer and crash safety
         shell: pwsh
         run: |
           node --test ./tests/shared-codex-protocol.test.js ./tests/shared-codex-controller.test.js
-          if ($LASTEXITCODE -ne 0) { throw 'Shared controller contract failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'Shared App Server integration failed.' }
+      - name: Check Windows worker, bridge and quota invariants
+        shell: pwsh
+        run: |
+          pwsh -NoLogo -NoProfile -File ./tests/flutter-port-source.test.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned worker source failed.' }
+          pwsh -NoLogo -NoProfile -STA -File ./tests/codex-worker-integration.test.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Worker integration failed.' }
+          pwsh -NoLogo -NoProfile -STA -File ./tests/flutter-port-bridge.test.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter bridge integration failed.' }
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Analyze and test Flutter questions, scheduling and existing behavior
+        shell: pwsh
+        working-directory: flutter_port
+        run: |
+          flutter create --platforms=windows --project-name codex_resume_flutter .
+          if ($LASTEXITCODE -ne 0) { throw 'Windows runner failed.' }
+          flutter pub get
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter dependencies failed.' }
+          flutter analyze --no-fatal-infos
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter analysis failed.' }
+          flutter test --exclude-tags visual-capture
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter regression tests failed.' }
+      - name: Compile and package Windows preview
+        shell: pwsh
+        working-directory: flutter_port
+        run: |
+          flutter build windows --release
+          if ($LASTEXITCODE -ne 0) { throw 'Windows release build failed.' }
+          pwsh -NoProfile -STA -File ./Build-WindowsPreview.ps1 -PackageVerifiedBuild -OutputDirectory ./build/review-out
+          if ($LASTEXITCODE -ne 0) { throw 'Windows preview packaging failed.' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shared-session-windows-preview-${{ github.sha }}
+          path: flutter_port/build/review-out/*.zip
+          if-no-files-found: error
+          retention-days: 7

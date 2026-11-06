@@ -62,22 +62,38 @@ function Assert-NoScheduledConversationOwner {
     }
  }
 }
+function Test-ContinuumPreviewReadiness {
+ param([bool]$CliPresent,[bool]$WindowsTerminalPresent,[bool]$PowerShellPresent)
+ return ($CliPresent -and ($WindowsTerminalPresent -or $PowerShellPresent))
+}
 $codexCommand=Get-Command codex.cmd -ErrorAction SilentlyContinue
 $terminalCommand=Get-Command wt.exe -ErrorAction SilentlyContinue
 $powerShellExecutable=Join-Path $PSHOME 'pwsh.exe'
+# Version is diagnostic metadata, not evidence that a terminal may start.
+# Codex builds can emit it on either stream, and a missing version string
+# must never override an otherwise valid executable/terminal discovery.
 $version=$null
+$versionCheck='not checked'
 if($codexCommand){
- $version=(& $codexCommand.Source --version 2>$null | Select-Object -First 1)
- if($LASTEXITCODE -ne 0){$version=$null}
+ try {
+   $versionLines=@(& $codexCommand.Source --version 2>&1)
+   $versionExitCode=$LASTEXITCODE
+   $version=($versionLines | ForEach-Object { [string]$_ } |
+      Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+      Select-Object -First 1)
+   $versionCheck=if($versionExitCode -eq 0){'exit 0'}else{"exit $versionExitCode"}
+ }catch{
+   $versionCheck='unavailable: '+$_.Exception.Message
+ }
 }
 $check=[ordered]@{
  CodexCli=if($codexCommand){$codexCommand.Source}else{$null}
  CodexVersion=$version
+ VersionProbe=$versionCheck
  WindowsTerminal=if($terminalCommand){$terminalCommand.Source}else{$null}
  DefaultTerminalHost=$powerShellExecutable
  LaunchMethod=if($terminalCommand){'Windows Terminal'}else{'Windows default console application'}
- SupportedForPreview=($null -ne $codexCommand -and [bool]$version -and
-    ($null -ne $terminalCommand -or (Test-Path -LiteralPath $powerShellExecutable -PathType Leaf)))
+ SupportedForPreview=(Test-ContinuumPreviewReadiness -CliPresent ($null -ne $codexCommand) -WindowsTerminalPresent ($null -ne $terminalCommand) -PowerShellPresent (Test-Path -LiteralPath $powerShellExecutable -PathType Leaf))
  RunningOwnerCanBeAttached=$false
 }
 if(-not $Open -and -not $OpenSaved){[pscustomobject]$check;return}
@@ -92,7 +108,6 @@ if($OpenSaved){
  if(-not $SessionId -or -not $Repository){throw 'Select a conversation and repository in Continuum first.'}
 }
 if(-not $codexCommand){throw 'Codex CLI not found: codex.cmd is not available on this PowerShell PATH.'}
-if(-not $version){throw 'Codex CLI was found, but codex --version did not succeed.'}
 if(-not $check.SupportedForPreview){throw 'No supported terminal host: neither wt.exe nor PowerShell 7 is available.'}
 $root=(& git -C $Repository rev-parse --show-toplevel 2>$null | Select-Object -First 1)
 if($LASTEXITCODE -ne 0 -or -not $root){throw 'Selected directory is not a Git repository.'}

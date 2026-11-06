@@ -1,0 +1,31 @@
+name: Shared Codex owner prototype (bounded)
+
+on:
+  push:
+    branches: [feat/shared-interactive-session]
+    paths:
+      - 'components/SharedCodex/**'
+      - 'tests/shared-codex-*.test.js'
+      - '.github/workflows/shared-session-prototype.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shared-codex-owner-prototype
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify shared protocol and interactive owner end-to-end against fake App Server
+        shell: pwsh
+        run: |
+          node --test ./tests/shared-codex-protocol.test.js ./tests/shared-codex-controller.test.js
+          if ($LASTEXITCODE -ne 0) { throw 'Shared controller contract failed.' }

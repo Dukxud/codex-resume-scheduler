@@ -56,4 +56,45 @@ if($apostrophe -notmatch [regex]::Escape("'C:\QA\It''s Repo'") -or
    $apostrophe -notmatch [regex]::Escape("'C:\QA\It''s Tool\codex.cmd'")){
    throw 'Default-console fallback lost literal apostrophe escaping.'
 }
+# Regression: do not treat a legitimate scheduled owner as a failed
+# terminal install, and never launch a second native writer.
+if($scriptText -notmatch 'StatusSaved'){
+  throw 'Read-only reservation diagnosis is missing.'
+}
+$testDirectory=Join-Path ([IO.Path]::GetTempPath()) ('continuum-tui-owner-'+[guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $testDirectory -Force)
+$taskName='CodexResume-20261105-1737-8fea70e0'
+$script:fakeTaskState='Running'
+function Get-ScheduledTask {
+  [CmdletBinding()]
+  param()
+  [pscustomobject]@{TaskName=$taskName;State=$script:fakeTaskState}
+}
+try {
+  [IO.File]::WriteAllText((Join-Path $testDirectory ($taskName+'.json')),
+     ('{"sessionId":"' + $id + '"}'))
+  $reservations=@(Get-ContinuumConversationReservations -SessionId $id -Directory $testDirectory)
+  if($reservations.Count -ne 1 -or $reservations[0].State -ne 'Running'){
+     throw 'Active Scheduler ownership was not surfaced as BLOCKED.'
+  }
+  $rejected=$false
+  try {[void](Assert-NoScheduledConversationOwner -SessionId $id -Directory $testDirectory)}
+  catch {$rejected=$_.Exception.Message -match 'BLOCKED:.*Running'}
+  if(-not $rejected){throw 'Active scheduled writer was not rejected explicitly.'}
+  $script:fakeTaskState='Ready'
+  if(@(Get-ContinuumConversationReservations -SessionId $id -Directory $testDirectory).Count -ne 1){
+     throw 'Ready task without outcome must reserve the original conversation.'
+  }
+  [IO.File]::WriteAllText((Join-Path $testDirectory ($taskName+'.result.json')),'{"status":"completed"}')
+  if(@(Get-ContinuumConversationReservations -SessionId $id -Directory $testDirectory).Count -ne 0){
+     throw 'Completed scheduler task incorrectly blocks native preview.'
+  }
+  $script:fakeTaskState='Queued'
+  if(@(Get-ContinuumConversationReservations -SessionId $id -Directory $testDirectory).Count -ne 1){
+     throw 'Queued task must remain reserved even with stale outcome metadata.'
+  }
+} finally {
+  Remove-Item Function:\Get-ScheduledTask -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $testDirectory -Recurse -Force -ErrorAction SilentlyContinue
+}
 Write-Host 'Native Codex TUI preview: parser, exact-session resume, safe Windows Terminal and default-console argument encoding PASS.' -ForegroundColor Green

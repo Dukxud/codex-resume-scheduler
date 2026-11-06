@@ -62,6 +62,19 @@ test('scheduled owner remains alive through prompt, supports reconnect, then exi
     await transact({descriptor:control,action:'respond',payload:{
       id:second.pending[0].id,response:{decision:'accept'},
     }});
+    await waitFor(async()=>{
+      const value=await transact({descriptor:control,action:'snapshot'});
+      return value.phase==='awaitingUser';
+    });
+    assert.equal(child.exitCode,null,'owner remains available for ordinary conversational replies');
+    await transact({descriptor:control,action:'message',payload:{
+      text:'I approve that approach. Please continue in this same conversation.',
+    }});
+    await waitFor(async()=>{
+      const value=await transact({descriptor:control,action:'snapshot'});
+      return value.phase==='awaitingUser';
+    });
+    await transact({descriptor:control,action:'finish'});
     assert.equal(await finish(child),0,errors.join(''));
     assert.equal(fs.existsSync(control),false,'owner descriptor removed after exit');
   }finally{

@@ -86,6 +86,12 @@ function Assert-NoScheduledConversationOwner {
  }
 }
 
+
+function Test-ContinuumPreviewReadiness {
+ param([bool]$CliPresent,[bool]$WindowsTerminalPresent,[bool]$PowerShellPresent)
+ return ($CliPresent -and ($WindowsTerminalPresent -or $PowerShellPresent))
+}
+
 $codexCommand=Get-Command codex.cmd -ErrorAction SilentlyContinue
 $terminalCommand=Get-Command wt.exe -ErrorAction SilentlyContinue
 $powerShellExecutable=Join-Path $PSHOME 'pwsh.exe'

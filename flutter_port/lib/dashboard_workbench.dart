@@ -231,7 +231,33 @@ extension _DashboardWorkbench on _SchedulerHomeState {
             ]),
           ))),
           const SizedBox(height: 12),
-          _deckFieldLabel('INSTRUCTION FOR CODEX'),
+          Row(children: [
+            Expanded(child: _deckFieldLabel('INSTRUCTION FOR CODEX')),
+            PopupMenuButton<String>(
+              key: const Key('execution-mode-picker'),
+              tooltip: 'How Codex will run',
+              initialValue: state.executionMode,
+              onSelected: (value) => state.edit(executionMode: value),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'interactive',
+                  child: Text('Interactive · questions and approvals')),
+                PopupMenuItem(value: 'unattended',
+                  child: Text('Unattended · no interactive questions')),
+              ],
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(state.executionMode == 'interactive'
+                  ? Icons.chat_bubble_outline_rounded : Icons.nightlight_outlined,
+                  size: 14, color: DeckColor.aqua),
+                const SizedBox(width: 5),
+                Text(state.executionMode == 'interactive'
+                    ? 'INTERACTIVE' : 'UNATTENDED',
+                  style: const TextStyle(color: DeckColor.aqua,
+                    fontSize: 10.5, fontWeight: FontWeight.w800)),
+                const Icon(Icons.expand_more_rounded,
+                  color: DeckColor.aqua, size: 16),
+              ]),
+            ),
+          ]),
           const SizedBox(height: 5),
           SizedBox(height: 59, child: DeckField(
             controller: instruction,

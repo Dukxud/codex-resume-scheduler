@@ -3,6 +3,7 @@
 param(
  [Parameter(Mandatory,ParameterSetName='Open')][switch]$Open,
  [Parameter(Mandatory,ParameterSetName='OpenSaved')][switch]$OpenSaved,
+ [Parameter(Mandatory,ParameterSetName='StatusSaved')][switch]$StatusSaved,
  [Parameter(Mandatory,ParameterSetName='Open')][string]$SessionId,
  [Parameter(Mandatory,ParameterSetName='Open')][string]$Repository
 )
@@ -45,27 +46,46 @@ function Get-ContinuumDefaultTerminalScript {
  $identity=Quote-ContinuumPowerShellLiteral $SessionId
  return "Set-Location -LiteralPath $directory; & $program -C $directory resume $identity"
 }
-function Assert-NoScheduledConversationOwner {
- param([string]$SessionId,[string]$Directory)
+# The preflight is informational; native Codex ownership remains authoritative.
+# A ready job with no result still reserves the original conversation.
+function Get-ContinuumConversationReservations {
+ param([Parameter(Mandatory)][string]$SessionId,
+       [Parameter(Mandatory)][string]$Directory)
+ $reservations=[Collections.Generic.List[object]]::new()
  foreach($task in @(Get-ScheduledTask -ErrorAction Stop | Where-Object {
     $_.TaskName -cmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[a-fA-F0-9]{8}$' })){
     if($task.State -notin @('Ready','Running','Queued')){continue}
     $jobFile=Join-Path $Directory ($task.TaskName+'.json')
     if(-not (Test-Path -LiteralPath $jobFile -PathType Leaf)){continue}
-    try {
-      $job=Get-Content -LiteralPath $jobFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-    } catch { throw "Scheduler job metadata unreadable: $($task.TaskName)" }
+    try{
+      $job=Get-Content -LiteralPath $jobFile -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+    }catch{
+      throw "Scheduler job metadata unreadable: $($task.TaskName)"
+    }
     if([string]$job.sessionId -cne $SessionId){continue}
-    $result=Join-Path $Directory ($task.TaskName+'.result.json')
-    if($task.State -eq 'Running' -or -not (Test-Path -LiteralPath $result -PathType Leaf)){
-      throw "Conversation reserved by Scheduler job $($task.TaskName). Do not open a second writer."
+    $outcome=Join-Path $Directory ($task.TaskName+'.result.json')
+    if($task.State -in @('Running','Queued') -or
+       -not (Test-Path -LiteralPath $outcome -PathType Leaf)){
+      $reservations.Add([pscustomobject]@{
+        Job=$task.TaskName
+        State=[string]$task.State
+        Reason=if($task.State -eq 'Running'){'Running job'}else{'Pending or unreconciled job'}
+      })
     }
  }
+ return @($reservations.ToArray())
 }
-function Test-ContinuumPreviewReadiness {
- param([bool]$CliPresent,[bool]$WindowsTerminalPresent,[bool]$PowerShellPresent)
- return ($CliPresent -and ($WindowsTerminalPresent -or $PowerShellPresent))
+function Assert-NoScheduledConversationOwner {
+ param([Parameter(Mandatory)][string]$SessionId,
+       [Parameter(Mandatory)][string]$Directory)
+ $reservations=@(Get-ContinuumConversationReservations -SessionId $SessionId -Directory $Directory)
+ if($reservations.Count){
+   $first=$reservations[0]
+   throw "BLOCKED: $($first.Job) ($($first.State)) owns or reserves this conversation. A hidden worker cannot be reattached by starting another Codex TUI. Do not retry until the job has ended."
+ }
 }
+
 $codexCommand=Get-Command codex.cmd -ErrorAction SilentlyContinue
 $terminalCommand=Get-Command wt.exe -ErrorAction SilentlyContinue
 $powerShellExecutable=Join-Path $PSHOME 'pwsh.exe'
@@ -96,8 +116,8 @@ $check=[ordered]@{
  SupportedForPreview=(Test-ContinuumPreviewReadiness -CliPresent ($null -ne $codexCommand) -WindowsTerminalPresent ($null -ne $terminalCommand) -PowerShellPresent (Test-Path -LiteralPath $powerShellExecutable -PathType Leaf))
  RunningOwnerCanBeAttached=$false
 }
-if(-not $Open -and -not $OpenSaved){[pscustomobject]$check;return}
-if($OpenSaved){
+if(-not $Open -and -not $OpenSaved -and -not $StatusSaved){[pscustomobject]$check;return}
+if($OpenSaved -or $StatusSaved){
  $settingsPath=Join-Path (Join-Path $env:LOCALAPPDATA 'CodexResumeScheduler') 'settings.json'
  if(-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)){
    throw 'Continuum has no saved conversation selection.'
@@ -106,6 +126,16 @@ if($OpenSaved){
  $SessionId=[string]$saved.draft.sessionId
  $Repository=[string]$saved.draft.repo
  if(-not $SessionId -or -not $Repository){throw 'Select a conversation and repository in Continuum first.'}
+}
+if($StatusSaved){
+  $reservations=@(Get-ContinuumConversationReservations -SessionId $SessionId -Directory (Join-Path $env:LOCALAPPDATA 'CodexResumeScheduler'))
+  [pscustomobject]@{
+    Status=if($reservations.Count){'BLOCKED'}elseif($check.SupportedForPreview){'ELIGIBLE_FOR_PREVIEW'}else{'UNAVAILABLE'}
+    Reservation=$reservations
+    RunningOwnerCanBeAttached=$false
+    Detail=if($reservations.Count){'Do not launch a second writer. Preserve the scheduled work.'}elseif($check.SupportedForPreview){'Native launcher can be tried when no other Codex writer owns the thread.'}else{'Required Codex or terminal executable missing.'}
+  }
+  return
 }
 if(-not $codexCommand){throw 'Codex CLI not found: codex.cmd is not available on this PowerShell PATH.'}
 if(-not $check.SupportedForPreview){throw 'No supported terminal host: neither wt.exe nor PowerShell 7 is available.'}

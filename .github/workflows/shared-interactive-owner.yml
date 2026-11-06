@@ -7,11 +7,14 @@ on:
     paths:
       - 'interactive/**'
       - 'tests/*interactive*'
+      - 'CodexRunEngine.ps1'
+      - 'flutter_port/**'
       - '.github/workflows/shared-interactive-owner.yml'
 
 permissions:
   contents: read
 
+# New commits supersede old attempts; no polling/retry loops.
 concurrency:
   group: shared-interactive-owner
   cancel-in-progress: true
@@ -19,7 +22,7 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-2022
-    timeout-minutes: 5
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Exercise single owner and authenticated multiple viewers
@@ -28,15 +31,61 @@ jobs:
           node --test ./tests/interactive-owner.test.js
           if ($LASTEXITCODE -ne 0) { throw 'Interactive ownership tests failed.' }
           node --test ./tests/interactive-runner.test.js
-          if ($LASTEXITCODE -ne 0) { throw 'Interactive owner integration fixture failed.' }
-      - name: Verify syntax
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive job lifetime tests failed.' }
+
+      - name: Verify Node syntax and worker bridge source
         shell: pwsh
         run: |
-          node --check ./interactive/interactive-owner.js
-          if ($LASTEXITCODE -ne 0) { throw 'Interactive owner syntax invalid.' }
-          node --check ./interactive/owner-client.js
-          if ($LASTEXITCODE -ne 0) { throw 'Mirror client syntax invalid.' }
-          node --check ./interactive/run-owner.js
-          if ($LASTEXITCODE -ne 0) { throw 'Owner service syntax invalid.' }
-          node --check ./interactive/owner-mirror.js
-          if ($LASTEXITCODE -ne 0) { throw 'Mirror syntax invalid.' }
+          foreach ($file in @('interactive/interactive-owner.js','interactive/owner-mirror.js','interactive/owner-client.js','interactive/run-owner.js')) {
+            node --check $file
+            if ($LASTEXITCODE -ne 0) { throw "Invalid syntax: $file" }
+          }
+          pwsh -NoProfile -File ./tests/flutter-port-source.test.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Worker and bridge source validation failed.' }
+
+      - name: Install pinned Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+
+      - name: Generate Windows runner
+        shell: pwsh
+        working-directory: flutter_port
+        run: flutter create --platforms=windows --project-name codex_resume_flutter .
+
+      - name: Resolve dependencies
+        shell: pwsh
+        working-directory: flutter_port
+        run: flutter pub get
+
+      - name: Dart analysis
+        shell: pwsh
+        working-directory: flutter_port
+        run: flutter analyze --no-fatal-infos
+
+      - name: Full Flutter nonvisual test suite
+        shell: pwsh
+        working-directory: flutter_port
+        run: flutter test --exclude-tags visual-capture
+
+      - name: Compile Windows release
+        shell: pwsh
+        working-directory: flutter_port
+        run: flutter build windows --release
+
+      - name: Package unsigned Windows preview
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -STA -File ./flutter_port/Build-WindowsPreview.ps1 `
+            -PackageVerifiedBuild `
+            -OutputDirectory ./flutter_port/build/review-out
+
+      - name: Retain native review package
+        uses: actions/upload-artifact@v4
+        with:
+          name: interactive-owner-preview-${{ github.sha }}
+          path: flutter_port/build/review-out/*.zip
+          if-no-files-found: error
+          retention-days: 7

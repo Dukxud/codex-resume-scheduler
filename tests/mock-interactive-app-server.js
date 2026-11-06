@@ -16,12 +16,17 @@ rl.on('line',line=>{
     send({id:m.id,result:{thread:{id:SESSION}}});
   }else if(m.method==='turn/start'&&initialized){
     turnCount++;
-    if(turnCount!==1)return send({id:m.id,error:{message:'Second owner turn forbidden'}});
+    if(turnCount>3)return send({id:m.id,error:{message:'Fixture turn limit reached'}});
     send({id:m.id,result:{turn:{id:'22222222-2222-3333-4444-555555555555'}}});
     send({method:'turn/started',params:{threadId:SESSION,turn:{id:'22222222-2222-3333-4444-555555555555'}}});
     send({method:'item/agentMessage/delta',params:{delta:'I need approval before changing files.'}});
-    pending=true;
-    send({id:71,method:'item/commandExecution/requestApproval',params:{threadId:SESSION,command:'git status',reason:'Fixture approval request'}});
+    if(turnCount===1){
+      pending=true;
+      send({id:71,method:'item/commandExecution/requestApproval',params:{threadId:SESSION,command:'git status',reason:'Fixture approval request'}});
+    }else{
+      send({method:'item/agentMessage/delta',params:{delta:'Answer to follow-up message.'}});
+      send({method:'turn/completed',params:{threadId:SESSION,turn:{status:'completed'}}});
+    }
   }else if(m.id===71&&pending){
     pending=false;
     if(m.result?.decision!=='accept'&&m.result?.decision!=='decline')return send({method:'error',params:{message:'Invalid decision'}});

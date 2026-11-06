@@ -165,7 +165,7 @@ class SchedulerController extends ChangeNotifier {
           ? preferredAccess : 'workspace-write';
         autoResumeOnLimit = field(draft, 'autoResumeOnLimit') == true;
         final storedExecutionMode = stringField(draft, 'executionMode');
-        executionMode = const ['terminal', 'background'].contains(storedExecutionMode)
+        executionMode = const ['terminal', 'background', 'shared'].contains(storedExecutionMode)
           ? storedExecutionMode
           : autoResumeOnLimit ? 'background' : 'terminal';
         micro = field(settings, 'microMode') == true;
@@ -361,10 +361,10 @@ class SchedulerController extends ChangeNotifier {
     if (instruction != null) message = instruction;
     if (accessMode != null) access = accessMode;
     if (reasoning != null) effort = reasoning;
-    if (autoResumeOnLimit != null) this.autoResumeOnLimit = autoResumeOnLimit;
-    if (executionMode != null && const ['terminal','background'].contains(executionMode)) {
+    if (autoResumeOnLimit != null && executionMode == 'background') this.autoResumeOnLimit = autoResumeOnLimit;
+    if (executionMode != null && const ['terminal','background','shared'].contains(executionMode)) {
       this.executionMode = executionMode;
-      if (executionMode == 'terminal') this.autoResumeOnLimit = false;
+      if (executionMode != 'background') this.autoResumeOnLimit = false;
     }
     final previousUsageTarget = usageTargetModel;
     var modeChanged = false;

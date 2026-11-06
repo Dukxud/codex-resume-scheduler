@@ -26,11 +26,17 @@ jobs:
         shell: pwsh
         run: |
           node --test ./tests/interactive-owner.test.js
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive ownership tests failed.' }
+          node --test ./tests/interactive-runner.test.js
           if ($LASTEXITCODE -ne 0) { throw 'Interactive owner integration fixture failed.' }
       - name: Verify syntax
         shell: pwsh
         run: |
           node --check ./interactive/interactive-owner.js
           if ($LASTEXITCODE -ne 0) { throw 'Interactive owner syntax invalid.' }
+          node --check ./interactive/owner-client.js
+          if ($LASTEXITCODE -ne 0) { throw 'Mirror client syntax invalid.' }
+          node --check ./interactive/run-owner.js
+          if ($LASTEXITCODE -ne 0) { throw 'Owner service syntax invalid.' }
           node --check ./interactive/owner-mirror.js
           if ($LASTEXITCODE -ne 0) { throw 'Mirror syntax invalid.' }

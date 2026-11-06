@@ -171,7 +171,7 @@ class InteractiveOwner extends EventEmitter {
       });
       if(!turn.turn?.id)throw Error('Codex did not return a turn identity');
       this.turnId=turn.turn.id;
-      this.phase=this.prompts.size?'awaitingInput':'running';
+      if(!this.turnStatus)this.phase=this.prompts.size?'awaitingInput':'running';
       this.event({type:'ownerReady',sessionId:run.sessionId,turnId:this.turnId});
       return this.snapshot();
     }catch(error){
@@ -184,6 +184,7 @@ class InteractiveOwner extends EventEmitter {
     if(typeof text!=='string'||!text.trim()||text.length>16000)
       throw Error('Invalid next user message');
     this.phase='startingTurn';
+    this.turnStatus=null;
     try{
       const turn=await this.call('turn/start',{
         threadId:this.run.sessionId,
@@ -193,8 +194,7 @@ class InteractiveOwner extends EventEmitter {
       });
       if(!turn.turn?.id)throw Error('Codex did not return a new turn identity');
       this.turnId=turn.turn.id;
-      this.turnStatus=null;
-      this.phase=this.prompts.size?'awaitingInput':'running';
+      if(!this.turnStatus)this.phase=this.prompts.size?'awaitingInput':'running';
       this.event({type:'nextTurn',turnId:this.turnId});
     }catch(error){
       this.phase='failed';this.event({type:'turnStartFailed',reason:error.message});

@@ -317,9 +317,25 @@ try {
         'sharedAnswer' {
             $name=[string]$request.name
             $questionId=[string]$request.questionId
-            if($name -cnotmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}
+            if($name -cnotmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}\z'){throw 'Invalid shared job name.'}
+            if($questionId -cnotmatch '^[a-zA-Z0-9_-]{1,128}\z'){throw 'Invalid Codex question identity.'}
+            $task=Get-ScheduledTask -TaskName $name -ErrorAction Stop
+            if($task.State -ne 'Running'){throw 'This Codex run is no longer active.'}
+            $jobPath=Join-Path $appDir ($name+'.json')
+            $job=Get-Content -LiteralPath $jobPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            if([string]$job.executionMode -cne 'shared'){throw 'This run does not use the shared controller.'}
+            $answer=$request.answer | ConvertTo-Json -Depth 15 -Compress
+            if([Text.Encoding]::UTF8.GetByteCount($answer) -gt 32768){throw 'Question response is too large.'}
+            $client=Join-Path $source 'components/SharedCodex/SharedClient.js'
+            $lines=@($answer | & (Get-Command node.exe -ErrorAction Stop).Source $client $jobPath answer $questionId)
+            if($LASTEXITCODE -ne 0 -or -not $lines){throw 'Shared controller refused the answer.'}
+            $answerResult=($lines | Select-Object -Last 1) | ConvertFrom-Json -ErrorAction Stop
+            if($answerResult.ok -ne $true){throw 'Shared controller did not acknowledge the answer.'}
+            $result=@{accepted=$true}
+        }
+        'cancel' {
             $name=[string]$request.name
-            if($name -cnotmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}$'){throw 'Invalid Scheduler task name.'}
+            if($name -cnotmatch '^CodexResume-[0-9]{8}-[0-9]{4}-[0-9a-fA-F]{8}\z'){throw 'Invalid Scheduler task name.'}
             Remove-OneTimeTask -Name $name -OnlyBeforeStart
             $warning=''
             $payloadPath=Join-Path $appDir ($name+'.json')

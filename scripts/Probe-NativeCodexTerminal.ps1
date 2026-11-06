@@ -2,6 +2,7 @@
 [CmdletBinding(DefaultParameterSetName='Probe')]
 param(
  [Parameter(Mandatory,ParameterSetName='Open')][switch]$Open,
+ [Parameter(Mandatory,ParameterSetName='OpenSaved')][switch]$OpenSaved,
  [Parameter(Mandatory,ParameterSetName='Open')][string]$SessionId,
  [Parameter(Mandatory,ParameterSetName='Open')][string]$Repository
 )
@@ -58,7 +59,17 @@ $check=[ordered]@{
  SupportedForPreview=($null -ne $codexCommand -and $null -ne $terminalCommand -and [bool]$version)
  RunningOwnerCanBeAttached=$false
 }
-if(-not $Open){[pscustomobject]$check;return}
+if(-not $Open -and -not $OpenSaved){[pscustomobject]$check;return}
+if($OpenSaved){
+ $settingsPath=Join-Path (Join-Path $env:LOCALAPPDATA 'CodexResumeScheduler') 'settings.json'
+ if(-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)){
+   throw 'Continuum has no saved conversation selection.'
+ }
+ $saved=Get-Content -LiteralPath $settingsPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+ $SessionId=[string]$saved.draft.sessionId
+ $Repository=[string]$saved.draft.repo
+ if(-not $SessionId -or -not $Repository){throw 'Select a conversation and repository in Continuum first.'}
+}
 if(-not $check.SupportedForPreview){throw 'Codex CLI and Windows Terminal are required.'}
 $root=(& git -C $Repository rev-parse --show-toplevel 2>$null | Select-Object -First 1)
 if($LASTEXITCODE -ne 0 -or -not $root){throw 'Selected directory is not a Git repository.'}

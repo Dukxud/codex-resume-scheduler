@@ -271,9 +271,10 @@ extension _DashboardWorkbench on _SchedulerHomeState {
               height: 36,
               child: Switch.adaptive(
                 key: const Key('auto-resume-on-limit'),
-                value: state.autoResumeOnLimit,
+                value: state.executionMode == 'unattended' && state.autoResumeOnLimit,
                 activeTrackColor: DeckColor.mint,
-                onChanged: (value) => state.edit(autoResumeOnLimit: value),
+                onChanged: state.executionMode == 'interactive'
+                  ? null : (value) => state.edit(autoResumeOnLimit: value),
               ),
             ),
             const SizedBox(width: 7),
@@ -285,14 +286,19 @@ extension _DashboardWorkbench on _SchedulerHomeState {
                   fontWeight: FontWeight.w600)),
             )),
             const SizedBox(width: 8),
-            const DeckInfo('OPT-IN', color: DeckColor.mint),
+            if (state.executionMode == 'unattended')
+               const DeckInfo('OPT-IN', color: DeckColor.mint),
           ]),
           const SizedBox(height: 5),
           Row(children: [
             Expanded(child: Text(
-              state.canSchedule
-                ? 'Windows will verify the task again at launch.'
-                : 'A verified model and fresh account data are required.',
+              state.executionMode == 'interactive'
+                 ? (state.access == 'yolo' || state.autoResumeOnLimit
+                   ? 'Interactive requires workspace permissions and auto-resume off.'
+                   : 'Interactive: Codex stays available to answer questions.')
+                 : state.canSchedule
+                   ? 'Windows will verify the task again at launch.'
+                   : 'A verified model and fresh account data are required.',
               maxLines: 2, overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: DeckColor.muted, fontSize: 10.5))),

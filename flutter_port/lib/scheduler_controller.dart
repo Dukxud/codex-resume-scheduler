@@ -361,7 +361,7 @@ class SchedulerController extends ChangeNotifier {
     if (instruction != null) message = instruction;
     if (accessMode != null) access = accessMode;
     if (reasoning != null) effort = reasoning;
-    if (autoResumeOnLimit != null && executionMode == 'background') this.autoResumeOnLimit = autoResumeOnLimit;
+    if (autoResumeOnLimit != null && (executionMode ?? this.executionMode) == 'background') this.autoResumeOnLimit = autoResumeOnLimit;
     if (executionMode != null && const ['terminal','background','shared'].contains(executionMode)) {
       this.executionMode = executionMode;
       if (executionMode != 'background') this.autoResumeOnLimit = false;

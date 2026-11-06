@@ -71,6 +71,8 @@ function Get-CodexRuntimeFiles {
     return @(
         'CodexResumeScheduler.ps1','CodexRunEngine.ps1',
         'CodexUsage.js','CodexRunJob.vbs','CodexQuotaContinuation.ps1',
+        'interactive/interactive-owner.js','interactive/owner-mirror.js',
+        'interactive/run-owner.js','interactive/owner-client.js',
         'components/RuntimeBundle/RuntimeBundle.psm1',
         'components/OneTimeTasks/OneTimeTasks.psm1',
         'components/GitRepository/GitRepository.psm1',
@@ -160,6 +162,9 @@ function Invoke-CodexScheduledJob {
         if ($job.effort -notmatch '^[a-zA-Z][a-zA-Z0-9_-]{0,40}$') { throw 'Invalid reasoning effort.' }
         if ($job.model -and $job.model -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$') { throw 'Invalid model identifier.' }
         if ($job.access -notin @('read-only','workspace-write','yolo')) { throw 'Invalid saved access setting.' }
+        $executionMode=if($job.executionMode){[string]$job.executionMode}else{'unattended'}
+        if($executionMode -cnotin @('unattended','interactive')){throw 'Unrecognized scheduled execution mode.'}
+        if($executionMode -eq 'interactive' -and $job.access -eq 'yolo'){throw 'Unrestricted interactive execution is not supported.'}
         if (-not (Test-Path -LiteralPath $job.repo -PathType Container)) { throw 'Repository no longer exists.' }
         $root = Get-GitRepositoryRoot -Path $job.repo
         if (-not $root -or ($root.TrimEnd([char[]]@('/','\')) -ine ([string]$job.repo).TrimEnd([char[]]@('/','\')))) { throw 'Saved directory is no longer the repository root.' }
@@ -232,6 +237,27 @@ function Invoke-CodexScheduledJob {
             Set-CodexRunOutcome -JobFile $JobFile -Status 'blocked' -ExitCode 1 -Attempt ([int]$job.retryAttempt) -Message $message
             Write-Host $message -ForegroundColor Yellow
             return 1
+        }
+        if($executionMode -eq 'interactive'){
+            if(Test-CodexContinuationPolicy $job){
+                throw 'Interactive execution does not yet support automatic quota continuation.'
+            }
+            $node=(Get-Command node.exe -ErrorAction Stop).Source
+            $cli=Get-CodexCliJs
+            $runner=Join-Path $RuntimeDirectory 'interactive/run-owner.js'
+            if(-not (Test-Path -LiteralPath $runner -PathType Leaf)){throw 'Interactive owner missing from pinned runtime.'}
+            # This PowerShell worker retains the per-conversation mutex for
+            # the entire child lifetime. Unlike wt.exe, node.exe stays alive
+            # while Codex waits for questions and human approvals.
+            $PSNativeCommandUseErrorActionPreference=$false
+            & $node $runner --job $JobFile --cli-js $cli
+            $result=[int]$LASTEXITCODE
+            if($result -eq 0){
+                Set-CodexRunOutcome -JobFile $JobFile -Status 'completed' -ExitCode 0 -Attempt ([int]$job.retryAttempt)
+            }else{
+                Set-CodexRunOutcome -JobFile $JobFile -Status 'failed' -ExitCode $result -Attempt ([int]$job.retryAttempt) -Message 'Interactive Codex owner failed or ended before completion.'
+            }
+            return $result
         }
         $argsList = @('exec','--json','-m',$model,'-c',"model_reasoning_effort=$($job.effort)",'-C',$root)
         if (-not $model) { $argsList = @('exec','--json','-c',"model_reasoning_effort=$($job.effort)",'-C',$root) }

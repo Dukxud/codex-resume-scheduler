@@ -5,10 +5,13 @@ class InteractiveOwnerPanel extends StatefulWidget {
   const InteractiveOwnerPanel({
     super.key, required this.snapshot,
     required this.onReply, required this.onSteer,
+    required this.onMessage, required this.onFinish,
   });
   final Map<String, dynamic> snapshot;
   final Future<void> Function(String id, Map<String, dynamic> response) onReply;
   final Future<void> Function(String text) onSteer;
+  final Future<void> Function(String text) onMessage;
+  final Future<void> Function() onFinish;
 
   @override
   State<InteractiveOwnerPanel> createState() => _InteractiveOwnerPanelState();
@@ -171,25 +174,39 @@ class _InteractiveOwnerPanelState extends State<InteractiveOwnerPanel> {
       for (final prompt in prompts) _prompt(prompt),
       if (_error != null)
         Text(_error!, style: const TextStyle(color: DeckColor.gold)),
-      if (phase == 'running' && prompts.isEmpty) ...[
+      if ((phase == 'running' || phase == 'awaitingUser') && prompts.isEmpty) ...[
         const SizedBox(height: 8),
         Row(children: [
           Expanded(child: TextField(
             key: const Key('interactive-steer-text'),
             controller: _steer,
             decoration: const InputDecoration(
-              hintText: 'Send a message to this turn', isDense: true))),
+              hintText: phase == 'awaitingUser'
+                ? 'Reply to Codex in this conversation' : 'Message this running turn',
+              isDense: true))),
           const SizedBox(width: 8),
           FilledButton(
             key: const Key('interactive-steer'),
             onPressed: _busy ? null : () => _send(() async {
               final text = _steer.text.trim();
               if (text.isEmpty) return;
-              await widget.onSteer(text);
+              if (phase == 'awaitingUser') {
+                await widget.onMessage(text);
+              } else {
+                await widget.onSteer(text);
+              }
               if (mounted) _steer.clear();
             }),
             child: const Text('Send')),
         ]),
+      ],
+      if (phase == 'awaitingUser') ...[
+        const SizedBox(height: 6),
+        Align(alignment: Alignment.centerRight,
+          child: TextButton(
+            key: const Key('interactive-finish'),
+            onPressed: _busy ? null : () => _send(widget.onFinish),
+            child: const Text('Finish session'))),
       ],
       const Divider(height: 24, color: DeckColor.line),
     ]);

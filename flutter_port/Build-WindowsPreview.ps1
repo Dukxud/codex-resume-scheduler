@@ -68,6 +68,13 @@ try{
         [void](New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force)
         Copy-Item -LiteralPath $source -Destination $target -Recurse -ErrorAction Stop
     }
+    # Interactive mode is a pinned worker capability, not a UI-only module.
+    # All four files must accompany the packaged runtime and bridge.
+    $interactiveSource=Join-Path $root 'interactive'
+    if(-not (Test-Path -LiteralPath $interactiveSource -PathType Container)){
+        throw 'Interactive owner source missing from review package.'
+    }
+    Copy-Item -LiteralPath $interactiveSource -Destination (Join-Path $destination 'interactive') -Recurse -ErrorAction Stop
     $bridgeFolder=Join-Path $destination 'flutter_port'
     [void](New-Item -ItemType Directory -Path $bridgeFolder -Force)
     Copy-Item -LiteralPath (Join-Path $project 'windows_bridge.ps1') -Destination $bridgeFolder -ErrorAction Stop

@@ -18,6 +18,8 @@ class LiveActivityDialog extends StatefulWidget {
 class _LiveActivityDialogState extends State<LiveActivityDialog> {
   Map<String, dynamic>? _lastActivity;
   bool _showAll = false;
+  Map<String, dynamic>? _sharedOwner;
+  bool _loadingOwner = false;
 
   String get _name => stringField(widget.run, 'Name');
 
@@ -26,6 +28,7 @@ class _LiveActivityDialogState extends State<LiveActivityDialog> {
     super.initState();
     _lastActivity = widget.controller.activities[_name];
     widget.controller.addListener(_refresh);
+    unawaited(_loadInteractive());
   }
 
   void _refresh() {
@@ -34,6 +37,42 @@ class _LiveActivityDialogState extends State<LiveActivityDialog> {
     final latest = widget.controller.activities[_name];
     if (latest != null) _lastActivity = latest;
     if (mounted) setState(() {});
+    unawaited(_loadInteractive());
+  }
+
+  Future<void> _loadInteractive() async {
+    if (_loadingOwner || !mounted) return;
+    final run = _find(widget.controller.upcoming);
+    if (run == null || stringField(run, 'Status') != 'Running') return;
+    _loadingOwner = true;
+    try {
+      final response = await widget.controller.adapter.call(
+        'interactiveStatus', {'name': _name});
+      if (mounted) {
+        setState(() {
+          _sharedOwner = field(response, 'available') == false
+            ? null : response;
+        });
+      }
+    } catch (_) {
+      // Preserve the last known owner state if a transient IPC read fails.
+    } finally {
+      _loadingOwner = false;
+    }
+  }
+
+  Future<void> _replyToOwner(String id, Map<String, dynamic> response) async {
+    await widget.controller.adapter.call('interactiveRespond', {
+      'name': _name, 'id': id, 'response': response,
+    });
+    await _loadInteractive();
+  }
+
+  Future<void> _steerOwner(String text) async {
+    await widget.controller.adapter.call('interactiveSteer', {
+      'name': _name, 'text': text,
+    });
+    await _loadInteractive();
   }
 
   @override
@@ -139,6 +178,13 @@ class _LiveActivityDialogState extends State<LiveActivityDialog> {
             key: const Key('live-activity-scroll'),
             padding: const EdgeInsets.fromLTRB(17, 12, 17, 14),
             children: [
+              if (_sharedOwner != null)
+                InteractiveOwnerPanel(
+                  key: const Key('shared-codex-owner-panel'),
+                  snapshot: _sharedOwner!,
+                  onReply: _replyToOwner,
+                  onSteer: _steerOwner,
+                ),
               Wrap(spacing: 9, runSpacing: 7, children: [
                 _metric('STATUS', status, active != null
                   ? DeckColor.gold : DeckColor.mint),

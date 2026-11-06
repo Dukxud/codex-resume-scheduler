@@ -44,3 +44,14 @@ Stage 5 (optional): verify a canonical App Server backend plus a Codex --remote 
 ## Important status
 
 This is a capability spike, not finished scheduling integration. It does not reattach to an existing hidden exec run or claim to reveal its questions. Native terminal launch has not been validated on BLACK-PUDDLE.
+
+## BP197 root-cause and safety review
+
+- BLACK-PUDDLE confirmed the installed Codex CLI (`codex-cli 0.166.0`) and `wt.exe` are available. The launch refusal arose because Scheduler job `CodexResume-20261105-1737-8fea70e0` reserved the saved session. Reservation is expected behavior, **not** a broken installation.
+- Earlier CI tested the Windows command line but never tested the on-device execution owner's availability. A probe that starts another `codex resume` cannot verify reattachment to the existing `codex exec --json resume` process.
+- This branch provides `-StatusSaved` to report `BLOCKED` versus `ELIGIBLE_FOR_PREVIEW` without creating a process. `ELIGIBLE_FOR_PREVIEW` does not guarantee ownership; Codex's own writer lock remains authoritative.
+- The current hidden worker has no interactive console to restore. Its task must finish normally; never kill or bypass a writer merely to get a prettier terminal. The future interactive mode must own the actual Codex TUI from launch and have a task lifecycle that tracks it.
+- **Important Microsoft Terminal behavior:** targeting an existing named window with `wt -w NAME new-tab` **adds a tab**; it does not reattach to the already-running Codex process. Future **Open Terminal** must focus the verified existing OS window instead of using the new-tab command a second time.
+- **Do not repeatedly run the launcher while an owner is active.** These blocked states are not errors to retry automatically. Product messages should distinguish `BLOCKED`, `UNAVAILABLE`, `ERROR`, and `LAUNCH_REQUESTED`. Never report the last as proof the interactive UI opened.
+- Official sources: https://learn.chatgpt.com/docs/cli/reference ; https://learn.chatgpt.com/docs/non-interactive-mode ; https://learn.microsoft.com/en-us/windows/terminal/command-line-arguments ; https://learn.chatgpt.com/docs/app-server
+

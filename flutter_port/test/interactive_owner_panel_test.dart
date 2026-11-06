@@ -26,6 +26,8 @@ void main() {
         snapshot: conversation,
         onReply: (id, response) async { answeredId = id; answer = response; },
         onSteer: (text) async {},
+        onMessage: (text) async {},
+        onFinish: () async {},
       ),
     ))));
     expect(find.text('CODEX NEEDS YOUR INPUT'), findsOneWidget);
@@ -57,6 +59,8 @@ void main() {
         },
         onReply: (id, response) async { answer = response; },
         onSteer: (text) async {},
+        onMessage: (text) async {},
+        onFinish: () async {},
       ),
     ))));
     await tester.enterText(
@@ -79,6 +83,8 @@ void main() {
         snapshot: {'phase': 'running', 'pending': const [], 'events': const []},
         onReply: (id, response) async {},
         onSteer: (text) async { message = text; },
+        onMessage: (text) async {},
+        onFinish: () async {},
       ),
     ))));
     await tester.enterText(find.byKey(const Key('interactive-steer-text')),

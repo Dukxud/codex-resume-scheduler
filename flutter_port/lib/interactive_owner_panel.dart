@@ -180,7 +180,7 @@ class _InteractiveOwnerPanelState extends State<InteractiveOwnerPanel> {
           Expanded(child: TextField(
             key: const Key('interactive-steer-text'),
             controller: _steer,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: phase == 'awaitingUser'
                 ? 'Reply to Codex in this conversation' : 'Message this running turn',
               isDense: true))),

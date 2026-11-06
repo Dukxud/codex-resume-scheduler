@@ -1,0 +1,36 @@
+name: Shared interactive owner (bounded)
+
+on:
+  push:
+    branches:
+      - feat/shared-interactive-owner
+    paths:
+      - 'interactive/**'
+      - 'tests/*interactive*'
+      - '.github/workflows/shared-interactive-owner.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shared-interactive-owner
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise single owner and authenticated multiple viewers
+        shell: pwsh
+        run: |
+          node --test ./tests/interactive-owner.test.js
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive owner integration fixture failed.' }
+      - name: Verify syntax
+        shell: pwsh
+        run: |
+          node --check ./interactive/interactive-owner.js
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive owner syntax invalid.' }
+          node --check ./interactive/owner-mirror.js
+          if ($LASTEXITCODE -ne 0) { throw 'Mirror syntax invalid.' }

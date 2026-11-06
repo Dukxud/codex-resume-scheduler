@@ -78,11 +78,17 @@ class OwnerMirror {
             error=>this.write(client,{kind:'rejected',action:'message',reason:error.message}),
           );
         }else if(message.kind==='finish'){
-          try{
-            this.owner.finish();
-            this.write(client,{kind:'ack',action:'finish'});
-          }catch(error){
-            this.write(client,{kind:'rejected',action:'finish',reason:error.message});
+          if(this.owner.closed || this.owner.phase!=='awaitingUser' ||
+              this.owner.prompts.size){
+            this.write(client,{kind:'rejected',action:'finish',
+              reason:'An active or unanswered turn cannot be finished'});
+          }else{
+            // Finish tears down the named pipe. Confirm to the human client
+            // BEFORE asking the runner to close, not after destroying IPC.
+            client.socket.write(JSON.stringify({kind:'ack',action:'finish'})+'\n',
+              ()=>{try{this.owner.finish()}catch(error){
+                this.owner.event({type:'finishFailed',reason:error.message});
+              }});
           }
         }else if(message.kind==='steer'){
           // Explicit human input, routed to the existing active turn only.

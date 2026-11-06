@@ -30,6 +30,7 @@ class SchedulerController extends ChangeNotifier {
   String repo = '';
   String message = 'Resume.';
   String access = 'workspace-write';
+  String executionMode = 'unattended';
   bool autoResumeOnLimit = false;
   bool compact = false;
   bool micro = false;
@@ -101,7 +102,8 @@ class SchedulerController extends ChangeNotifier {
   /// Quota exhaustion now does not forbid scheduling a later run. As with
   /// WinForms v1.16, the pinned worker rechecks quota at execution time.
   bool get canSchedule {
-    if (compact || busy || quota == null || quotaAt == null ||
+    if ((executionMode == 'interactive' && (access == 'yolo' || autoResumeOnLimit)) ||
+        compact || busy || quota == null || quotaAt == null ||
         DateTime.now().difference(quotaAt!).inSeconds > 120 ||
         model == null || sessionId == null || !efforts.contains(effort) ||
         quotaModel != model || stringField(quota, 'catalogError').isNotEmpty) return false;
@@ -161,6 +163,8 @@ class SchedulerController extends ChangeNotifier {
         access = const ['workspace-write', 'read-only', 'yolo'].contains(preferredAccess)
           ? preferredAccess : 'workspace-write';
         autoResumeOnLimit = field(draft, 'autoResumeOnLimit') == true;
+        executionMode = stringField(draft, 'executionMode') == 'interactive'
+          ? 'interactive' : 'unattended';
         micro = field(settings, 'microMode') == true;
         compact = micro || field(settings, 'compactMode') == true;
         alwaysOnTop = field(settings, 'alwaysOnTop') == true;
@@ -341,6 +345,7 @@ class SchedulerController extends ChangeNotifier {
 
   void edit({
     String? repository, String? instruction, String? accessMode,
+    String? executionMode,
     String? reasoning, bool? compactMode, bool? microMode,
     bool? pinOnTop, bool? autoResumeOnLimit, DateTime? time,
   }) {
@@ -352,6 +357,9 @@ class SchedulerController extends ChangeNotifier {
     }
     if (instruction != null) message = instruction;
     if (accessMode != null) access = accessMode;
+    if (executionMode != null && const ['interactive', 'unattended'].contains(executionMode)) {
+      this.executionMode = executionMode;
+    }
     if (reasoning != null) effort = reasoning;
     if (autoResumeOnLimit != null) this.autoResumeOnLimit = autoResumeOnLimit;
     final previousUsageTarget = usageTargetModel;
@@ -503,7 +511,7 @@ class SchedulerController extends ChangeNotifier {
     'draft': {
       'sessionId': sessionId ?? '', 'repo': repo, 'model': model ?? '',
       'effort': effort ?? '', 'access': access, 'message': message,
-      'autoResumeOnLimit': autoResumeOnLimit,
+      'autoResumeOnLimit': autoResumeOnLimit, 'executionMode': executionMode,
       'runAt': localIsoSecond(runAt),
     },
   };
@@ -549,7 +557,7 @@ class SchedulerController extends ChangeNotifier {
       final response = await adapter.call('schedule', {
         'sessionId': sessionId, 'repo': repo, 'model': model, 'effort': effort,
         'access': access, 'message': message.trim(), 'runAt': localIsoSecond(runAt),
-        'autoResumeOnLimit': autoResumeOnLimit,
+        'autoResumeOnLimit': autoResumeOnLimit, 'executionMode': executionMode,
         'confirmUnrestricted': confirmUnrestricted, 'confirmOverlap': confirmOverlap,
       });
       // Once Windows has registered the task, never report a later preferences

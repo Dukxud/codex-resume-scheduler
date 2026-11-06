@@ -46,10 +46,27 @@ async function main(args){
   let turnFinished;
   const completed=new Promise(resolve=>{turnFinished=resolve;});
   let outcome=null;
+  // A completed conversational turn is not necessarily the end of the
+  // human interaction. Stay attached for follow-up messages until Finish
+  // or a bounded idle timeout; never leave a Scheduler task running forever.
+  let idleTimer=null;
+  const clearIdle=()=>{if(idleTimer){clearTimeout(idleTimer);idleTimer=null;}};
   owner.on('event',event=>{
     if(event.type==='turnCompleted'){
-      outcome=event.params?.turn?.status==='completed'?'completed':'failed';
-      turnFinished();
+      const status=event.params?.turn?.status;
+      if(status!=='completed'){
+        outcome='failed';turnFinished();
+      }else{
+        clearIdle();
+        idleTimer=setTimeout(()=>{
+          outcome='completed';turnFinished();
+        },2*60*60*1000);
+        idleTimer.unref();
+      }
+    }else if(event.type==='nextTurn'){
+      clearIdle();
+    }else if(event.type==='finishRequested'){
+      outcome='completed';turnFinished();
     }else if(event.type==='closed'){
       if(!outcome)outcome='lost';
       turnFinished();
@@ -70,6 +87,7 @@ async function main(args){
     await completed;
     return outcome==='completed'?0:1;
   }finally{
+    clearIdle();
     // Remove discoverability before closing the owner; no hidden second run.
     if(registered){
       try{fs.unlinkSync(descriptor)}catch{/* Fail closed if stale */ }
